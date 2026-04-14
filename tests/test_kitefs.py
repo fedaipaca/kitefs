@@ -1,6 +1,9 @@
-from kitefs import hello
+"""Smoke test for the kitefs package."""
+
+from kitefs import FeatureGroup, FeatureType
 
 
-class TestHello:
-    def test_returns_greeting_string(self):
-        assert hello() == "Hello from kitefs!"
+class TestPackage:
+    def test_core_types_importable(self) -> None:
+        assert FeatureGroup is not None
+        assert FeatureType is not None
