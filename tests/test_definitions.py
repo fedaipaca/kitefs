@@ -1,6 +1,7 @@
 """Tests for the KiteFS definition module (src/kitefs/definitions.py)."""
 
 import dataclasses
+from typing import Any
 
 import pytest
 
@@ -105,31 +106,31 @@ class TestExpect:
 
     def test_empty_expect(self) -> None:
         e = Expect()
-        assert e._constraints == ()
+        assert dataclasses.asdict(e)["_constraints"] == ()
 
     def test_not_null(self) -> None:
         e = Expect().not_null()
-        assert e._constraints == ({"type": "not_null"},)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "not_null"},)
 
     def test_gt(self) -> None:
         e = Expect().gt(0)
-        assert e._constraints == ({"type": "gt", "value": 0},)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "gt", "value": 0},)
 
     def test_gte(self) -> None:
         e = Expect().gte(1900)
-        assert e._constraints == ({"type": "gte", "value": 1900},)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "gte", "value": 1900},)
 
     def test_lt(self) -> None:
         e = Expect().lt(100)
-        assert e._constraints == ({"type": "lt", "value": 100},)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "lt", "value": 100},)
 
     def test_lte(self) -> None:
         e = Expect().lte(2030)
-        assert e._constraints == ({"type": "lte", "value": 2030},)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "lte", "value": 2030},)
 
     def test_one_of(self) -> None:
         e = Expect().one_of(["a", "b", "c"])
-        assert e._constraints == ({"type": "one_of", "values": ["a", "b", "c"]},)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "one_of", "values": ["a", "b", "c"]},)
 
     def test_chaining_returns_new_instance(self) -> None:
         e1 = Expect()
@@ -137,20 +138,20 @@ class TestExpect:
         e3 = e2.gt(0)
         assert e1 is not e2
         assert e2 is not e3
-        assert e1._constraints == ()
-        assert len(e2._constraints) == 1
-        assert len(e3._constraints) == 2
+        assert dataclasses.asdict(e1)["_constraints"] == ()
+        assert len(dataclasses.asdict(e2)["_constraints"]) == 1
+        assert len(dataclasses.asdict(e3)["_constraints"]) == 2
 
     def test_chaining_not_null_gt(self) -> None:
         e = Expect().not_null().gt(0)
-        assert e._constraints == (
+        assert dataclasses.asdict(e)["_constraints"] == (
             {"type": "not_null"},
             {"type": "gt", "value": 0},
         )
 
     def test_chaining_gte_lte(self) -> None:
         e = Expect().gte(1900).lte(2030)
-        assert e._constraints == (
+        assert dataclasses.asdict(e)["_constraints"] == (
             {"type": "gte", "value": 1900},
             {"type": "lte", "value": 2030},
         )
@@ -232,7 +233,7 @@ class TestFeature:
     def test_with_expect(self) -> None:
         f = Feature(name="price", dtype=FeatureType.FLOAT, expect=Expect().not_null().gt(0))
         assert f.expect is not None
-        assert len(f.expect._constraints) == 2
+        assert len(dataclasses.asdict(f.expect)["_constraints"]) == 2
 
     def test_frozen(self) -> None:
         f = Feature(name="price", dtype=FeatureType.FLOAT)
@@ -294,7 +295,7 @@ class TestMetadata:
 # ---------------------------------------------------------------------------
 
 
-def _make_feature_group(**overrides) -> FeatureGroup:
+def _make_feature_group(**overrides: Any) -> FeatureGroup:
     """Helper to build a minimal FeatureGroup with sensible defaults."""
     defaults = {
         "name": "test_group",
@@ -484,8 +485,9 @@ class TestReferenceUseCaseListingFeatures:
     def test_build_year_expectations(self, listing_features: FeatureGroup) -> None:
         build_year = next(f for f in listing_features.features if f.name == "build_year")
         assert build_year.expect is not None
-        assert len(build_year.expect._constraints) == 3
-        types = [c["type"] for c in build_year.expect._constraints]
+        constraints = dataclasses.asdict(build_year.expect)["_constraints"]
+        assert len(constraints) == 3
+        types = [c["type"] for c in constraints]
         assert types == ["not_null", "gte", "lte"]
 
 
@@ -550,7 +552,7 @@ class TestReferenceUseCaseTownMarketFeatures:
     def test_feature_expectation(self, town_market_features: FeatureGroup) -> None:
         feat = town_market_features.features[0]
         assert feat.expect is not None
-        assert feat.expect._constraints == (
+        assert dataclasses.asdict(feat.expect)["_constraints"] == (
             {"type": "not_null"},
             {"type": "gt", "value": 0},
         )

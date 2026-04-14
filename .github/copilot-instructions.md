@@ -129,4 +129,4 @@ Introduce dependencies incrementally — do not add dependencies that are not ye
 
 - One branch per task: `feat/task-{n}/{short-description}`
 - Each task produces a self-contained, demonstrable outcome
-- Commits should be atomic and descriptive
+- **Do not create commits** — make code changes only; the user handles all git operations
