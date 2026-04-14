@@ -1,7 +1,7 @@
 [project]
 name = "kitefs"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python feature store library for offline/online feature storage, registry, validation, and serving"
 readme = "README.md"
 authors = [
     { name = "Fedai Paca", email = "fedaipaca@gmail.com" }
