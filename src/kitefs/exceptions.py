@@ -22,10 +22,6 @@ class ConfigurationError(KiteFSError):
     missing AWS credentials, etc).
     """
 
-    def __init__(self, message: str) -> None:
-        """Initialise with an actionable configuration error message."""
-        super().__init__(message)
-
 
 class DefinitionError(KiteFSError):
     """Raised when feature group definitions are structurally invalid.
@@ -35,10 +31,6 @@ class DefinitionError(KiteFSError):
     so users can fix them all in one pass.
     """
 
-    def __init__(self, message: str) -> None:
-        """Initialise with a message listing all collected definition errors."""
-        super().__init__(message)
-
 
 class RegistryError(KiteFSError):
     """Raised when the registry file is unavailable or its contents are corrupted.
@@ -46,10 +38,6 @@ class RegistryError(KiteFSError):
     Raised by BB-04 when registry.json cannot be found or its JSON is malformed.
     Should not occur in a correctly initialised project (kitefs init seeds the file).
     """
-
-    def __init__(self, message: str) -> None:
-        """Initialise with an actionable registry error message."""
-        super().__init__(message)
 
 
 class FeatureGroupNotFoundError(KiteFSError):
@@ -60,10 +48,6 @@ class FeatureGroupNotFoundError(KiteFSError):
     the named group is absent from registry.json.
     """
 
-    def __init__(self, message: str) -> None:
-        """Initialise with a message identifying the missing group and how to register it."""
-        super().__init__(message)
-
 
 class ValidationError(KiteFSError):
     """Base class for validation failures.
@@ -71,10 +55,6 @@ class ValidationError(KiteFSError):
     Not raised directly — raise SchemaValidationError or DataValidationError.
     Catch this to handle any validation failure regardless of phase.
     """
-
-    def __init__(self, message: str) -> None:
-        """Initialise with a validation error message."""
-        super().__init__(message)
 
 
 class SchemaValidationError(ValidationError):
@@ -84,10 +64,6 @@ class SchemaValidationError(ValidationError):
     when required columns are missing, or the entity key / event timestamp column
     contains null values. The message lists all schema issues found.
     """
-
-    def __init__(self, message: str) -> None:
-        """Initialise with a message listing all missing columns and null-column issues."""
-        super().__init__(message)
 
 
 class DataValidationError(ValidationError):
@@ -99,10 +75,6 @@ class DataValidationError(ValidationError):
     and per-failure details (entity key, field, expected constraint, actual value).
     """
 
-    def __init__(self, message: str) -> None:
-        """Initialise with a message containing the full validation report."""
-        super().__init__(message)
-
 
 class IngestionError(KiteFSError):
     """Raised for ingestion failures not covered by validation errors.
@@ -111,10 +83,6 @@ class IngestionError(KiteFSError):
     DataFrame, CSV path, or Parquet path), or when an input file cannot be
     found or read.
     """
-
-    def __init__(self, message: str) -> None:
-        """Initialise with an actionable ingestion error message."""
-        super().__init__(message)
 
 
 class RetrievalError(KiteFSError):
@@ -125,10 +93,6 @@ class RetrievalError(KiteFSError):
     operator, or the feature group is OFFLINE-only and online retrieval was requested.
     """
 
-    def __init__(self, message: str) -> None:
-        """Initialise with an actionable retrieval error message."""
-        super().__init__(message)
-
 
 class MaterializationError(KiteFSError):
     """Raised for materialization-specific failures.
@@ -137,10 +101,6 @@ class MaterializationError(KiteFSError):
     or by BB-07 in get_online_features() when the online store table doesn't exist
     (i.e. materialize() has never been run for that group).
     """
-
-    def __init__(self, message: str) -> None:
-        """Initialise with an actionable materialization error message."""
-        super().__init__(message)
 
 
 class JoinError(KiteFSError):
@@ -151,10 +111,6 @@ class JoinError(KiteFSError):
     more than one group (MVP limit — FR-OFF-009).
     """
 
-    def __init__(self, message: str) -> None:
-        """Initialise with an actionable join error message."""
-        super().__init__(message)
-
 
 class ProviderError(KiteFSError):
     """Raised when the underlying storage backend fails.
@@ -164,7 +120,3 @@ class ProviderError(KiteFSError):
     Wraps provider-specific exceptions with KiteFS context, preserving the
     original error as context (use `raise ProviderError(...) from original`).
     """
-
-    def __init__(self, message: str) -> None:
-        """Initialise with a message describing the operation, storage path, and cause."""
-        super().__init__(message)
