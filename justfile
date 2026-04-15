@@ -18,15 +18,23 @@ lint:
 format:
     uv run ruff format src/ tests/
 
+# Check formatting without modifying files
+format-check:
+    uv run ruff format --check src/ tests/
+
 # Auto-fix lint issues
 fix:
     uv run ruff check --fix src/ tests/
 
-# Run lint + tests (quick pre-commit check)
-check: lint test
+# Run static type checking
+typecheck:
+    uv run pyright
 
-# Build the package
-build:
+# Run lint + format-check + typecheck + tests (quick pre-commit check)
+check: lint format-check typecheck test
+
+# Run all checks, if successful then build the project
+build: check
     uv build
 
 # Remove build artifacts and caches

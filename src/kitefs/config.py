@@ -145,6 +145,13 @@ def _validate(raw: dict, config_path: Path, env_origins: dict[str, str]) -> None
         errors.append(
             f"Invalid 'storage_root' value{source}: expected a string path, got {type(storage_root).__name__}"
         )
+    elif not storage_root.strip():
+        env_var = env_origins.get("storage_root")
+        source = f" (set by environment variable {env_var})" if env_var else ""
+        errors.append(
+            f"Invalid 'storage_root' value{source}: path must not be empty. "
+            "Set a relative path such as './feature_store/'."
+        )
 
     # --- AWS fields (only when provider is aws) ---
     if provider == "aws":

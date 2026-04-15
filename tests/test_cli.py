@@ -1,8 +1,10 @@
 """Tests for the CLI entry point and ``kitefs init`` command (BB-01)."""
 
 import json
+import os
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from kitefs.cli import cli
@@ -225,3 +227,80 @@ class TestInitAlreadyInitialized:
         assert result.exit_code == 1
         assert "KiteFS project already initialized at this location" in result.output
         assert "Traceback" not in result.output
+
+    def test_error_goes_to_stderr(self, tmp_path: Path) -> None:
+        _runner().invoke(cli, ["init", str(tmp_path)])
+
+        # Click (stable) removed mix_stderr; Result now natively exposes .stderr.
+        result = _runner().invoke(cli, ["init", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "KiteFS project already initialized" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# kitefs init — atomicity: kitefs.yaml written last
+# ---------------------------------------------------------------------------
+
+
+class TestInitAtomicity:
+    """kitefs.yaml is the sentinel file and is written last."""
+
+    def test_kitefs_yaml_is_last_file_written(self, tmp_path: Path) -> None:
+        # If kitefs.yaml is missing but all other scaffold files exist, a retry
+        # of `kitefs init` must succeed — proving the sentinel is written last.
+        _runner().invoke(cli, ["init", str(tmp_path)])
+
+        # Simulate a crash that left everything except the sentinel
+        (tmp_path / "kitefs.yaml").unlink()
+
+        # Re-running init should succeed, not raise "already initialized"
+        result = _runner().invoke(cli, ["init", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert (tmp_path / "kitefs.yaml").exists()
+
+
+# ---------------------------------------------------------------------------
+# kitefs init — OS error paths
+# ---------------------------------------------------------------------------
+
+
+class TestInitOSErrors:
+    """Filesystem errors produce exit code 1 without tracebacks."""
+
+    @pytest.mark.skipif(os.getuid() == 0, reason="root ignores filesystem permissions")
+    def test_readonly_directory(self, tmp_path: Path) -> None:
+        import stat
+
+        target = tmp_path / "readonly_project"
+        target.mkdir()
+        target.chmod(stat.S_IRUSR | stat.S_IXUSR)  # read + execute only, no write
+
+        try:
+            result = _runner().invoke(cli, ["init", str(target)])
+            assert result.exit_code == 1
+            assert "Traceback" not in result.output
+        finally:
+            # Restore write permission so tmp_path cleanup can delete the directory
+            target.chmod(stat.S_IRWXU)
+
+
+# ---------------------------------------------------------------------------
+# kitefs init — nonexistent target path
+# ---------------------------------------------------------------------------
+
+
+class TestInitNonexistentPath:
+    """``kitefs init <path>`` where the path does not yet exist."""
+
+    def test_parent_does_not_exist(self, tmp_path: Path) -> None:
+        target = tmp_path / "deep" / "nested" / "project"
+        # target and its parents do not exist yet
+        assert not target.exists()
+
+        result = _runner().invoke(cli, ["init", str(target)])
+
+        assert result.exit_code == 0
+        assert (target / "kitefs.yaml").exists()
+        assert (target / "feature_store" / "registry.json").exists()

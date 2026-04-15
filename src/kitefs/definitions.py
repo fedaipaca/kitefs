@@ -1,5 +1,6 @@
 """Definition types for KiteFS feature groups — the foundational data model (BB-03)."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -65,9 +66,9 @@ class Expect:
         """Require values less than or equal to *value*."""
         return Expect(_constraints=(*self._constraints, {"type": "lte", "value": value}))
 
-    def one_of(self, values: list) -> "Expect":
-        """Require values to be one of the given *values*."""
-        return Expect(_constraints=(*self._constraints, {"type": "one_of", "values": values}))
+    def one_of(self, values: Sequence[str | int | float]) -> "Expect":
+        """Require values to be one of the given *values*. Stores a defensive copy as a tuple."""
+        return Expect(_constraints=(*self._constraints, {"type": "one_of", "values": tuple(values)}))
 
 
 @dataclass(frozen=True)

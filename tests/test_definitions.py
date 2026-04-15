@@ -130,7 +130,8 @@ class TestExpect:
 
     def test_one_of(self) -> None:
         e = Expect().one_of(["a", "b", "c"])
-        assert dataclasses.asdict(e)["_constraints"] == ({"type": "one_of", "values": ["a", "b", "c"]},)
+        # values is stored as a tuple (defensive copy — see Expect.one_of implementation)
+        assert dataclasses.asdict(e)["_constraints"] == ({"type": "one_of", "values": ("a", "b", "c")},)
 
     def test_chaining_returns_new_instance(self) -> None:
         e1 = Expect()
@@ -165,6 +166,23 @@ class TestExpect:
         e = Expect().not_null().gt(5)
         d = dataclasses.asdict(e)
         assert d == {"_constraints": ({"type": "not_null"}, {"type": "gt", "value": 5})}
+
+    def test_one_of_defensive_copy(self) -> None:
+        original = ["apartment", "house"]
+        e = Expect().one_of(original)
+        original.append("land")  # mutate the original list after construction
+        constraint = dataclasses.asdict(e)["_constraints"][0]
+        assert "land" not in constraint["values"], "Mutating original list must not affect stored constraint"
+
+    def test_one_of_stores_tuple_not_list(self) -> None:
+        e = Expect().one_of(["a", "b"])
+        constraint = dataclasses.asdict(e)["_constraints"][0]
+        assert isinstance(constraint["values"], tuple)
+
+    def test_one_of_empty_list(self) -> None:
+        e = Expect().one_of([])
+        constraint = dataclasses.asdict(e)["_constraints"][0]
+        assert constraint["values"] == ()
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +398,28 @@ class TestFeatureGroup:
         fg_a = _make_feature_group(features=features_a)
         fg_b = _make_feature_group(features=features_b)
         assert fg_a == fg_b
+
+    def test_empty_features_list(self) -> None:
+        # BB-03 does not enforce a minimum feature count — that is BB-04's job at apply().
+        # Verify construction succeeds and results in an empty tuple.
+        fg = _make_feature_group(features=[])
+        assert fg.features == ()
+
+    def test_single_feature(self) -> None:
+        fg = _make_feature_group(features=[Feature(name="price", dtype=FeatureType.FLOAT)])
+        assert len(fg.features) == 1
+        assert fg.features[0].name == "price"
+
+    def test_duplicate_feature_names(self) -> None:
+        # BB-03 does not reject duplicates — BB-04 catches them at apply().
+        # Sorted tuple will contain both; this documents that behaviour.
+        features = [
+            Feature(name="price", dtype=FeatureType.FLOAT),
+            Feature(name="price", dtype=FeatureType.INTEGER),
+        ]
+        fg = _make_feature_group(features=features)
+        assert len(fg.features) == 2
+        assert all(f.name == "price" for f in fg.features)
 
 
 # ---------------------------------------------------------------------------
