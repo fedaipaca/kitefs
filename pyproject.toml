@@ -8,8 +8,12 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "click>=8.3.2",
     "pyyaml>=6.0",
 ]
+
+[project.scripts]
+kitefs = "kitefs.cli:cli"
 
 [build-system]
 requires = ["uv_build>=0.11.1,<0.12.0"]

@@ -1,3 +1,5 @@
 """Entry point for `python -m kitefs`."""
 
-print("kitefs")
+from kitefs.cli import cli
+
+cli()
