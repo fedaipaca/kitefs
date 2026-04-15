@@ -1,6 +1,28 @@
 # kitefs
 
-TBD: Feature store library.
+A Python feature store library for offline/online feature storage, registry, materialization, validation, and serving. Designed for Machine Learning practitioners who need feature management with minimal operational overhead.
+
+- **SDK**: Python API for notebooks, scripts, and applications (`from kitefs import FeatureStore`)
+- **CLI**: Command-line interface (`kitefs init`, `kitefs apply`, `kitefs ingest`, etc.)
+- **Library-first**: No running server, no Docker — just `pip install` and go
+
+## Install from TestPyPI
+
+> TestPyPI is a separate package index used for testing. The `--extra-index-url` flag tells pip to fetch dependencies (like `click` and `pyyaml`) from the real PyPI, since TestPyPI may not have them.
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ kitefs==0.1.0
+```
+
+Verify the installation:
+
+```bash
+# Should display the available commands
+kitefs --help
+
+# Create a new KiteFS project in the current directory
+kitefs init
+```
 
 ## Prerequisites
 
