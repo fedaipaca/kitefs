@@ -269,3 +269,67 @@ class TestLoadConfigNonStringStorageRoot:
         _write_yaml(tmp_path, "provider: local\nstorage_root: 123\n")
         with pytest.raises(ConfigurationError, match="int"):
             load_config(tmp_path)
+
+
+class TestLoadConfigEmptyStorageRoot:
+    """Empty or whitespace-only storage_root raises ConfigurationError."""
+
+    def test_empty_string(self, tmp_path: Path) -> None:
+        _write_yaml(tmp_path, 'provider: local\nstorage_root: ""\n')
+        with pytest.raises(ConfigurationError, match="storage_root"):
+            load_config(tmp_path)
+
+    def test_whitespace_only(self, tmp_path: Path) -> None:
+        _write_yaml(tmp_path, 'provider: local\nstorage_root: "   "\n')
+        with pytest.raises(ConfigurationError, match="storage_root"):
+            load_config(tmp_path)
+
+    def test_error_mentions_how_to_fix(self, tmp_path: Path) -> None:
+        _write_yaml(tmp_path, 'provider: local\nstorage_root: ""\n')
+        with pytest.raises(ConfigurationError, match="feature_store"):
+            load_config(tmp_path)
+
+    def test_empty_storage_root_from_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _write_yaml(tmp_path, "provider: local\nstorage_root: ./feature_store/\n")
+        monkeypatch.setenv("KITEFS_STORAGE_ROOT", "")
+        with pytest.raises(ConfigurationError, match="KITEFS_STORAGE_ROOT"):
+            load_config(tmp_path)
+
+
+class TestLoadConfigNonMappingYAML:
+    """YAML that parses to a non-mapping type raises ConfigurationError."""
+
+    def test_yaml_list(self, tmp_path: Path) -> None:
+        _write_yaml(tmp_path, "- item1\n- item2\n")
+        with pytest.raises(ConfigurationError, match="Expected a YAML mapping"):
+            load_config(tmp_path)
+
+    def test_yaml_scalar(self, tmp_path: Path) -> None:
+        _write_yaml(tmp_path, "just_a_string\n")
+        with pytest.raises(ConfigurationError, match="Expected a YAML mapping"):
+            load_config(tmp_path)
+
+
+class TestLoadConfigAWSEmptyStringFields:
+    """AWS fields set to empty strings are treated as missing (not aws fixture.get() truthy)."""
+
+    def test_empty_s3_bucket_treated_as_missing(self, tmp_path: Path) -> None:
+        _write_yaml(
+            tmp_path,
+            (
+                "provider: aws\nstorage_root: ./feature_store/\n"
+                'aws:\n  s3_bucket: ""\n  s3_prefix: prefix/\n  dynamodb_table_prefix: pfx_\n'
+            ),
+        )
+        with pytest.raises(ConfigurationError, match=r"aws\.s3_bucket"):
+            load_config(tmp_path)
+
+
+class TestLoadConfigEnvVarStorageRootType:
+    """An env-var-provided storage_root is always a str, passing the type check cleanly."""
+
+    def test_env_var_storage_root_passes_type_check(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _write_yaml(tmp_path, "provider: local\nstorage_root: ./feature_store/\n")
+        monkeypatch.setenv("KITEFS_STORAGE_ROOT", "./env_store/")
+        config = load_config(tmp_path)
+        assert config.storage_root == (tmp_path / "env_store").resolve()

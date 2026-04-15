@@ -55,11 +55,9 @@ just
 ```
 kitefs/
 ├── src/
-│   └── kitefs/          # Source code
-│       ├── __init__.py
-│       └── __main__.py  # Entry point for `python -m kitefs`
-├── tests/               # Test files
-│   └── test_kitefs.py
+│   └── kitefs/          # Directory contains source code files
+├── tests/               # Directory contains test files
+├── docs/                # Design documents
 ├── pyproject.toml       # Project config, dependencies, tool settings
 ├── justfile             # Task runner commands
 └── uv.lock              # Locked dependencies

@@ -311,7 +311,7 @@ Write tests covering: successful init (verify all files/dirs created), re-init e
   - `pip install -i https://test.pypi.org/simple/ kitefs`
   - `kitefs --help` shows commands.
   - `kitefs init` creates the scaffold.
-- Document the publish workflow (brief note in README or a small CI step).
+- Document the usage instructions for installing from TestPyPI and running `kitefs init` in the README.
 
 **Dependencies introduced:** None new.
 
