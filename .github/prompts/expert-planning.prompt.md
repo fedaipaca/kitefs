@@ -25,10 +25,11 @@ The plan must include:
 1. **Summary** — one paragraph describing the task and its outcome.
 2. **Relevant files** — list every file to create, modify, or delete, grouped by category (source, tests, config).
 3. **Step-by-step implementation** — ordered steps, each describing what to do and why. Group into logical phases if the task is large.
-4. **Assumptions** — any design decisions not explicitly specified, with rationale.
-5. **Conflicts or open questions** — any mismatches found between docs, existing code, or the task description. For each, state what the conflict is and recommend a resolution.
+4. **-if needed- Assumptions** — any design decisions not explicitly specified, with rationale.
+5. **-if needed- Conflicts or open questions** — any mismatches found between docs, existing code, or the task description. For each, state what the conflict is and recommend a resolution.
 6. **Verification** — how to confirm the implementation is correct (specific test commands, checks, expected outcomes).
 7. **Branch name** — suggest a branch name following `feat/task-{n}/{short-description}`. If branch is already created skip branch creation. This information can be provided by user, or can be understand before implementation by checking the current branch.
+8. **just commands** - mention after implementation, `just clean build` should pass.
 
 Do **not** implement anything — only produce the plan.
 

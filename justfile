@@ -10,6 +10,10 @@ dev:
 test:
     uv run pytest
 
+# Run tests for a specific file, with optional extra args
+test-file file +args='':
+    uv run pytest {{file}} {{args}}
+
 # Check code for lint issues
 lint:
     uv run ruff check src/ tests/

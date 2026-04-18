@@ -12,8 +12,10 @@ from kitefs.definitions import (
     StorageTarget,
     ValidationMode,
 )
+from kitefs.registry import ApplyResult
 
 __all__ = [
+    "ApplyResult",
     "EntityKey",
     "EventTimestamp",
     "Expect",

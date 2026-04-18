@@ -60,7 +60,7 @@ When a task mentions a requirement, decision, or building block ID, look it up i
 ## Tooling
 
 - **Python >= 3.12** — use modern features (`|` unions, `match` statements)
-- **`just`** — task runner (see `./justfile` for available commands)
+- **`just`** — task runner (see `./justfile` for available commands and use those commands according to your need)
 - **`uv`** — use uv to run commands not existing in `justfile`
 - **`ruff`** — linter and formatter (configured in `pyproject.toml`); run `just format`
 - **`pytest`** — tests in `tests/`, source in `src/kitefs/`
