@@ -27,27 +27,34 @@ KiteFS is a Python feature store library serving through a Python SDK and CLI: o
 - **SDK**: `from kitefs import FeatureStore`
 - **CLI**: Click-based (`kitefs init`, `kitefs apply`, `kitefs ingest`, …)
 
+### Implementation Status
+
+KiteFS is mid-build. The `docs/` directory describes the target architecture; the codebase represents partial progress toward that target. Key implications:
+
+- **`FeatureStore`** is the documented SDK entry point but is **not yet implemented or exported**. It will be the root class that orchestrates all operations.
+- When a documented module does not exist as code yet, treat the docs as the design spec and existing code conventions as the style guide. Do not assume unimplemented APIs exist — check the code first.
+
 ## Project Documentation
 
 Docs are the **primary design reference** for product knowledge and architecture. They are draft and may contain internal inconsistencies or stale decisions. Consult them before implementing, but do not treat them as infallible specifications.
 
-| Document                                   | Contents                                                      |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| `docs/docs-00-01-reference-use-case.md`    | Real estate platform example; use for test data               |
-| `docs/docs-00-02-flow-charts.md`           | Step-by-step flows for every command and method               |
-| `docs/docs-01-project-charter.md`          | Vision, goals, personas, non-goals                            |
-| `docs/docs-02-project-requirements.md`     | Functional requirements and non-functional requirements       |
-| `docs/docs-03-01-architecture-overview.md` | Building blocks, dependency tiers, operational flows          |
-| `docs/docs-03-02-internals-and-data.md`    | Registry schema, validation phases, behavioral rules          |
-| `docs/docs-03-03-api-contracts.md`         | SDK/CLI signatures, exception hierarchy, internal interfaces  |
-| `docs/docs-04-implementation-guide.md`     | Phased task breakdown, dependency introduction order          |
+| Document                                   | Contents                                                     |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `docs/docs-00-01-reference-use-case.md`    | Real estate platform example; use for test data              |
+| `docs/docs-00-02-flow-charts.md`           | Step-by-step flows for every command and method              |
+| `docs/docs-01-project-charter.md`          | Vision, goals, personas, non-goals                           |
+| `docs/docs-02-project-requirements.md`     | Functional requirements and non-functional requirements      |
+| `docs/docs-03-01-architecture-overview.md` | Building blocks, dependency tiers, operational flows         |
+| `docs/docs-03-02-internals-and-data.md`    | Registry schema, validation phases, behavioral rules         |
+| `docs/docs-03-03-api-contracts.md`         | SDK/CLI signatures, exception hierarchy, internal interfaces |
+| `docs/docs-04-implementation-guide.md`     | Phased task breakdown, dependency introduction order         |
 
 When a task mentions a requirement, decision, or building block ID, look it up in the corresponding document.
 
 ## Source Precedence
 
 - **Existing implemented modules** — current code and tests are the source of truth for behavior. Docs provide design intent and target state.
-- **New modules not yet implemented** — docs are the design guide. Keep assumptions explicit.
+- **All modules not yet implemented** — docs are the design guide. Keep assumptions explicit.
 - **When docs conflict with each other or with code** — flag the conflict explicitly. Prefer the least risky interpretation and state the assumption. Do not silently force code toward docs or vice versa.
 
 ## Tooling
