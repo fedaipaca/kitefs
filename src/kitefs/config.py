@@ -1,4 +1,4 @@
-"""Configuration manager (BB-10) — loads, validates, and exposes kitefs.yaml settings."""
+"""Configuration manager — loads, validates, and exposes kitefs.yaml settings."""
 
 import os
 from dataclasses import dataclass
@@ -47,8 +47,8 @@ class Config:
 def load_config(project_root: Path) -> Config:
     """Load and validate kitefs.yaml from the given project root.
 
-    Environment variables take precedence over file values (FR-CFG-005).
-    All validation errors are collected before raising (KTD-9).
+    Environment variables take precedence over file values.
+    All validation errors are collected before raising.
     """
     project_root = project_root.resolve()
     config_path = project_root / "kitefs.yaml"

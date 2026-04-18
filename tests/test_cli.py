@@ -1,4 +1,4 @@
-"""Tests for the CLI entry point and ``kitefs init`` command (BB-01)."""
+"""Tests for the CLI entry point and ``kitefs init`` command."""
 
 import json
 import os

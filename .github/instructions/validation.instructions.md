@@ -2,21 +2,15 @@
 description: "Use when implementing or modifying the validation engine (schema validation, data validation, ValidationMode)."
 applyTo: "**/validation/**,**/validation.py"
 ---
-# Validation Engine Conventions
+# Validation Engine — Module-Specific Additions
 
-## Stateless Engine
+Follows all rules in `copilot-instructions.md`.
 
-The validation engine receives data and configuration as arguments and returns results. It performs no I/O and holds no state. All storage access is the caller's responsibility.
+## Separation of Concerns
 
-## Two-Phase Validation
+Definition validation (Python object correctness) is handled by the registry manager. Data validation (DataFrame content correctness) is handled by the validation engine. These are separate activities with different inputs and purposes.
 
-- **Phase 1 (Schema)**: Always runs with ERROR semantics, not mode-controlled. Checks column presence and null structural fields. If Phase 1 fails, Phase 2 never runs.
-- **Phase 2 (Data)**: Respects `ValidationMode` (`ERROR`, `FILTER`, `NONE`). Checks type conformance and `Expect` constraints.
+## Phase Details
 
-## Separation of Concerns (KTD-5)
-
-Definition validation (Python object correctness) is handled by the registry manager (BB-04). Data validation (DataFrame content correctness) is handled here (BB-05). These are separate activities with different inputs and purposes.
-
-## Full Specification
-
-See `docs/docs-03-02-internals-and-data.md` for the complete validation phases specification. See `docs/docs-03-03-api-contracts.md` (BB-05) for method contracts.
+- **Phase 1 (Schema)**: Checks column presence and null structural fields. Not mode-controlled — always ERROR semantics.
+- **Phase 2 (Data)**: Checks type conformance and `Expect` constraints. Respects `ValidationMode`.
