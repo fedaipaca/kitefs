@@ -1,94 +1,121 @@
 # KiteFS — Copilot Instructions
 
+## Hard Rules
+
+These apply to all generated code — source files, tests, comments, docstrings, and user-facing messages. No exceptions.
+
+1. **No internal references in code** — do not put doc paths (`docs/...`), document names, requirement IDs (`FR-*`, `NFR-*`), decision IDs (`KTD-*`), or building block IDs (`BB-*`) in source code, tests, comments, or docstrings. Describe behavior directly. These instruction files may reference docs; generated code may not.
+2. **Type annotations everywhere** — Python 3.12+ syntax (`X | None`, `list[str]`) on all signatures, returns, and class attributes.
+3. **Docstrings on everything** — every module, class, function, and method. Brief: one-line summary, parameters only when non-obvious.
+4. **Actionable error messages** — every error must say what went wrong, what input caused it, and how to fix it.
+5. **No bare exceptions** — use the hierarchy in `kitefs.exceptions`. Never raise `Exception` or `ValueError` for user-facing errors.
+6. **Do not create commits** — make code changes only; the user handles git operations.
+
 ## Project Identity
 
-KiteFS (`kitefs`) is a Python feature store library providing offline/online feature storage, a registry, materialization, validation, and serving through a Python SDK and CLI. It is installed via `pip install kitefs` and designed for ML practitioners who need feature management with minimal operational overhead.
+KiteFS is a Python feature store library serving through a Python SDK and CLI: offline/online storage, registry, materialization, validation, and serving. Library-first — no server, no Docker, just `pip install kitefs`.
 
-- **SDK**: Python API used in notebooks, scripts, and applications (`from kitefs import FeatureStore`)
-- **CLI**: Command-line interface via Click (`kitefs init`, `kitefs apply`, `kitefs ingest`, etc.)
-- **Library-first**: No running server, no Docker — just `pip install` and go
+- **SDK**: `from kitefs import FeatureStore`
+- **CLI**: Click-based (`kitefs init`, `kitefs apply`, `kitefs ingest`, …)
 
 ## Project Documentation
 
-All project design documents live in the `docs/` directory. **Always consult them before implementing or making architectural decisions:**
+Consult docs **before** implementing or making architecture decisions. These are for your research only — do not surface them in generated code.
 
-- `docs/docs-00-01-reference-use-case.md` — Real estate listing platform example; use as test data source for integration tests
-- `docs/docs-00-02-flow-charts.md` — Step-by-step flow charts for every CLI command and SDK method
-- `docs/docs-01-project-charter.md` — Vision, goals, personas, non-goals
-- `docs/docs-02-project-requirements.md` — Functional and non-functional requirements (FR-*, NFR-*)
-- `docs/docs-03-01-architecture-overview.md` — Architecture principles, building blocks (BB-*), dependency tiers, operational flows
-- `docs/docs-03-02-internals-and-data.md` — Registry JSON schema, validation phases, file naming conventions, behavioral rules (KTD-*)
-- `docs/docs-03-03-api-contracts.md` — SDK/CLI method signatures, `where`/`select` parameter specs, exception hierarchy, internal interfaces
-- `docs/docs-04-implementation-guide.md` — Phased task breakdown with traces to requirements; dependency introduction order
+| Document                                   | Contents                                                      |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| `docs/docs-00-01-reference-use-case.md`    | Real estate platform example; use for test data               |
+| `docs/docs-00-02-flow-charts.md`           | Step-by-step flows for every command and method               |
+| `docs/docs-01-project-charter.md`          | Vision, goals, personas, non-goals                            |
+| `docs/docs-02-project-requirements.md`     | Functional (FR-_) and non-functional (NFR-_) requirements     |
+| `docs/docs-03-01-architecture-overview.md` | Building blocks (BB-\*), dependency tiers, operational flows  |
+| `docs/docs-03-02-internals-and-data.md`    | Registry schema, validation phases, behavioral rules (KTD-\*) |
+| `docs/docs-03-03-api-contracts.md`         | SDK/CLI signatures, exception hierarchy, internal interfaces  |
+| `docs/docs-04-implementation-guide.md`     | Phased task breakdown, dependency introduction order          |
 
-When a task references a requirement (e.g., FR-REG-001), a decision record (e.g., KTD-3), or a building block (e.g., BB-04), look it up in the corresponding document.
+When a task mentions a requirement, decision, or building block ID, look it up in the corresponding document.
 
 ## Tooling
 
-- **Python >= 3.12** — minimum version, use modern Python features (type unions with `|`, `match` statements where appropriate)
-- **`uv`** — project tool for package management, virtual environments, and builds. Use `uv run` to execute commands, `uv sync` to install, `uv build` to package
-- **`just`** — task runner. See `./justfile` for available commands
-- **`ruff`** — linter and formatter (configured in `pyproject.toml`). Formatting enforced by ruff — run `just format`
-- **`pytest`** — test runner. Tests in `tests/`, source in `src/kitefs/`
+- **Python >= 3.12** — use modern features (`|` unions, `match` statements)
+- **`just`** — task runner (see `./justfile` for available commands)
+- **`uv`** — Use uv to run commands not existing in `justfile`
+- **`ruff`** — linter and formatter (configured in `pyproject.toml`); run `just format`
+- **`pytest`** — tests in `tests/`, source in `src/kitefs/`
 
-## Code Readability
+## Code Style
 
-- **Type annotations everywhere** — use Python 3.12+ syntax (`X | None`, `list[str]`, `dict[str, Any]`) on all function signatures, return types, and class attributes
-- **Docstrings on all functions, classes, and methods** — public and internal alike. Keep them brief: one-line summary, parameters only when non-obvious
-- **Module-level docstring** — every module should have a one-line docstring identifying its purpose
-- **Descriptive names** — variables, functions, and classes should be self-explanatory. A reader should understand purpose without tracing back to the assignment
-- **Comments explain *why*, not *what*** — don't restate what the code already says. Add comments for non-obvious trade-offs, workarounds, or business rules
-- **Never reference internal doc paths in code** — no `docs/...` references in comments or docstrings. Code must be self-contained; instruction files handle doc navigation
-
-## Code Style and Conventions
-
-- **`src/kitefs/` layout** — all source code under `src/kitefs/`
-- **Frozen dataclasses** for definition types (KTD-6) — `FeatureGroup`, `Feature`, `EntityKey`, etc. are immutable
-- **ABC with `@abstractmethod`** for provider abstraction (KTD-14) — not Protocol
-- **Thin CLI, Fat SDK** (KTD-4) — CLI is a thin wrapper that delegates to the SDK. Business logic lives in the SDK, never in CLI commands (exception: `kitefs init`)
-- **All-or-nothing validation** (KTD-9) — collect all errors before raising, never fail on the first error alone
-- **Deterministic registry output** — `json.dumps(sort_keys=True, indent=2)` for Git-versionable diffs
-- **Actionable error messages** (NFR-UX-001) — every error must tell the user what went wrong and how to fix it
-- **Exceptions** — use the hierarchy in `kitefs.exceptions`. Raise specific exceptions, never bare `Exception` or generic `ValueError` for user-facing errors
-- **Public API re-exports** — all public symbols are importable from `from kitefs import ...` via `__init__.py`
+- **`src/kitefs/` layout** — all source under `src/kitefs/`
+- **Frozen dataclasses** for definition types — `FeatureGroup`, `Feature`, `EntityKey`, etc. are immutable
+- **ABC with `@abstractmethod`** for provider abstraction — not Protocol
+- **Thin CLI, Fat SDK** — CLI delegates to the SDK. No business logic in CLI commands (exception: `kitefs init`)
+- **All-or-nothing validation** — collect all errors before raising, never fail on the first error alone
+- **Deterministic registry output** — `json.dumps(sort_keys=True, indent=2)`
+- **Public API re-exports** — all public symbols importable from `from kitefs import ...`
+- **Comments explain _why_, not _what_** — no restating what code already says
+- **Descriptive names** — a reader should understand purpose without tracing back
+- **Follow best practices** — Follow clean code principles, community best practices, industry standards, and Python idioms. While doing so, do not over-engineer or over-abstract — prefer simplicity, clarity and readability.
+- **When in doubt** - You can ask for clarification, or you can reference offical docs using Context7 MCP, or you can make a reasonable decision and document it in code comments and docstrings.
 
 ## Exception Hierarchy
 
-All exceptions live in `kitefs.exceptions` and inherit from `KiteFSError`. Always raise specific exception types — never bare `Exception` or generic `ValueError` for user-facing errors. Every error message must include: **what went wrong**, **what input caused it**, and **how to fix it** (NFR-UX-001). See `docs/docs-03-03-api-contracts.md` for the full hierarchy.
+All exceptions live in `kitefs.exceptions` and inherit from `KiteFSError`:
+
+```
+KiteFSError
+├── ConfigurationError
+├── DefinitionError
+├── RegistryError
+├── FeatureGroupNotFoundError
+├── ValidationError
+│   ├── SchemaValidationError
+│   └── DataValidationError
+├── IngestionError
+├── RetrievalError
+├── MaterializationError
+├── JoinError
+└── ProviderError
+```
 
 ## Naming Conventions
 
-| Entity | Convention | Example |
-|--------|-----------|---------|
-| Feature group / feature names | `snake_case` | `listing_features`, `net_area` |
-| Entity key / event timestamp fields | `snake_case` | `listing_id`, `event_timestamp` |
-| Exception classes | `PascalCase` + `Error` suffix | `DefinitionError` |
-| Enum values | `SCREAMING_SNAKE_CASE` | `OFFLINE_AND_ONLINE`, `DATETIME` |
-| Parquet files | `{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet` | `ing_20250101T120000_a1b2c3d4.parquet` |
-| CLI options | `kebab-case` | `--format json`, `--storage-target` |
+| Entity                              | Convention                                      | Example                                |
+| ----------------------------------- | ----------------------------------------------- | -------------------------------------- |
+| Feature group / feature names       | `snake_case`                                    | `listing_features`, `net_area`         |
+| Entity key / event timestamp fields | `snake_case`                                    | `listing_id`, `event_timestamp`        |
+| Exception classes                   | `PascalCase` + `Error`                          | `DefinitionError`                      |
+| Enum values                         | `SCREAMING_SNAKE_CASE`                          | `OFFLINE_AND_ONLINE`                   |
+| Parquet files                       | `{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet` | `ing_20250101T120000_a1b2c3d4.parquet` |
+| CLI options                         | `kebab-case`                                    | `--format json`                        |
 
 ## Module Organization
 
 - Each building block (BB-01 through BB-10) maps to its own module under `src/kitefs/`
-- Exceptions live in a dedicated `exceptions.py` module
-- Providers live in a `providers/` subpackage with a base ABC and per-backend implementations
-- Keep modules focused: one building block per module, no circular imports
-- Follow the dependency tier order in `docs/docs-03-01-architecture-overview.md` — Tier 0 modules (definitions, config, validation engine, join engine) have no internal dependencies; higher tiers depend only on lower tiers
+- Providers in `providers/` subpackage (base ABC + per-backend implementations)
+- No circular imports
+- Tier 0 modules (definitions, config, validation engine, join engine) have no internal dependencies; higher tiers depend only on lower tiers
+
+## Architecture Principles
+
+- **Provider abstraction** — all storage I/O goes through the provider layer. Never access filesystem or cloud storage directly from SDK, CLI, or engine code
+- **Registry as full rebuild** — `apply()` regenerates the entire registry from definitions, preserving only `last_materialized_at`
+- **Stateless engines** — validation and join engines receive data and config as arguments, return results. No I/O, no state
+- **Append-only offline store** — ingestion never overwrites existing Parquet files. New data is written as new files in the partition
 
 ## Validation Behavior
 
-Two-phase validation: schema validation (Phase 1) always runs with ERROR semantics and is not mode-controlled; data validation (Phase 2) respects `ValidationMode` (`ERROR`, `FILTER`, `NONE`). Phase 2 never runs if Phase 1 fails. See `docs/docs-03-02-internals-and-data.md` for the full specification.
+Two phases: schema validation (Phase 1) always runs with ERROR semantics; data validation (Phase 2) respects `ValidationMode` (`ERROR`, `FILTER`, `NONE`). Phase 2 never runs if Phase 1 fails.
 
 ## Common Patterns
 
 ```python
-# DO: Frozen dataclass for definitions (KTD-6)
+# DO: Frozen dataclass
 @dataclass(frozen=True)
 class Feature:
     name: str
     dtype: FeatureType
 
-# DON'T: Mutable dataclass — definitions must be immutable
+# DON'T: Mutable dataclass
 @dataclass
 class Feature:
     name: str
@@ -96,7 +123,7 @@ class Feature:
 ```
 
 ```python
-# DO: Actionable error message (NFR-UX-001)
+# DO: Actionable error
 raise FeatureGroupNotFoundError(
     f"Feature group '{name}' not found in registry. "
     f"Run `kitefs apply` to register your definitions."
@@ -106,27 +133,17 @@ raise FeatureGroupNotFoundError(
 raise ValueError("Not found")
 ```
 
-All storage I/O **must** go through the provider layer (BB-09) — never access the filesystem or cloud storage directly from SDK, engine, or CLI code. See `docs/docs-03-03-api-contracts.md` (BB-09) for provider method contracts.
-
 ## Testing
 
 - Write tests for every new module and feature
-- Run `just test` (or `uv run pytest`) to verify changes; `just check` (lint + tests) before considering work complete
-- See `.github/instructions/testing.instructions.md` for detailed testing conventions
-
-## Architecture Principles
-
-- **Provider abstraction** — all storage I/O goes through the provider layer (BB-09). Never access the filesystem or cloud storage directly from SDK or CLI code
-- **Registry as full rebuild** (KTD-3) — `apply()` always regenerates the entire registry from definitions, preserving only `last_materialized_at`
-- **Stateless engines** — the validation engine (BB-05) and join engine (BB-08) receive data and config as arguments, return results. No I/O, no state
-- **Append-only offline store** — ingestion never overwrites existing Parquet files. New data is written as new files in the partition
+- Run `just test` (or `uv run pytest`); `just check` (lint + tests) before considering work complete
+- See testing.instructions.md for conventions
 
 ## Dependencies
 
-Introduce dependencies incrementally — do not add dependencies that are not yet needed by the current task. See `docs/docs-04-implementation-guide.md` for the phased dependency introduction order.
+Introduce dependencies incrementally — do not add packages not yet needed by the current task.
 
 ## Git Workflow
 
 - One branch per task: `feat/task-{n}/{short-description}`
 - Each task produces a self-contained, demonstrable outcome
-- **Do not create commits** — make code changes only; the user handles all git operations

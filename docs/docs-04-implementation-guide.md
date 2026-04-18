@@ -337,7 +337,7 @@ Write tests covering: successful init (verify all files/dirs created), re-init e
 **What this phase covers:**
 
 - Provider abstraction layer with registry I/O (Task 7)
-- Definition discovery, validation, and registry generation (Task 8)
+- Definition discovery (Task 8a), definition validation rules (Task 8b), registry manager + `apply()` (Task 8c), SDK + CLI `apply` (Task 8d)
 - Feature group inspection commands (Task 9)
 
 **Building blocks touched:** BB-09 (Provider Layer, partial), BB-04 (Registry Manager), BB-02 (SDK, partial)
@@ -385,39 +385,181 @@ Write tests covering: `LocalProvider` read/write roundtrip (string in, string ou
 
 ---
 
-### Task 8 — Registry Manager + `apply()` (BB-04 + BB-02 partial)
+### Task 8a — Definition Discovery
 
-|                     |                                                                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Branch**          | `feat/task-8/registry-apply`                                                                                               |
-| **Goal**            | `kitefs apply` discovers definitions, validates them, and generates `registry.json` — feature groups are now registerable. |
-| **Building blocks** | BB-04 (Registry Manager), BB-02 (SDK — constructor + `apply()` only)                                                       |
+|                     |                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-8a/definition-discovery`                                                                                              |
+| **Goal**            | A pure discovery function that scans `definitions/`, imports `.py` files via `importlib` (KTD-8), and returns `FeatureGroup` instances — the first step of the apply pipeline. |
+| **Building blocks** | BB-04 (Registry Manager — discovery only)                                                                                        |
 
 **What to implement:**
 
-**BB-04 (Registry Manager)** — as defined in [Internals §2.4](docs-03-02-internals-and-data.md):
+Implement `_discover_definitions(definitions_path: Path) -> list[FeatureGroup]` as a private module-level function in a new `src/kitefs/registry.py` module:
 
-- **Definition discovery:** Scan `definitions/` directory, dynamically import `.py` files via `importlib` (KTD-8), find `FeatureGroup` instances via `isinstance` checks on module-level attributes (FR-REG-003).
-- **Definition validation** (all-or-nothing — collect all errors, KTD-9):
+- Walk `.py` files in `definitions/` (non-recursive, skip `__init__.py`, ignore non-`.py` files).
+- Dynamically import each file via `importlib.util.spec_from_file_location` + `loader.exec_module` (KTD-8).
+- Inspect all module-level attributes with `isinstance(attr, FeatureGroup)` to collect instances (FR-REG-003). No decorators, naming conventions, or registration calls required.
+- Import errors (`SyntaxError`, `ImportError`, etc.) → `DefinitionError` with file path and original error included in the message.
+- No `FeatureGroup` instances found in any file → `DefinitionError`: "No feature group definitions found in `{definitions_path}/`. Create a `.py` file with a `FeatureGroup` instance."
+- No provider or config dependencies — uses only `definitions.py`, `exceptions.py`, and stdlib `importlib`/`pathlib` for filesystem discovery.
+
+Write tests covering: single group discovered, multiple groups across multiple files, `__init__.py` skipped, non-`FeatureGroup` module-level attributes ignored, empty directory error, `SyntaxError` in a file produces `DefinitionError` with file path, `ImportError` in a file, non-`.py` files ignored.
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- Unit tests prove discovery works for valid definition files and produces clear, actionable errors for broken or empty `definitions/` directories.
+
+**Traces:**
+
+| Document                                                   | Look for                                  | What you'll find                                               |
+| ---------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------- |
+| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.2 Feature Registry — FR-REG-003        | Discovery via `isinstance`, no decorators or naming convention |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §2.4 Registry Manager (BB-04)             | KTD-8 (importlib discovery mechanism)                         |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)  | §5.6 Registry Manager                     | Discovery as part of the BB-04 interface                       |
+
+---
+
+### Task 8b — Definition Validation Rules
+
+|                     |                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-8b/definition-validation-rules`                                                                                            |
+| **Goal**            | A pure validation function that checks `list[FeatureGroup]` against all structural rules, collecting all errors before reporting (KTD-9). |
+| **Building blocks** | BB-04 (Registry Manager — validation only)                                                                                            |
+
+**What to implement:**
+
+Implement `_validate_definitions(groups: list[FeatureGroup]) -> list[str]` as a private module-level function in `src/kitefs/registry.py`:
+
+- Returns a list of error message strings. Empty list means all definitions are valid.
+- Collects **all** errors before returning — never fails on the first error alone (KTD-9).
+- **Individual group validation** (runs first, per group):
+  - `EventTimestamp.dtype` must be `FeatureType.DATETIME` → error.
+  - Feature `dtype` must be a member of the `FeatureType` enum → error.
+  - Field names must be unique within the group across `entity_key.name`, `event_timestamp.name`, and all `feature.name` values → error.
+- **Cross-group validation** (runs second, across the full list):
   - Duplicate feature group names → error.
-  - `EventTimestamp` dtype must be `DATETIME` → error.
-  - Feature types from the supported set → error.
-  - Field names unique within group (entity key, event timestamp, features) → error.
-  - Join key references: referenced group must exist, field name must match referenced entity key name, types must match → error.
-- **Full registry rebuild** (KTD-3): Regenerate `registry.json` from scratch. Preserve `last_materialized_at` from the existing registry. Set `applied_at` ISO 8601 timestamp for each group.
-- **Registry persistence:** Via provider (BB-09 from Task 7). BB-04 serializes definitions to a deterministic JSON string (`sort_keys=True, indent=2`) and calls the provider's `write_registry(data)` to persist it.
-- **Lookup methods:** For use by later SDK operations — `get_group(name)`, `list_groups()`, `group_exists(name)` per [API Contracts §5.6](docs-03-03-api-contracts.md). Also `update_materialized_at(name, timestamp)` for Task 18 and `validate_query_params(...)` for Tasks 14, 16, 19.
+  - Join key `referenced_group` must name an existing group → error.
+  - Join key `field_name` must match the `entity_key.name` of the referenced group → error with rename suggestion.
+  - Join key type compatibility: look up the field in the base group whose `name` matches `join_key.field_name` (could be the `entity_key` or a `Feature`), then verify its `dtype` matches the `entity_key.dtype` of the referenced group → error listing both types and both groups.
+- No I/O, provider, or config dependencies — pure logic on definition objects.
+
+Write tests covering: one test per validation rule, multiple errors from multiple groups collected in one call, valid definitions return empty list, reference use case definitions (`listing_features` + `town_market_features` from [Reference Use Case](docs-00-01-reference-use-case.md)) pass validation.
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- All structural validation rules are enforced with actionable error messages.
+- A single call with multiple broken definitions returns all errors at once, not just the first.
+
+**Traces:**
+
+| Document                                                         | Look for                                  | What you'll find                                              |
+| ---------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
+| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.2 Feature Registry — FR-REG-004        | Unique feature group names requirement                        |
+| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.2 Feature Registry — FR-REG-007        | Join key relationship metadata                                |
+| [Reference Use Case (docs-00-01)](docs-00-01-reference-use-case.md) | Full document                          | Example definitions for validation pass test                  |
+| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §3.4 KTD-5                                | Separation of definition validation from data validation      |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.4 Registry Manager (BB-04)             | Validation rules, KTD-9 (all-or-nothing collected errors)     |
+
+---
+
+### Task 8c — Registry Manager + `apply()` (BB-04)
+
+|                     |                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-8c/registry-manager-apply`                                                                                               |
+| **Goal**            | `RegistryManager` orchestrates discovery → validation → serialization → persistence, and exposes lookup methods for later SDK operations. |
+| **Building blocks** | BB-04 (Registry Manager — full)                                                                                                     |
+| **Depends on**      | Task 8a (discovery), Task 8b (validation)                                                                                           |
+
+**What to implement:**
+
+**`ApplyResult`** — frozen dataclass in `src/kitefs/registry.py`:
+
+- `registered_groups: tuple[str, ...]` — names of all registered feature groups.
+- `group_count: int` — number of groups registered.
+
+**`RegistryManager`** class in `src/kitefs/registry.py`:
+
+- **Constructor** `__init__(self, provider: StorageProvider, definitions_path: Path) -> None`: stores provider and definitions path; loads existing registry from provider for `last_materialized_at` preservation and to serve lookup queries.
+- **`apply(self) -> ApplyResult`** — full orchestration (KTD-3):
+  1. Call `_discover_definitions(self._definitions_path)`.
+  2. Call `_validate_definitions(groups)`.
+  3. If any errors → raise `DefinitionError` with all errors joined; registry remains unchanged (KTD-9).
+  4. Serialize each group to the registry JSON schema via `_serialize_group()`.
+  5. Preserve `last_materialized_at` from the existing registry for each group that already exists.
+  6. Set `applied_at` to the current UTC timestamp (ISO 8601) for each group.
+  7. Build the full registry dict: `{ "version": "1.0", "feature_groups": { ... } }`.
+  8. Write `json.dumps(registry, sort_keys=True, indent=2)` via `provider.write_registry()` (FR-REG-001).
+  9. Update internal state; return `ApplyResult`.
+- **`_serialize_group(group: FeatureGroup) -> dict`** — private helper: converts a `FeatureGroup` to the registry JSON schema dict (enum values as `.value` strings, features with `expect` constraints as list of dicts, join keys, metadata, validation modes, storage target).
+- **Lookup methods** — for use by later SDK operations per [API Contracts §5.6](docs-03-03-api-contracts.md):
+  - `get_group(self, name: str) -> FeatureGroup` — reconstruct and return `FeatureGroup` from loaded registry; raise `FeatureGroupNotFoundError` if not found.
+  - `list_groups(self) -> list[dict]` — return summary dicts (`name`, `owner`, `entity_key`, `storage_target`, `feature_count`) for all groups.
+  - `group_exists(self, name: str) -> bool`.
+- **Stubs with full signatures** (implementation in later tasks):
+  - `update_materialized_at(self, group_name: str, timestamp: datetime) -> None` — for Task 18.
+  - `validate_query_params(self, from_: str, select: list[str] | str | dict[str, list[str] | str], where: dict[str, dict[str, Any]] | None, join: list[str] | None, method: str) -> None` — for Tasks 14, 16, 19.
+
+Write tests covering: successful apply single/multiple groups, `applied_at` is valid ISO 8601, `last_materialized_at` preserved across re-apply and `null` for newly added groups, all-or-nothing behavior (invalid definitions → `DefinitionError` raised, existing registry unchanged), deterministic JSON output (`sort_keys=True, indent=2`), `version: "1.0"` present, `get_group()` returns correct group, `get_group()` with unknown name raises `FeatureGroupNotFoundError`, `list_groups()` and `group_exists()` correct, deleted definition files vanish on re-apply (KTD-3), reference use case produces valid registry JSON.
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- `RegistryManager` produces a correct, deterministic `registry.json` from valid definitions; preserves runtime fields across re-applies; raises collected errors without touching the registry when definitions are invalid.
+
+**Traces:**
+
+| Document                                                         | Look for                                           | What you'll find                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §2.1 `apply()`                                     | Full SDK apply flow chart                                      |
+| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.2 Feature Registry — FR-REG-001, FR-REG-002     | Deterministic JSON, full rebuild, preserve `last_materialized_at` |
+| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §3.4 KTD-3 (Registry as Full Rebuild)              | System-level decision record                                   |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.4 Registry Manager (BB-04)                      | Full BB-04 specification                                       |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §3.1 Registry JSON schema                          | Registry data format reference                                 |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §5.6 Registry Manager                              | Lookup method signatures and contracts                         |
+
+---
+
+### Task 8d — SDK `FeatureStore` + CLI `apply` (BB-02 partial + BB-01 partial)
+
+|                     |                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-8d/sdk-featurestore-cli-apply`                                                                                         |
+| **Goal**            | `FeatureStore` SDK class with constructor + `apply()`, and the `kitefs apply` CLI command — feature groups are now registerable from the command line. |
+| **Building blocks** | BB-02 (SDK — constructor + `apply()` only), BB-01 (CLI — `apply` command)                                                         |
+| **Depends on**      | Task 8c (RegistryManager)                                                                                                         |
+
+**What to implement:**
 
 **BB-02 (SDK — partial)** — as defined in [Internals §2.2](docs-03-02-internals-and-data.md) and [API Contracts §2.0–§2.1](docs-03-03-api-contracts.md):
 
-- `FeatureStore.__init__`: Load config (BB-10), instantiate provider (BB-09), create registry manager (BB-04).
-- `FeatureStore.apply()`: Delegate to BB-04 for definition discovery + registry regeneration.
+- **`FeatureStore.__init__(self, project_root: str | Path | None = None) -> None`**:
+  - If `project_root` is provided, use it directly; otherwise walk up from `cwd` to find `kitefs.yaml` (KTD-4 — project root resolution lives in the SDK, not the CLI).
+  - If no `kitefs.yaml` found → `ConfigurationError`: "No KiteFS project found. Run `kitefs init` to create one."
+  - Load config via BB-10 (`load_config(project_root)`).
+  - Instantiate provider via BB-09 (`create_provider(config)`).
+  - Create `RegistryManager(provider, config.definitions_path)` (BB-04).
+  - Note: Other core module instances (BB-05 through BB-08) are added to the constructor as their respective tasks are implemented (Tasks 11, 12, 15, 18).
+- **`FeatureStore.apply(self) -> ApplyResult`**: delegates to `self._registry_manager.apply()`.
+- Add `FeatureStore` and `ApplyResult` to `src/kitefs/__init__.py` re-exports.
 
-**CLI `apply` command** — as defined in [API Contracts §3.2](docs-03-03-api-contracts.md):
+**BB-01 (CLI — `apply`)** — as defined in [API Contracts §3.2](docs-03-03-api-contracts.md):
 
-- `kitefs apply` → resolve project root → instantiate `FeatureStore` → call `apply()` → render result.
+- `kitefs apply` command (no arguments or options).
+- Instantiate `FeatureStore`, call `fs.apply()`, print success summary + exit 0.
+- On `DefinitionError` or `ProviderError` → render error message to stderr + exit 1.
 
-Write tests covering: successful apply with single/multiple definitions, duplicate names rejected, invalid types rejected, field name collisions rejected, join key validation, all-or-nothing behavior (invalid definitions leave registry unchanged), `applied_at` timestamp set.
+Write tests covering:
+
+- SDK: constructor with valid project, constructor with no `kitefs.yaml` in path raises `ConfigurationError`, `apply()` success returns correct `ApplyResult`, `apply()` with invalid definitions raises `DefinitionError`, end-to-end (init → write definition file → `FeatureStore.apply()` → read `registry.json` → verify contents).
+- CLI: `kitefs apply` success (exit 0, summary message), outside KiteFS project (exit 1, error message), invalid definitions (exit 1, errors to stderr), no definition files (exit 1, error message), `kitefs apply --help` shows no options.
 
 **Dependencies introduced:** None new.
 
@@ -428,17 +570,15 @@ Write tests covering: successful apply with single/multiple definitions, duplica
 
 **Traces:**
 
-| Document                                                         | Look for                                           | What you'll find                                                       |
-| ---------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §1.2 `kitefs apply`, §2.1 `apply()`                | Detailed CLI + SDK flow charts                                         |
-| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.2 Feature Registry — FR-REG-001–004, FR-REG-007 | Requirement-level acceptance criteria                                  |
-| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §4.3 Apply Definitions                             | Operational flow diagram                                               |
-| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §3.4 KTD-3 (Registry as Full Rebuild)              | System-level decision record                                           |
-| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.4 Registry Manager (BB-04)                      | Discovery, validation rules, KTD-8 (importlib), KTD-9 (all-or-nothing) |
-| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.2 SDK (BB-02)                                   | Constructor wiring, apply() orchestration                              |
-| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §3.1 Registry JSON schema                          | Registry data format reference                                         |
-| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §2.0–§2.1 Constructor + `apply()`                  | SDK method signatures and return types                                 |
-| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §3.2 `kitefs apply`                                | CLI contract                                                           |
+| Document                                                         | Look for                                 | What you'll find                                   |
+| ---------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------- |
+| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §1.2 `kitefs apply`, §2.1 `apply()`      | Detailed CLI + SDK flow charts                     |
+| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.10 CLI — FR-CLI-003                   | CLI `apply` command requirement                    |
+| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §4.3 Apply Definitions                   | Operational flow diagram                           |
+| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §3.4 KTD-4 (Thin CLI, Fat SDK)           | Project root resolution belongs in the SDK         |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.2 SDK (BB-02)                         | Constructor wiring, `apply()` orchestration        |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §2.0–§2.1 Constructor + `apply()`        | SDK method signatures and return types             |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §3.2 `kitefs apply`                      | CLI contract                                       |
 
 ---
 
@@ -1179,8 +1319,10 @@ Phase 1 — Project Foundation
   (scaffold) (errors) (types) (config) (CLI init) (publish)
 
 Phase 2 — Define & Register
-  Task 7  → Task 8  → Task 9
-  (provider) (apply) (list/describe)
+  Task 7  → Task 8a ──┐
+  (provider) (discovery) ├──→ Task 8c → Task 8d → Task 9
+             Task 8b ──┘   (registry) (SDK+CLI) (list/describe)
+             (validation)
 
 Phase 3 — Ingest & Query
   Task 10 → Task 11 → Task 12 → Task 13 → Task 14
@@ -1224,8 +1366,10 @@ Phase 6 — AWS & Extras
 | Requirement Category         | FR IDs                                                       | Task(s)         |
 | ---------------------------- | ------------------------------------------------------------ | --------------- |
 | Feature Group Definition     | FR-DEF-001 through FR-DEF-007                                | 3               |
-| Feature Registry             | FR-REG-001 through FR-REG-004, FR-REG-007                    | 8               |
-| Feature Registry (discovery) | FR-REG-005, FR-REG-006                                       | 9               |
+| Feature Registry (discovery) | FR-REG-003                                                   | 8a              |
+| Feature Registry (validation)| FR-REG-004, FR-REG-007                                       | 8b              |
+| Feature Registry (apply)     | FR-REG-001, FR-REG-002                                       | 8c              |
+| Feature Registry (inspect)   | FR-REG-005, FR-REG-006                                       | 9               |
 | Feature Registry (sync/pull) | FR-REG-008, FR-REG-009                                       | 21              |
 | Data Ingestion               | FR-ING-001 through FR-ING-007                                | 10, 12, 13      |
 | Offline Store & Historical   | FR-OFF-001, FR-OFF-002, FR-OFF-006, FR-OFF-007               | 10, 12, 14      |
@@ -1237,13 +1381,13 @@ Phase 6 — AWS & Extras
 | Provider Abstraction (AWS)   | FR-PROV-002, FR-PROV-004                                     | 20              |
 | Configuration                | FR-CFG-001 through FR-CFG-006                                | 4               |
 | CLI                          | FR-CLI-001, FR-CLI-002                                       | 5               |
-| CLI                          | FR-CLI-003                                                   | 8               |
+| CLI                          | FR-CLI-003                                                   | 8d              |
 | CLI                          | FR-CLI-004                                                   | 13              |
 | CLI                          | FR-CLI-005, FR-CLI-006, FR-CLI-012                           | 9               |
 | CLI                          | FR-CLI-007                                                   | 18              |
 | CLI                          | FR-CLI-008                                                   | 21              |
 | CLI                          | FR-CLI-009                                                   | 22              |
 | CLI                          | FR-CLI-010                                                   | 23              |
-| CLI (cross-cutting)          | FR-CLI-011                                                   | 5, 8, 9, 13, 18 |
+| CLI (cross-cutting)          | FR-CLI-011                                                   | 5, 8d, 9, 13, 18 |
 | Mock Data Generation         | FR-MOCK-001 through FR-MOCK-003                              | 22              |
 | Smart Sampling               | FR-SAM-001 through FR-SAM-003                                | 23              |
