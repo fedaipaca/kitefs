@@ -1,8 +1,8 @@
-"""CLI entry point for KiteFS (BB-01) — thin delegation layer over the SDK.
+"""CLI entry point for KiteFS — thin delegation layer over the SDK.
 
 ``kitefs init`` is the only self-contained command because the project
 scaffold (including ``kitefs.yaml``) does not exist yet when it runs.
-All other commands delegate to :class:`kitefs.FeatureStore` (KTD-4).
+All other commands delegate to :class:`kitefs.FeatureStore`.
 """
 
 import json

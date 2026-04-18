@@ -1,4 +1,4 @@
-"""Definition types for KiteFS feature groups — the foundational data model (BB-03)."""
+"""Definition types for KiteFS feature groups — the foundational data model."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -89,7 +89,7 @@ class EventTimestamp:
     """The single event timestamp for a feature group.
 
     Structural column — always included in query results, implicitly non-null.
-    dtype must be FeatureType.DATETIME (enforced by BB-04 at apply() time).
+    dtype must be FeatureType.DATETIME (enforced at apply() time).
     """
 
     name: str
@@ -116,7 +116,7 @@ class JoinKey:
     """Declares a join relationship to another feature group's entity key.
 
     field_name must match a feature name in this group AND the entity key name
-    of referenced_group. Type matching is validated by BB-04 at apply() time.
+    of referenced_group. Type matching is validated at apply() time.
     """
 
     field_name: str
@@ -140,11 +140,11 @@ class FeatureGroup:
     """Top-level definition for a feature group.
 
     The foundational type that users create in their definitions/ directory.
-    BB-04 discovers FeatureGroup instances at apply() time via importlib.
+    FeatureGroup instances are discovered at apply() time via importlib.
 
     features is normalised to a tuple sorted alphabetically by Feature.name
-    during construction (KTD-16), ensuring deterministic equality and
-    serialisation regardless of user-provided order.
+    during construction, ensuring deterministic equality and serialisation
+    regardless of user-provided order.
     """
 
     name: str

@@ -379,7 +379,7 @@ The Registry Manager does NOT validate DataFrame data — that is BB-05's (Valid
   - (C) *Decorator-based:* Users decorate classes or functions with `@feature_group`. Provides discoverability but couples definition syntax to the registration mechanism.
 - **Decision:** (A) `importlib` dynamic import.
 - **Rationale:** AP-4 (definitions as code — defining a `FeatureGroup` object is sufficient), FR-REG-003 (no decorators, naming conventions, or registration calls). The user experience is minimal friction: create a `.py` file, define a `FeatureGroup`, run `apply()`. No additional ceremony.
-- **Consequences:** Any `FeatureGroup` instance at module level in any `.py` file under `definitions/` is automatically discovered. Users can organize definitions across multiple files freely. Import errors in definition files surface as clear `RegistryError` messages during `apply()`, including the file path and error details.
+- **Consequences:** Any `FeatureGroup` instance at module level in any `.py` file under `definitions/` is automatically discovered. Users can organize definitions across multiple files freely. Import errors in definition files surface as clear `DefinitionError` messages during `apply()`, including the file path and error details.
 - **Revisit if:** Security concerns arise about executing arbitrary Python during `apply()`. This is acceptable for a developer tool — the user controls what's in `definitions/`. If KiteFS were ever exposed as a shared service (unlikely per AP-1), sandboxing would need consideration.
 
 ---

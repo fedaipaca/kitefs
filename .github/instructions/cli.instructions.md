@@ -1,20 +1,20 @@
 ---
 description: "Use when working on CLI commands, Click groups, or command-line interface code for KiteFS."
-applyTo: "**/cli/**"
+applyTo: "**/cli/**,**/cli.py"
 ---
-# CLI Conventions
+# CLI — Module-Specific Additions
 
-## Thin CLI, Fat SDK (KTD-4)
+Follows all rules in `copilot-instructions.md`.
 
-The CLI is a **thin delegation layer**. Every command (except `init`) follows this pattern:
+## Command Pattern
+
+Every command (except `init`) follows this flow:
 
 1. Parse arguments via Click
 2. Instantiate `FeatureStore`
 3. Call the corresponding SDK method
 4. Format and print the result
-5. Handle exceptions → user-friendly error message + appropriate exit code
-
-**No business logic in CLI commands.** Validation, registry operations, ingestion logic — all live in the SDK.
+5. Handle exceptions → user-friendly message + appropriate exit code
 
 ## Exception: `kitefs init`
 
@@ -29,7 +29,7 @@ The CLI is a **thin delegation layer**. Every command (except `init`) follows th
 
 ## Error Handling
 
-Catch `KiteFSError` subtypes at the CLI boundary and convert to user-friendly messages:
+Catch `KiteFSError` subtypes at the CLI boundary:
 
 ```python
 try:

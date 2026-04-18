@@ -400,7 +400,8 @@ class TestFeatureGroup:
         assert fg_a == fg_b
 
     def test_empty_features_list(self) -> None:
-        # BB-03 does not enforce a minimum feature count — that is BB-04's job at apply().
+        # The definitions module does not enforce a minimum feature count —
+        # that is the registry manager's job at apply() time.
         # Verify construction succeeds and results in an empty tuple.
         fg = _make_feature_group(features=[])
         assert fg.features == ()
@@ -411,7 +412,8 @@ class TestFeatureGroup:
         assert fg.features[0].name == "price"
 
     def test_duplicate_feature_names(self) -> None:
-        # BB-03 does not reject duplicates — BB-04 catches them at apply().
+        # The definitions module does not reject duplicates — the registry
+        # manager catches them at apply() time.
         # Sorted tuple will contain both; this documents that behaviour.
         features = [
             Feature(name="price", dtype=FeatureType.FLOAT),
@@ -428,7 +430,7 @@ class TestFeatureGroup:
 
 
 class TestReferenceUseCaseListingFeatures:
-    """listing_features from docs-00-01-reference-use-case.md is instantiable."""
+    """listing_features from the reference use case is instantiable."""
 
     @pytest.fixture()
     def listing_features(self) -> FeatureGroup:
@@ -537,7 +539,7 @@ class TestReferenceUseCaseListingFeatures:
 
 
 class TestReferenceUseCaseTownMarketFeatures:
-    """town_market_features from docs-00-01-reference-use-case.md is instantiable."""
+    """town_market_features from the reference use case is instantiable."""
 
     @pytest.fixture()
     def town_market_features(self) -> FeatureGroup:

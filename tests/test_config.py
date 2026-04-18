@@ -1,4 +1,4 @@
-"""Tests for the configuration manager (BB-10)."""
+"""Tests for the configuration manager."""
 
 from pathlib import Path
 
@@ -81,7 +81,7 @@ class TestLoadConfigStorageRootResolution:
 
 
 class TestLoadConfigEnvVarOverrides:
-    """Environment variables override kitefs.yaml values (FR-CFG-005)."""
+    """Environment variables override kitefs.yaml values."""
 
     def test_override_provider(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         _write_yaml(
@@ -246,7 +246,7 @@ class TestLoadConfigEnvVarInvalidProvider:
 
 
 class TestLoadConfigMultipleErrors:
-    """Multiple validation errors are collected and reported together (KTD-9)."""
+    """Multiple validation errors are collected and reported together."""
 
     def test_collects_all_errors(self, tmp_path: Path) -> None:
         _write_yaml(tmp_path, "some_field: value\n")
