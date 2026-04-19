@@ -1,9 +1,9 @@
 """Tests for the KiteFS definition module (src/kitefs/definitions.py)."""
 
 import dataclasses
-from typing import Any
 
 import pytest
+from helpers import make_feature_group
 
 from kitefs import (
     EntityKey,
@@ -313,29 +313,16 @@ class TestMetadata:
 # ---------------------------------------------------------------------------
 
 
-def _make_feature_group(**overrides: Any) -> FeatureGroup:
-    """Helper to build a minimal FeatureGroup with sensible defaults."""
-    defaults = {
-        "name": "test_group",
-        "storage_target": StorageTarget.OFFLINE,
-        "entity_key": EntityKey(name="id", dtype=FeatureType.INTEGER),
-        "event_timestamp": EventTimestamp(name="ts", dtype=FeatureType.DATETIME),
-        "features": [Feature(name="value", dtype=FeatureType.FLOAT)],
-    }
-    defaults.update(overrides)
-    return FeatureGroup(**defaults)
-
-
 class TestFeatureGroup:
     """FeatureGroup frozen dataclass with __post_init__ normalisation."""
 
     def test_creation_minimal(self) -> None:
-        fg = _make_feature_group()
+        fg = make_feature_group()
         assert fg.name == "test_group"
         assert fg.storage_target == StorageTarget.OFFLINE
 
     def test_defaults(self) -> None:
-        fg = _make_feature_group()
+        fg = make_feature_group()
         assert fg.join_keys == ()
         assert fg.ingestion_validation == ValidationMode.ERROR
         assert fg.offline_retrieval_validation == ValidationMode.NONE
@@ -347,18 +334,18 @@ class TestFeatureGroup:
             Feature(name="a_col", dtype=FeatureType.INTEGER),
             Feature(name="m_col", dtype=FeatureType.FLOAT),
         ]
-        fg = _make_feature_group(features=features)
+        fg = make_feature_group(features=features)
         assert isinstance(fg.features, tuple)
         assert [f.name for f in fg.features] == ["a_col", "m_col", "z_col"]
 
     def test_join_keys_normalised_to_tuple(self) -> None:
         jk = [JoinKey(field_name="town_id", referenced_group="towns")]
-        fg = _make_feature_group(join_keys=jk)
+        fg = make_feature_group(join_keys=jk)
         assert isinstance(fg.join_keys, tuple)
         assert len(fg.join_keys) == 1
 
     def test_frozen(self) -> None:
-        fg = _make_feature_group()
+        fg = make_feature_group()
         with pytest.raises(dataclasses.FrozenInstanceError):
             fg.name = "other"  # type: ignore[misc]
 
@@ -367,7 +354,7 @@ class TestFeatureGroup:
             FeatureGroup(name="test")  # type: ignore[call-arg]
 
     def test_asdict_roundtrip(self) -> None:
-        fg = _make_feature_group(
+        fg = make_feature_group(
             metadata=Metadata(description="Test", owner="me", tags={"k": "v"}),
             features=[
                 Feature(name="price", dtype=FeatureType.FLOAT, expect=Expect().not_null().gt(0)),
@@ -395,19 +382,19 @@ class TestFeatureGroup:
             Feature(name="a", dtype=FeatureType.INTEGER),
             Feature(name="b", dtype=FeatureType.STRING),
         ]
-        fg_a = _make_feature_group(features=features_a)
-        fg_b = _make_feature_group(features=features_b)
+        fg_a = make_feature_group(features=features_a)
+        fg_b = make_feature_group(features=features_b)
         assert fg_a == fg_b
 
     def test_empty_features_list(self) -> None:
         # The definitions module does not enforce a minimum feature count —
         # that is the registry manager's job at apply() time.
         # Verify construction succeeds and results in an empty tuple.
-        fg = _make_feature_group(features=[])
+        fg = make_feature_group(features=[])
         assert fg.features == ()
 
     def test_single_feature(self) -> None:
-        fg = _make_feature_group(features=[Feature(name="price", dtype=FeatureType.FLOAT)])
+        fg = make_feature_group(features=[Feature(name="price", dtype=FeatureType.FLOAT)])
         assert len(fg.features) == 1
         assert fg.features[0].name == "price"
 
@@ -419,7 +406,7 @@ class TestFeatureGroup:
             Feature(name="price", dtype=FeatureType.FLOAT),
             Feature(name="price", dtype=FeatureType.INTEGER),
         ]
-        fg = _make_feature_group(features=features)
+        fg = make_feature_group(features=features)
         assert len(fg.features) == 2
         assert all(f.name == "price" for f in fg.features)
 
