@@ -12,6 +12,7 @@ from kitefs.definitions import (
     StorageTarget,
     ValidationMode,
 )
+from kitefs.feature_store import FeatureStore
 from kitefs.registry import ApplyResult
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "Expect",
     "Feature",
     "FeatureGroup",
+    "FeatureStore",
     "FeatureType",
     "JoinKey",
     "Metadata",
