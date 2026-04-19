@@ -4,22 +4,11 @@ import os
 from pathlib import Path
 
 import pytest
+from helpers import make_local_config
 
 from kitefs.config import AWSConfig, Config
 from kitefs.exceptions import ProviderError
 from kitefs.providers import LocalProvider, StorageProvider, create_provider
-
-
-def _make_local_config(tmp_path: Path) -> Config:
-    """Build a minimal local Config pointing at tmp_path."""
-    storage_root = tmp_path / "feature_store"
-    return Config(
-        provider="local",
-        project_root=tmp_path,
-        storage_root=storage_root,
-        definitions_path=storage_root / "definitions",
-        aws=None,
-    )
 
 
 def _make_aws_config(tmp_path: Path) -> Config:
@@ -88,7 +77,7 @@ class TestLocalProviderReadRegistry:
     """LocalProvider.read_registry — success and error paths."""
 
     def test_read_existing_registry_returns_content(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         config.storage_root.mkdir(parents=True)
         (config.storage_root / "registry.json").write_text('{"version": "1.0"}', encoding="utf-8")
 
@@ -98,7 +87,7 @@ class TestLocalProviderReadRegistry:
         assert result == '{"version": "1.0"}'
 
     def test_read_missing_registry_raises_provider_error(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
 
         provider = LocalProvider(config)
 
@@ -106,14 +95,14 @@ class TestLocalProviderReadRegistry:
             provider.read_registry()
 
     def test_missing_registry_error_mentions_kitefs_init(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
 
         with pytest.raises(ProviderError, match="kitefs init"):
             provider.read_registry()
 
     def test_missing_registry_error_mentions_path(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
 
         with pytest.raises(ProviderError, match=r"registry\.json"):
@@ -123,7 +112,7 @@ class TestLocalProviderReadRegistry:
         if os.name == "nt":
             pytest.skip("File permission test is not reliable on Windows.")
 
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         config.storage_root.mkdir(parents=True)
         registry = config.storage_root / "registry.json"
         registry.write_text('{"version": "1.0"}', encoding="utf-8")
@@ -144,7 +133,7 @@ class TestLocalProviderWriteRegistry:
     """LocalProvider.write_registry — file creation, content, and directory creation."""
 
     def test_write_creates_registry_file(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
 
         provider.write_registry('{"version": "1.0"}')
@@ -152,7 +141,7 @@ class TestLocalProviderWriteRegistry:
         assert (config.storage_root / "registry.json").exists()
 
     def test_write_creates_parent_directories(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         assert not config.storage_root.exists()
 
         provider = LocalProvider(config)
@@ -161,7 +150,7 @@ class TestLocalProviderWriteRegistry:
         assert config.storage_root.is_dir()
 
     def test_write_stores_exact_content(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         data = '{\n  "version": "1.0",\n  "feature_groups": {}\n}'
 
         provider = LocalProvider(config)
@@ -171,7 +160,7 @@ class TestLocalProviderWriteRegistry:
         assert on_disk == data
 
     def test_write_overwrites_existing_content(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
 
         provider.write_registry('{"version": "1.0"}')
@@ -213,7 +202,7 @@ class TestLocalProviderRegistryRoundtrip:
     """Read/write roundtrip — the provider does raw string I/O, no JSON interpretation."""
 
     def test_roundtrip_returns_exact_string(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
         original = '{\n  "version": "1.0",\n  "feature_groups": {}\n}'
 
@@ -223,7 +212,7 @@ class TestLocalProviderRegistryRoundtrip:
         assert result == original
 
     def test_roundtrip_preserves_unicode(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
         data = '{"name": "café_features", "emoji": "🪁"}'
 
@@ -232,7 +221,7 @@ class TestLocalProviderRegistryRoundtrip:
         assert provider.read_registry() == data
 
     def test_roundtrip_preserves_whitespace_and_formatting(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
         # Simulate deterministic JSON output as produced by the registry manager
         data = '{\n  "feature_groups": {},\n  "version": "1.0"\n}'
@@ -242,7 +231,7 @@ class TestLocalProviderRegistryRoundtrip:
         assert provider.read_registry() == data
 
     def test_write_and_read_empty_string(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
 
         provider.write_registry("")
@@ -250,7 +239,7 @@ class TestLocalProviderRegistryRoundtrip:
         assert provider.read_registry() == ""
 
     def test_multiple_writes_last_write_wins(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = LocalProvider(config)
 
         provider.write_registry('{"version": "1.0"}')
@@ -264,14 +253,14 @@ class TestCreateProvider:
     """Provider factory — correct dispatch and error cases."""
 
     def test_local_config_returns_local_provider(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
 
         provider = create_provider(config)
 
         assert isinstance(provider, LocalProvider)
 
     def test_local_provider_is_storage_provider_instance(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
 
         provider = create_provider(config)
 
@@ -304,7 +293,7 @@ class TestCreateProvider:
 
     def test_returned_local_provider_can_write_and_read(self, tmp_path: Path) -> None:
         """Integration smoke test: factory-created provider works end-to-end."""
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
         provider = create_provider(config)
         data = '{"version": "1.0", "feature_groups": {}}'
 
@@ -313,7 +302,7 @@ class TestCreateProvider:
         assert provider.read_registry() == data
 
     def test_factory_returns_distinct_instances(self, tmp_path: Path) -> None:
-        config = _make_local_config(tmp_path)
+        config = make_local_config(tmp_path)
 
         p1 = create_provider(config)
         p2 = create_provider(config)
