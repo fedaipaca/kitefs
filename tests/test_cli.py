@@ -505,3 +505,389 @@ class TestApplyProviderError:
         assert result.exit_code == 1
         combined = result.output + (result.stderr or "")
         assert "Disk full" in combined
+
+
+# ---------------------------------------------------------------------------
+# kitefs --help — shows list and describe commands
+# ---------------------------------------------------------------------------
+
+
+class TestCLIHelpShowsListAndDescribe:
+    """The top-level help lists the list and describe commands."""
+
+    def test_help_shows_list_command(self) -> None:
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "list" in result.output
+
+    def test_help_shows_describe_command(self) -> None:
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "describe" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs list --help
+# ---------------------------------------------------------------------------
+
+
+class TestListHelp:
+    """``kitefs list --help`` shows the format and target options."""
+
+    def test_help_exits_zero(self) -> None:
+        result = _runner().invoke(cli, ["list", "--help"])
+
+        assert result.exit_code == 0
+
+    def test_shows_format_option(self) -> None:
+        result = _runner().invoke(cli, ["list", "--help"])
+
+        assert "--format" in result.output
+
+    def test_shows_target_option(self) -> None:
+        result = _runner().invoke(cli, ["list", "--help"])
+
+        assert "--target" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs describe --help
+# ---------------------------------------------------------------------------
+
+
+class TestDescribeHelp:
+    """``kitefs describe --help`` shows the name argument and options."""
+
+    def test_help_exits_zero(self) -> None:
+        result = _runner().invoke(cli, ["describe", "--help"])
+
+        assert result.exit_code == 0
+
+    def test_shows_name_argument(self) -> None:
+        result = _runner().invoke(cli, ["describe", "--help"])
+
+        assert "feature_group_name" in result.output.lower() or "name" in result.output.lower()
+
+    def test_shows_format_option(self) -> None:
+        result = _runner().invoke(cli, ["describe", "--help"])
+
+        assert "--format" in result.output
+
+    def test_shows_target_option(self) -> None:
+        result = _runner().invoke(cli, ["describe", "--help"])
+
+        assert "--target" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs list — success paths
+# ---------------------------------------------------------------------------
+
+
+class TestListSuccess:
+    """Successful ``kitefs list`` renders feature group summaries."""
+
+    def test_exit_code_is_zero(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["list"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+
+    def test_output_contains_group_names(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["list"], catch_exceptions=False)
+
+        assert "listing_features" in result.output
+        assert "town_market_features" in result.output
+
+    def test_output_contains_summary_values(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["list"], catch_exceptions=False)
+
+        assert "data-science-team" in result.output
+        assert "listing_id" in result.output
+
+    def test_empty_registry_prints_informational_message(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td))
+            result = runner.invoke(cli, ["list"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "No feature groups registered" in result.output
+
+    def test_json_format_prints_json_to_stdout(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["list", "--format", "json"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+
+    def test_target_writes_file_and_confirms_path(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            td_path = Path(td)
+            setup_project(td_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            output_file = td_path / "list_output.json"
+            result = runner.invoke(cli, ["list", "--target", str(output_file)], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+        data = json.loads(output_file.read_text(encoding="utf-8"))
+        assert isinstance(data, list)
+        assert "Output written to" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs list — error paths
+# ---------------------------------------------------------------------------
+
+
+class TestListOutsideProject:
+    """``kitefs list`` outside a KiteFS project fails with exit 1."""
+
+    def test_exit_code_is_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["list"])
+
+        assert result.exit_code == 1
+
+    def test_error_message_suggests_init(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["list"])
+
+        combined = result.output + (result.stderr or "")
+        assert "kitefs init" in combined
+
+
+# ---------------------------------------------------------------------------
+# kitefs describe — success paths
+# ---------------------------------------------------------------------------
+
+
+class TestDescribeSuccess:
+    """Successful ``kitefs describe`` renders the full feature group definition."""
+
+    def test_exit_code_is_zero(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+
+    def test_output_contains_group_name(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features"], catch_exceptions=False)
+
+        assert "listing_features" in result.output
+
+    def test_output_contains_structural_fields(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features"], catch_exceptions=False)
+
+        assert "listing_id" in result.output
+        assert "event_timestamp" in result.output
+        assert "OFFLINE" in result.output
+
+    def test_output_contains_features(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features"], catch_exceptions=False)
+
+        assert "net_area" in result.output
+        assert "sold_price" in result.output
+
+    def test_output_contains_validation_modes(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features"], catch_exceptions=False)
+
+        assert "ERROR" in result.output
+
+    def test_json_format_prints_json_to_stdout(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features", "--format", "json"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["name"] == "listing_features"
+
+    def test_target_writes_file_and_confirms_path(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            td_path = Path(td)
+            setup_project(td_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            output_file = td_path / "describe_output.json"
+            result = runner.invoke(
+                cli, ["describe", "listing_features", "--target", str(output_file)], catch_exceptions=False
+            )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+        data = json.loads(output_file.read_text(encoding="utf-8"))
+        assert data["name"] == "listing_features"
+        assert "Output written to" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs describe — error paths
+# ---------------------------------------------------------------------------
+
+
+class TestDescribeOutsideProject:
+    """``kitefs describe`` outside a KiteFS project fails with exit 1."""
+
+    def test_exit_code_is_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["describe", "anything"])
+
+        assert result.exit_code == 1
+
+    def test_error_message_suggests_init(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["describe", "anything"])
+
+        combined = result.output + (result.stderr or "")
+        assert "kitefs init" in combined
+
+
+class TestDescribeUnknownGroup:
+    """``kitefs describe`` with unknown group name exits 1."""
+
+    def test_exit_code_is_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "missing_group"])
+
+        assert result.exit_code == 1
+
+    def test_error_message_includes_group_name(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "missing_group"])
+
+        combined = result.output + (result.stderr or "")
+        assert "missing_group" in combined
+
+    def test_error_suggests_kitefs_list(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "missing_group"])
+
+        combined = result.output + (result.stderr or "")
+        assert "kitefs list" in combined
+
+    def test_no_traceback(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "missing_group"])
+
+        assert "Traceback" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs list — None owner renders cleanly (no literal "None" in output)
+# ---------------------------------------------------------------------------
+
+
+class TestListOwnerNoneRenders:
+    """A feature group with no owner shows an empty cell, not the string 'None'."""
+
+    def test_none_owner_does_not_appear_as_string(self, tmp_path: Path) -> None:
+        # MINIMAL_DEF has no Metadata, so owner is None.
+        minimal = MINIMAL_DEF.format(varname="no_owner_group", name="no_owner_group")
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"minimal.py": minimal})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["list"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "None" not in result.output
+
+    def test_none_owner_json_format_contains_null(self, tmp_path: Path) -> None:
+        minimal = MINIMAL_DEF.format(varname="no_owner_group", name="no_owner_group")
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"minimal.py": minimal})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["list", "--format", "json"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed[0]["owner"] is None
+
+
+# ---------------------------------------------------------------------------
+# kitefs describe — join keys section appears in output
+# ---------------------------------------------------------------------------
+
+
+class TestDescribeJoinKeysShown:
+    """``kitefs describe`` renders the join keys section when present."""
+
+    def test_join_key_field_and_target_group_shown(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "listing_features"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "town_id" in result.output
+        assert "town_market_features" in result.output
+
+    def test_no_join_keys_section_absent_for_group_without_joins(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"town.py": TOWN_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+            result = runner.invoke(cli, ["describe", "town_market_features"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "Join Keys" not in result.output

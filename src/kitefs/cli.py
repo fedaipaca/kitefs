@@ -126,3 +126,128 @@ def apply() -> None:
         raise SystemExit(1) from None
 
     click.echo(f"Applied {result.group_count} feature group(s) — registered successfully.")
+
+
+@cli.command(name="list")
+@click.option("--format", "fmt", default=None, type=click.Choice(["json"], case_sensitive=False), help="Output format.")
+@click.option("--target", default=None, type=click.Path(), help="File path to write output to.")
+def list_cmd(fmt: str | None, target: str | None) -> None:
+    """List all registered feature groups with summary information."""
+    from kitefs.exceptions import KiteFSError
+    from kitefs.feature_store import FeatureStore
+
+    try:
+        fs = FeatureStore()
+        result = fs.list_feature_groups(format=fmt, target=target)
+    except KiteFSError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+    if target is not None:
+        click.echo(f"Output written to {target}")
+        return
+
+    if fmt == "json":
+        click.echo(result)
+        return
+
+    # Default: human-readable table.
+    assert isinstance(result, list)  # target/format branches already returned
+    if not result:
+        click.echo("No feature groups registered. Run `kitefs apply` first.")
+        return
+
+    _render_list_table(result)
+
+
+def _render_list_table(summaries: list[dict]) -> None:
+    """Render feature group summaries as a human-readable table."""
+    headers = ["Name", "Owner", "Entity Key", "Storage Target", "Features"]
+    keys = ["name", "owner", "entity_key", "storage_target", "feature_count"]
+
+    rows: list[list[str]] = []
+    for s in summaries:
+        rows.append([str(s.get(k) or "") for k in keys])
+
+    # Compute column widths from headers and data.
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def _fmt_row(cells: list[str]) -> str:
+        return "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells))
+
+    click.echo(_fmt_row(headers))
+    click.echo("  ".join("-" * w for w in widths))
+    for row in rows:
+        click.echo(_fmt_row(row))
+
+
+@cli.command()
+@click.argument("feature_group_name")
+@click.option("--format", "fmt", default=None, type=click.Choice(["json"], case_sensitive=False), help="Output format.")
+@click.option("--target", default=None, type=click.Path(), help="File path to write output to.")
+def describe(feature_group_name: str, fmt: str | None, target: str | None) -> None:
+    """Display the full definition of a specific feature group."""
+    from kitefs.exceptions import KiteFSError
+    from kitefs.feature_store import FeatureStore
+
+    try:
+        fs = FeatureStore()
+        result = fs.describe_feature_group(feature_group_name, format=fmt, target=target)
+    except KiteFSError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+    if target is not None:
+        click.echo(f"Output written to {target}")
+        return
+
+    if fmt == "json":
+        click.echo(result)
+        return
+
+    # Default: human-readable key-value layout.
+    assert isinstance(result, dict)  # target/format branches already returned
+    _render_describe(result)
+
+
+def _render_describe(entry: dict) -> None:
+    """Render a full feature group definition as a human-readable layout."""
+    click.echo(f"Feature Group: {entry.get('name', '?')}")
+    click.echo(f"  Storage Target:              {entry.get('storage_target', '?')}")
+
+    ek = entry.get("entity_key", {})
+    click.echo(f"  Entity Key:                  {ek.get('name', '?')} ({ek.get('dtype', '?')})")
+
+    et = entry.get("event_timestamp", {})
+    click.echo(f"  Event Timestamp:             {et.get('name', '?')} ({et.get('dtype', '?')})")
+
+    click.echo(f"  Ingestion Validation:        {entry.get('ingestion_validation', '?')}")
+    click.echo(f"  Offline Retrieval Validation: {entry.get('offline_retrieval_validation', '?')}")
+
+    meta = entry.get("metadata") or {}
+    if meta.get("owner"):
+        click.echo(f"  Owner:                       {meta['owner']}")
+    if meta.get("description"):
+        click.echo(f"  Description:                 {meta['description']}")
+    if meta.get("tags"):
+        click.echo(f"  Tags:                        {meta['tags']}")
+
+    click.echo(f"  Applied At:                  {entry.get('applied_at', '?')}")
+    click.echo(f"  Last Materialized At:        {entry.get('last_materialized_at', 'None')}")
+
+    features = entry.get("features", [])
+    click.echo(f"  Features ({len(features)}):")
+    for f in features:
+        expect_str = ""
+        if f.get("expect"):
+            expect_str = f" expect={f['expect']}"
+        click.echo(f"    - {f['name']} ({f.get('dtype', '?')}){expect_str}")
+
+    join_keys = entry.get("join_keys", [])
+    if join_keys:
+        click.echo(f"  Join Keys ({len(join_keys)}):")
+        for jk in join_keys:
+            click.echo(f"    - {jk['field_name']} -> {jk['referenced_group']}")

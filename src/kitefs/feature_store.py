@@ -1,11 +1,15 @@
 """SDK entry point — orchestrates all KiteFS operations through a single class."""
 
+import json
 from pathlib import Path
+from typing import TypeVar
 
 from kitefs.config import load_config
-from kitefs.exceptions import ConfigurationError
+from kitefs.exceptions import ConfigurationError, FeatureGroupNotFoundError
 from kitefs.providers.factory import create_provider
 from kitefs.registry import ApplyResult, RegistryManager
+
+_T = TypeVar("_T", list[dict], dict)
 
 
 class FeatureStore:
@@ -31,9 +35,59 @@ class FeatureStore:
         """Register all feature group definitions into the registry."""
         return self._registry_manager.apply()
 
+    def list_feature_groups(
+        self,
+        format: str | None = None,
+        target: str | None = None,
+    ) -> list[dict] | str:
+        """Return a summary of all registered feature groups.
+
+        Parameters match the documented API contract: default returns
+        ``list[dict]``, ``format="json"`` returns a JSON string,
+        ``target`` writes JSON to a file and returns the target path.
+        """
+        summaries = self._registry_manager.list_groups()
+        return self._format_output(summaries, format=format, target=target)
+
+    def describe_feature_group(
+        self,
+        name: str,
+        format: str | None = None,
+        target: str | None = None,
+    ) -> dict | str:
+        """Return the full definition of a specific registered feature group.
+
+        Raises FeatureGroupNotFoundError if *name* is not in the registry.
+        """
+        try:
+            entry = self._registry_manager.get_group_entry(name)
+        except FeatureGroupNotFoundError:
+            raise FeatureGroupNotFoundError(
+                f"Feature group '{name}' not found in registry. Run `kitefs list` to see registered groups."
+            ) from None
+        return self._format_output(entry, format=format, target=target)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_output(
+        data: _T,
+        *,
+        format: str | None,
+        target: str | None,
+    ) -> _T | str:
+        """Apply the target-first, then format=json, then structured-return precedence."""
+        if target is not None:
+            Path(target).write_text(
+                json.dumps(data, sort_keys=True, indent=2),
+                encoding="utf-8",
+            )
+            return str(target)
+        if format == "json":
+            return json.dumps(data, sort_keys=True, indent=2)
+        return data
 
     @staticmethod
     def _resolve_project_root(project_root: str | Path | None) -> Path:

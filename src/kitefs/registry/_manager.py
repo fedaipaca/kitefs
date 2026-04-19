@@ -132,6 +132,23 @@ class RegistryManager:
             )
         return _deserialize_group(name, groups[name])
 
+    def get_group_entry(self, name: str) -> dict:
+        """Return the full registry entry dict for a feature group.
+
+        Unlike get_group(), this returns the raw registry dict including
+        runtime fields (applied_at, last_materialized_at) needed by
+        describe_feature_group().
+
+        Raises FeatureGroupNotFoundError if the group is not registered.
+        """
+        groups: dict[str, dict] = self._registry.get("feature_groups", {})
+        if name not in groups:
+            raise FeatureGroupNotFoundError(
+                f"Feature group '{name}' not found in registry. Run `kitefs apply` to register your definitions."
+            )
+        # Deep copy via JSON round-trip so callers cannot mutate the in-memory registry.
+        return json.loads(json.dumps(groups[name]))
+
     def list_groups(self) -> list[dict]:
         """Return summary dicts for all registered feature groups.
 
