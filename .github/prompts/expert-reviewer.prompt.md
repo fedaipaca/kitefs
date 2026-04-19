@@ -14,7 +14,7 @@ Before reviewing:
 
 1. Inspect all changed files (staged and unstaged).
 2. Read the `docs/` files referenced in the task description's tracing table. Follow traces to related requirements, decision records, or building blocks as needed for full context.
-3. Read the project instructions (`.github/copilot-instructions.md` and any applicable `.github/instructions/*.instructions.md` files) and use them as constraints during the review.
+3. Follow the project instructions (`.github/copilot-instructions.md` and any applicable `.github/instructions/*.instructions.md` files) and use them as constraints during the review.
 
 Review with deep expertise in:
 
