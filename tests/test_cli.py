@@ -1,13 +1,16 @@
-"""Tests for the CLI entry point and ``kitefs init`` command."""
+"""Tests for the CLI entry point, ``kitefs init``, and ``kitefs apply`` commands."""
 
 import json
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
 from kitefs.cli import cli
+from kitefs.exceptions import ProviderError
+from tests.helpers import LISTING_DEF, MINIMAL_DEF, TOWN_DEF, setup_project
 
 
 def _runner() -> CliRunner:
@@ -304,3 +307,201 @@ class TestInitNonexistentPath:
         assert result.exit_code == 0
         assert (target / "kitefs.yaml").exists()
         assert (target / "feature_store" / "registry.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# kitefs --help — shows apply command
+# ---------------------------------------------------------------------------
+
+
+class TestCLIHelpShowsApply:
+    """The top-level help lists the apply command."""
+
+    def test_help_shows_apply_command(self) -> None:
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "apply" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs apply --help
+# ---------------------------------------------------------------------------
+
+
+class TestApplyHelp:
+    """``kitefs apply --help`` advertises no custom options or arguments."""
+
+    def test_help_exits_zero(self) -> None:
+        result = _runner().invoke(cli, ["apply", "--help"])
+
+        assert result.exit_code == 0
+
+    def test_no_custom_options(self) -> None:
+        result = _runner().invoke(cli, ["apply", "--help"])
+
+        # Only Click's built-in --help should appear; no custom arguments or options.
+        lines = result.output.strip().splitlines()
+        option_lines = [line.strip() for line in lines if line.strip().startswith("--")]
+        assert all("--help" in line for line in option_lines)
+
+
+# ---------------------------------------------------------------------------
+# kitefs apply — success paths
+# ---------------------------------------------------------------------------
+
+# A concrete definition for CLI tests.
+_SIMPLE_DEF = MINIMAL_DEF.format(varname="listing_features", name="listing_features")
+
+
+class TestApplySuccess:
+    """Successful ``kitefs apply`` exits 0 and prints a summary."""
+
+    def test_exit_code_is_zero(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": _SIMPLE_DEF})
+            result = runner.invoke(cli, ["apply"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+
+    def test_prints_summary(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": _SIMPLE_DEF})
+            result = runner.invoke(cli, ["apply"], catch_exceptions=False)
+
+        assert "1" in result.output
+        assert "registered" in result.output.lower() or "applied" in result.output.lower()
+
+    def test_registry_json_updated(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            td_path = Path(td)
+            setup_project(td_path, {"listing.py": _SIMPLE_DEF})
+            runner.invoke(cli, ["apply"], catch_exceptions=False)
+
+            registry = json.loads((td_path / "feature_store" / "registry.json").read_text(encoding="utf-8"))
+
+        assert "listing_features" in registry["feature_groups"]
+
+    def test_multiple_groups_summary(self, tmp_path: Path) -> None:
+        """Applying two groups prints count '2' in the summary."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(
+                Path(td),
+                {"listing.py": LISTING_DEF, "town.py": TOWN_DEF},
+            )
+            result = runner.invoke(cli, ["apply"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "2" in result.output
+
+
+# ---------------------------------------------------------------------------
+# kitefs apply — error paths
+# ---------------------------------------------------------------------------
+
+
+class TestApplyOutsideProject:
+    """``kitefs apply`` outside a KiteFS project fails with exit 1."""
+
+    def test_exit_code_is_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["apply"])
+
+        assert result.exit_code == 1
+
+    def test_error_message_suggests_init(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["apply"])
+
+        assert "kitefs init" in result.output or "kitefs init" in (result.stderr or "")
+
+    def test_error_goes_to_stderr(self, tmp_path: Path) -> None:
+        """Error output is written to stderr, not stdout."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["apply"])
+
+        assert result.exit_code == 1
+        assert "No KiteFS project found" in result.stderr
+
+    def test_no_traceback(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["apply"])
+
+        assert "Traceback" not in result.output
+
+
+class TestApplyInvalidDefinitions:
+    """``kitefs apply`` with broken definitions exits 1 with errors to stderr."""
+
+    def test_exit_code_is_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"broken.py": "import nonexistent_module_xyz\n"})
+            result = runner.invoke(cli, ["apply"])
+
+        assert result.exit_code == 1
+
+    def test_error_message_contains_filename(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"broken.py": "import nonexistent_module_xyz\n"})
+            result = runner.invoke(cli, ["apply"])
+
+        combined = result.output + (result.stderr or "")
+        assert "broken.py" in combined
+
+    def test_no_traceback(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"broken.py": "import nonexistent_module_xyz\n"})
+            result = runner.invoke(cli, ["apply"])
+
+        assert "Traceback" not in result.output
+
+
+class TestApplyNoDefinitions:
+    """``kitefs apply`` with no definition files exits 1."""
+
+    def test_exit_code_is_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td))
+            result = runner.invoke(cli, ["apply"])
+
+        assert result.exit_code == 1
+
+    def test_error_message_is_actionable(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td))
+            result = runner.invoke(cli, ["apply"])
+
+        combined = result.output + (result.stderr or "")
+        assert "No feature group definitions found" in combined
+
+
+class TestApplyProviderError:
+    """``kitefs apply`` handles ProviderError with exit 1."""
+
+    def test_provider_error_exits_one(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            setup_project(Path(td), {"listing.py": _SIMPLE_DEF})
+
+            with patch(
+                "kitefs.feature_store.FeatureStore.apply",
+                side_effect=ProviderError("Disk full"),
+            ):
+                result = runner.invoke(cli, ["apply"])
+
+        assert result.exit_code == 1
+        combined = result.output + (result.stderr or "")
+        assert "Disk full" in combined

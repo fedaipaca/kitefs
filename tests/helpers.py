@@ -1,5 +1,6 @@
 """Shared test helpers for the KiteFS test suite."""
 
+import json
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -166,3 +167,37 @@ town_market_features = FeatureGroup(
     ),
 )
 """
+
+
+def setup_project(project_root: Path, definitions: dict[str, str] | None = None) -> Path:
+    """Create a minimal KiteFS project scaffold on disk for SDK tests.
+
+    Writes kitefs.yaml, creates the definitions directory, and seeds
+    an empty registry.json. Optionally writes definition files from a
+    {filename: content} dict.
+
+    Returns the project_root for convenience.
+    """
+    storage_root = project_root / "feature_store"
+    definitions_dir = storage_root / "definitions"
+    definitions_dir.mkdir(parents=True, exist_ok=True)
+    (definitions_dir / "__init__.py").write_text("", encoding="utf-8")
+
+    # Mirror the data directories that `kitefs init` creates.
+    (storage_root / "data" / "offline_store").mkdir(parents=True, exist_ok=True)
+    (storage_root / "data" / "online_store").mkdir(parents=True, exist_ok=True)
+
+    (project_root / "kitefs.yaml").write_text(
+        "provider: local\nstorage_root: ./feature_store/\n",
+        encoding="utf-8",
+    )
+    (storage_root / "registry.json").write_text(
+        json.dumps({"version": "1.0", "feature_groups": {}}, sort_keys=True, indent=2),
+        encoding="utf-8",
+    )
+
+    if definitions:
+        for filename, content in definitions.items():
+            (definitions_dir / filename).write_text(content, encoding="utf-8")
+
+    return project_root

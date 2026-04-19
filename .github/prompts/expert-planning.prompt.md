@@ -10,7 +10,7 @@ Create a detailed **implementation plan** for the task described below.
 
 Before planning:
 
-1. Read the project instructions (`.github/copilot-instructions.md` and any applicable `.github/instructions/*.instructions.md` files).
+1. Follow the project instructions (`.github/copilot-instructions.md` and any applicable `.github/instructions/*.instructions.md` files).
 2. Read the `docs/` files relevant to the task. Follow traces to related requirements, decisions, or building blocks as needed for full context.
 3. Read the existing source code and tests that will be affected.
 
@@ -29,7 +29,7 @@ The plan must include:
 5. **-if needed- Conflicts or open questions** — any mismatches found between docs, existing code, or the task description. For each, state what the conflict is and recommend a resolution.
 6. **Verification** — how to confirm the implementation is correct (specific test commands, checks, expected outcomes).
 7. **Branch name** — suggest a branch name following `feat/task-{n}/{short-description}`. If branch is already created skip branch creation. This information can be provided by user, or can be understand before implementation by checking the current branch.
-8. **just commands** - mention after implementation, `just clean build` should pass.
+8. **just commands** - mention related just commands to run, and explicitly mention `just clean build` should pass.
 
 Do **not** implement anything — only produce the plan.
 

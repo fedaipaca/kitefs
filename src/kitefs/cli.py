@@ -110,3 +110,19 @@ def init(path: str | None) -> None:
     click.echo(f"Project initialized at {project_root}")
     click.echo("  Provider: local")
     click.echo(f"  Config:   {config_path}")
+
+
+@cli.command()
+def apply() -> None:
+    """Register feature group definitions into the registry."""
+    from kitefs.exceptions import KiteFSError
+    from kitefs.feature_store import FeatureStore
+
+    try:
+        fs = FeatureStore()
+        result = fs.apply()
+    except KiteFSError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+    click.echo(f"Applied {result.group_count} feature group(s) — registered successfully.")
