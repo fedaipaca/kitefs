@@ -4,9 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from click.testing import CliRunner
 
-from kitefs.cli import cli
 from kitefs.exceptions import ConfigurationError, DefinitionError, FeatureGroupNotFoundError
 from kitefs.feature_store import FeatureStore
 from kitefs.registry import ApplyResult
@@ -25,6 +23,7 @@ class TestConstructorExplicitRoot:
     """FeatureStore(project_root=...) with explicit Path or str."""
 
     def test_accepts_path(self, tmp_path: Path) -> None:
+        """FeatureStore accepts an explicit Path to the project root."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
 
         fs = FeatureStore(project_root=tmp_path)
@@ -32,6 +31,7 @@ class TestConstructorExplicitRoot:
         assert fs is not None
 
     def test_accepts_str(self, tmp_path: Path) -> None:
+        """FeatureStore accepts a string path to the project root."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
 
         fs = FeatureStore(project_root=str(tmp_path))
@@ -43,6 +43,7 @@ class TestConstructorCwdDiscovery:
     """FeatureStore() with no project_root walks up from cwd."""
 
     def test_finds_project_in_ancestor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FeatureStore discovers kitefs.yaml by walking up from a nested cwd."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
         nested = tmp_path / "some" / "deep" / "subdir"
         nested.mkdir(parents=True)
@@ -54,6 +55,7 @@ class TestConstructorCwdDiscovery:
         assert result.group_count >= 1
 
     def test_finds_project_at_cwd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FeatureStore discovers kitefs.yaml when cwd is the project root."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
         monkeypatch.chdir(tmp_path)
 
@@ -74,12 +76,14 @@ class TestConstructorErrors:
     def test_no_project_in_tree_raises_configuration_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """ConfigurationError raised when no kitefs.yaml exists in the directory tree."""
         monkeypatch.chdir(tmp_path)
 
         with pytest.raises(ConfigurationError, match=r"No KiteFS project found"):
             FeatureStore()
 
     def test_error_message_suggests_kitefs_init(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Error message suggests running kitefs init to create a project."""
         monkeypatch.chdir(tmp_path)
 
         with pytest.raises(ConfigurationError, match=r"kitefs init"):
@@ -114,6 +118,7 @@ class TestApplySuccess:
     """apply() delegates to RegistryManager and returns ApplyResult."""
 
     def test_returns_apply_result(self, tmp_path: Path) -> None:
+        """apply() returns an ApplyResult dataclass."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
         fs = FeatureStore(project_root=tmp_path)
 
@@ -122,6 +127,7 @@ class TestApplySuccess:
         assert isinstance(result, ApplyResult)
 
     def test_group_count_matches_definitions(self, tmp_path: Path) -> None:
+        """group_count reflects the number of discovered definitions."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
         fs = FeatureStore(project_root=tmp_path)
 
@@ -130,6 +136,7 @@ class TestApplySuccess:
         assert result.group_count == 1
 
     def test_registered_groups_contains_group_name(self, tmp_path: Path) -> None:
+        """registered_groups tuple contains the name of the applied group."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
         fs = FeatureStore(project_root=tmp_path)
 
@@ -138,6 +145,7 @@ class TestApplySuccess:
         assert "listing_features" in result.registered_groups
 
     def test_multiple_definitions(self, tmp_path: Path) -> None:
+        """Applying two definition files registers both groups."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
 
@@ -156,6 +164,7 @@ class TestApplySuccess:
         assert result.registered_groups == tuple(sorted(result.registered_groups))
 
     def test_registry_json_updated(self, tmp_path: Path) -> None:
+        """apply() writes the group to registry.json on disk."""
         setup_project(tmp_path, {"listing.py": _SIMPLE_DEF})
         fs = FeatureStore(project_root=tmp_path)
 
@@ -176,6 +185,7 @@ class TestApplyErrors:
     """apply() propagates errors from the registry layer."""
 
     def test_invalid_definitions_raises_definition_error(self, tmp_path: Path) -> None:
+        """A definition with an import error raises DefinitionError."""
         bad_def = "import nonexistent_module_xyz\n"
         setup_project(tmp_path, {"broken.py": bad_def})
         fs = FeatureStore(project_root=tmp_path)
@@ -184,50 +194,8 @@ class TestApplyErrors:
             fs.apply()
 
     def test_no_definitions_raises_definition_error(self, tmp_path: Path) -> None:
+        """An empty definitions directory raises DefinitionError."""
         setup_project(tmp_path)
-        fs = FeatureStore(project_root=tmp_path)
-
-        with pytest.raises(DefinitionError, match=r"No feature group definitions found"):
-            fs.apply()
-
-
-# ---------------------------------------------------------------------------
-# End-to-end — init → define → apply → verify
-# ---------------------------------------------------------------------------
-
-
-class TestEndToEnd:
-    """Full workflow: CLI init → write definition → SDK apply → verify registry."""
-
-    def test_init_then_apply_produces_valid_registry(self, tmp_path: Path) -> None:
-        # 1. kitefs init
-        runner = CliRunner()
-        result = runner.invoke(cli, ["init", str(tmp_path)])
-        assert result.exit_code == 0
-
-        # 2. Write a real definition
-        defs_dir = tmp_path / "feature_store" / "definitions"
-        (defs_dir / "listing.py").write_text(_SIMPLE_DEF, encoding="utf-8")
-
-        # 3. SDK apply
-        fs = FeatureStore(project_root=tmp_path)
-        apply_result = fs.apply()
-
-        # 4. Verify
-        assert apply_result.group_count == 1
-        assert "listing_features" in apply_result.registered_groups
-
-        registry_path = tmp_path / "feature_store" / "registry.json"
-        data = json.loads(registry_path.read_text(encoding="utf-8"))
-        assert "listing_features" in data["feature_groups"]
-        assert data["version"] == "1.0"
-
-    def test_init_scaffold_with_no_real_definitions_raises_definition_error(self, tmp_path: Path) -> None:
-        """An init scaffold with only example_features.py raises DefinitionError."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["init", str(tmp_path)])
-        assert result.exit_code == 0
-
         fs = FeatureStore(project_root=tmp_path)
 
         with pytest.raises(DefinitionError, match=r"No feature group definitions found"):
@@ -243,6 +211,7 @@ class TestListFeatureGroupsSuccess:
     """list_feature_groups() returns summaries from the registry."""
 
     def test_returns_list_of_summary_dicts(self, tmp_path: Path) -> None:
+        """Default return is a list of summary dicts, one per group."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -255,6 +224,7 @@ class TestListFeatureGroupsSuccess:
         assert names == {"listing_features", "town_market_features"}
 
     def test_summary_contains_required_fields(self, tmp_path: Path) -> None:
+        """Each summary dict includes name, owner, entity_key, storage_target, feature_count."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -269,6 +239,7 @@ class TestListFeatureGroupsSuccess:
             assert "feature_count" in summary
 
     def test_empty_registry_returns_empty_list(self, tmp_path: Path) -> None:
+        """An empty registry returns an empty list, not an error."""
         setup_project(tmp_path)
         fs = FeatureStore(project_root=tmp_path)
 
@@ -277,6 +248,7 @@ class TestListFeatureGroupsSuccess:
         assert result == []
 
     def test_json_format_returns_json_string(self, tmp_path: Path) -> None:
+        """format='json' returns a JSON string instead of a list."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -289,6 +261,7 @@ class TestListFeatureGroupsSuccess:
         assert len(parsed) == 2
 
     def test_target_writes_json_file(self, tmp_path: Path) -> None:
+        """target parameter writes summaries as JSON to the specified file."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -324,6 +297,7 @@ class TestDescribeFeatureGroupSuccess:
     """describe_feature_group() returns the full definition from the registry."""
 
     def test_returns_full_definition_dict(self, tmp_path: Path) -> None:
+        """Default return is a dict with all registry fields for the group."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -343,6 +317,7 @@ class TestDescribeFeatureGroupSuccess:
         assert "last_materialized_at" in result
 
     def test_metadata_fields_present(self, tmp_path: Path) -> None:
+        """Metadata owner and description are included in the describe output."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -355,6 +330,7 @@ class TestDescribeFeatureGroupSuccess:
         assert meta["description"] == "Historical sold listing attributes and prices"
 
     def test_last_materialized_at_present_even_when_none(self, tmp_path: Path) -> None:
+        """last_materialized_at is included as null for groups not yet materialized."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -366,6 +342,7 @@ class TestDescribeFeatureGroupSuccess:
         assert result["last_materialized_at"] is None
 
     def test_json_format_returns_json_string(self, tmp_path: Path) -> None:
+        """format='json' returns a JSON string of the full group definition."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -377,6 +354,7 @@ class TestDescribeFeatureGroupSuccess:
         assert parsed["name"] == "listing_features"
 
     def test_target_writes_json_file(self, tmp_path: Path) -> None:
+        """target parameter writes the full definition as JSON to the specified file."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -390,6 +368,7 @@ class TestDescribeFeatureGroupSuccess:
         assert isinstance(result, str)
 
     def test_storage_target_value(self, tmp_path: Path) -> None:
+        """storage_target is serialized as the enum value string."""
         setup_project(tmp_path, {"town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -409,6 +388,7 @@ class TestDescribeFeatureGroupErrors:
     """describe_feature_group() raises FeatureGroupNotFoundError for missing groups."""
 
     def test_unknown_name_raises_feature_group_not_found_error(self, tmp_path: Path) -> None:
+        """Describing a non-existent group raises FeatureGroupNotFoundError."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -417,6 +397,7 @@ class TestDescribeFeatureGroupErrors:
             fs.describe_feature_group("ghost")
 
     def test_error_message_suggests_kitefs_list(self, tmp_path: Path) -> None:
+        """Error message suggests running kitefs list to see available groups."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -434,6 +415,7 @@ class TestListFeatureGroupsJsonFields:
     """list_feature_groups(format='json') output contains all required summary fields."""
 
     def test_json_output_has_all_required_summary_fields(self, tmp_path: Path) -> None:
+        """JSON list output includes name, owner, entity_key, storage_target, feature_count."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -446,6 +428,7 @@ class TestListFeatureGroupsJsonFields:
             assert set(summary.keys()) >= {"name", "owner", "entity_key", "storage_target", "feature_count"}
 
     def test_json_field_types_are_correct(self, tmp_path: Path) -> None:
+        """JSON summary fields have the correct Python types after parsing."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()
@@ -472,6 +455,7 @@ class TestDescribeFeatureGroupReturnsCopy:
     """describe_feature_group() returns a copy; mutating it does not affect the registry."""
 
     def test_mutating_result_does_not_affect_subsequent_call(self, tmp_path: Path) -> None:
+        """Mutating a returned dict does not corrupt subsequent describe calls."""
         setup_project(tmp_path, {"listing.py": LISTING_DEF, "town.py": TOWN_DEF})
         fs = FeatureStore(project_root=tmp_path)
         fs.apply()

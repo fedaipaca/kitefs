@@ -27,6 +27,7 @@ class TestImportability:
     """All exception classes are importable from kitefs.exceptions."""
 
     def test_all_exception_classes_importable(self) -> None:
+        """All exception classes are proper Exception subclasses."""
         # If any import above fails this module won't even load — this test
         # just asserts they're all proper Exception subclasses as a smoke check.
         classes = [
@@ -57,48 +58,63 @@ class TestInheritanceTree:
     """Verify every class sits at the correct position in the hierarchy."""
 
     def test_kitesfserror_is_exception(self) -> None:
+        """KiteFSError inherits from Exception."""
         assert issubclass(KiteFSError, Exception)
 
     def test_configuration_error_is_kitesfserror(self) -> None:
+        """ConfigurationError inherits from KiteFSError."""
         assert issubclass(ConfigurationError, KiteFSError)
 
     def test_definition_error_is_kitesfserror(self) -> None:
+        """DefinitionError inherits from KiteFSError."""
         assert issubclass(DefinitionError, KiteFSError)
 
     def test_registry_error_is_kitesfserror(self) -> None:
+        """RegistryError inherits from KiteFSError."""
         assert issubclass(RegistryError, KiteFSError)
 
     def test_feature_group_not_found_error_is_kitesfserror(self) -> None:
+        """FeatureGroupNotFoundError inherits from KiteFSError."""
         assert issubclass(FeatureGroupNotFoundError, KiteFSError)
 
     def test_validation_error_is_kitesfserror(self) -> None:
+        """ValidationError inherits from KiteFSError."""
         assert issubclass(ValidationError, KiteFSError)
 
     def test_schema_validation_error_is_validation_error(self) -> None:
+        """SchemaValidationError inherits from ValidationError."""
         assert issubclass(SchemaValidationError, ValidationError)
 
     def test_schema_validation_error_is_kitesfserror(self) -> None:
+        """SchemaValidationError also inherits from KiteFSError."""
         assert issubclass(SchemaValidationError, KiteFSError)
 
     def test_data_validation_error_is_validation_error(self) -> None:
+        """DataValidationError inherits from ValidationError."""
         assert issubclass(DataValidationError, ValidationError)
 
     def test_data_validation_error_is_kitesfserror(self) -> None:
+        """DataValidationError also inherits from KiteFSError."""
         assert issubclass(DataValidationError, KiteFSError)
 
     def test_ingestion_error_is_kitesfserror(self) -> None:
+        """IngestionError inherits from KiteFSError."""
         assert issubclass(IngestionError, KiteFSError)
 
     def test_retrieval_error_is_kitesfserror(self) -> None:
+        """RetrievalError inherits from KiteFSError."""
         assert issubclass(RetrievalError, KiteFSError)
 
     def test_materialization_error_is_kitesfserror(self) -> None:
+        """MaterializationError inherits from KiteFSError."""
         assert issubclass(MaterializationError, KiteFSError)
 
     def test_join_error_is_kitesfserror(self) -> None:
+        """JoinError inherits from KiteFSError."""
         assert issubclass(JoinError, KiteFSError)
 
     def test_provider_error_is_kitesfserror(self) -> None:
+        """ProviderError inherits from KiteFSError."""
         assert issubclass(ProviderError, KiteFSError)
 
 
@@ -111,21 +127,27 @@ class TestSiblingIsolation:
     """Sibling exceptions must not inherit from one another."""
 
     def test_configuration_error_is_not_validation_error(self) -> None:
+        """ConfigurationError does not inherit from ValidationError."""
         assert not issubclass(ConfigurationError, ValidationError)
 
     def test_ingestion_error_is_not_validation_error(self) -> None:
+        """IngestionError does not inherit from ValidationError."""
         assert not issubclass(IngestionError, ValidationError)
 
     def test_definition_error_is_not_registry_error(self) -> None:
+        """DefinitionError does not inherit from RegistryError."""
         assert not issubclass(DefinitionError, RegistryError)
 
     def test_schema_validation_error_is_not_data_validation_error(self) -> None:
+        """SchemaValidationError does not inherit from DataValidationError."""
         assert not issubclass(SchemaValidationError, DataValidationError)
 
     def test_data_validation_error_is_not_schema_validation_error(self) -> None:
+        """DataValidationError does not inherit from SchemaValidationError."""
         assert not issubclass(DataValidationError, SchemaValidationError)
 
     def test_provider_error_is_not_ingestion_error(self) -> None:
+        """ProviderError does not inherit from IngestionError."""
         assert not issubclass(ProviderError, IngestionError)
 
 
@@ -155,10 +177,12 @@ class TestCatchabilityViaBase:
         ],
     )
     def test_catchable_via_kitesfserror(self, exc_class: type[KiteFSError]) -> None:
+        """Every exception is catchable via the KiteFSError base."""
         with pytest.raises(KiteFSError):
             raise exc_class("test message")
 
     def test_kitesfserror_is_subclass_of_exception(self) -> None:
+        """KiteFSError is a subclass of Exception."""
         assert issubclass(KiteFSError, Exception)
 
 
@@ -171,14 +195,17 @@ class TestValidationErrorIntermediateCatch:
     """SchemaValidationError and DataValidationError are catchable via ValidationError."""
 
     def test_schema_validation_error_catchable_as_validation_error(self) -> None:
+        """SchemaValidationError is catchable via ValidationError."""
         with pytest.raises(ValidationError):
             raise SchemaValidationError("missing column: event_timestamp")
 
     def test_data_validation_error_catchable_as_validation_error(self) -> None:
+        """DataValidationError is catchable via ValidationError."""
         with pytest.raises(ValidationError):
             raise DataValidationError("3 rows failed 'not_null' on 'price'")
 
     def test_configuration_error_not_catchable_as_validation_error(self) -> None:
+        """ConfigurationError is not catchable via ValidationError."""
         with pytest.raises(ConfigurationError):
             try:
                 raise ConfigurationError("bad config")
@@ -247,5 +274,6 @@ class TestMessagePreservation:
         ],
     )
     def test_message_preserved(self, exc_class: type[KiteFSError], message: str) -> None:
+        """Constructor message is preserved in str()."""
         exc = exc_class(message)
         assert str(exc) == message
