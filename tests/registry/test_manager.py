@@ -14,10 +14,6 @@ from kitefs.exceptions import DefinitionError, FeatureGroupNotFoundError, Provid
 from kitefs.providers.local import LocalProvider
 from kitefs.registry import RegistryManager
 
-# ---------------------------------------------------------------------------
-# Successful apply
-# ---------------------------------------------------------------------------
-
 
 class TestRegistryManagerApplySuccess:
     """Happy-path tests for RegistryManager.apply()."""
@@ -155,11 +151,6 @@ class TestRegistryManagerApplySuccess:
         assert raw.index('"feature_groups"') < raw.index('"version"')
 
 
-# ---------------------------------------------------------------------------
-# All-or-nothing behavior
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerApplyAllOrNothing:
     """Invalid definitions must leave the existing registry unchanged."""
 
@@ -197,11 +188,6 @@ class TestRegistryManagerApplyAllOrNothing:
 
         with pytest.raises(DefinitionError, match=r"bad\.py"):
             manager.apply()
-
-
-# ---------------------------------------------------------------------------
-# Lookup methods
-# ---------------------------------------------------------------------------
 
 
 class TestRegistryManagerLookup:
@@ -327,11 +313,6 @@ g = FeatureGroup(
         assert group.features[0].expect is None
 
 
-# ---------------------------------------------------------------------------
-# Stubs
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerStubs:
     """Stub methods raise NotImplementedError with informative messages."""
 
@@ -346,11 +327,6 @@ class TestRegistryManagerStubs:
         manager = setup_manager(tmp_path)
         with pytest.raises(NotImplementedError, match=r"Task"):
             manager.validate_query_params("g", "*", None, None, "get_historical_features")
-
-
-# ---------------------------------------------------------------------------
-# _load_registry error handling
-# ---------------------------------------------------------------------------
 
 
 def _make_provider_error_with_cause(message: str, cause: Exception) -> ProviderError:
@@ -411,11 +387,6 @@ class TestRegistryManagerLoadRegistry:
             RegistryManager(provider, config.definitions_path)
 
 
-# ---------------------------------------------------------------------------
-# applied_at timezone and new-group null materialized_at
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerApplyTimestamps:
     """Tests for applied_at timezone correctness and last_materialized_at edge cases."""
 
@@ -454,11 +425,6 @@ class TestRegistryManagerApplyTimestamps:
         assert fg["newgroup"]["last_materialized_at"] is None
 
 
-# ---------------------------------------------------------------------------
-# get_group enum deserialization
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerGetGroupDeserialization:
     """Tests that get_group() returns correctly typed enum values, not raw strings."""
 
@@ -488,11 +454,6 @@ g = FeatureGroup(
         assert group.storage_target is StorageTarget.OFFLINE_AND_ONLINE
         assert group.ingestion_validation is ValidationMode.FILTER
         assert group.offline_retrieval_validation is ValidationMode.ERROR
-
-
-# ---------------------------------------------------------------------------
-# Reference use case
-# ---------------------------------------------------------------------------
 
 
 class TestRegistryManagerReferenceUseCase:

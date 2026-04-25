@@ -17,10 +17,6 @@ from kitefs import (
     ValidationMode,
 )
 
-# ---------------------------------------------------------------------------
-# Reference use case: listing_features
-# ---------------------------------------------------------------------------
-
 
 class TestReferenceUseCaseListingFeatures:
     """listing_features from the reference use case is instantiable."""
@@ -133,11 +129,6 @@ class TestReferenceUseCaseListingFeatures:
         assert len(constraints) == 3
         types = [c["type"] for c in constraints]
         assert types == ["not_null", "gte", "lte"]
-
-
-# ---------------------------------------------------------------------------
-# Reference use case: town_market_features
-# ---------------------------------------------------------------------------
 
 
 class TestReferenceUseCaseTownMarketFeatures:

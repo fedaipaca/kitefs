@@ -14,11 +14,6 @@ def _runner() -> CliRunner:
     return CliRunner()
 
 
-# ---------------------------------------------------------------------------
-# kitefs list --help
-# ---------------------------------------------------------------------------
-
-
 class TestListHelp:
     """``kitefs list --help`` shows the format and target options."""
 
@@ -39,11 +34,6 @@ class TestListHelp:
         result = _runner().invoke(cli, ["list", "--help"])
 
         assert "--target" in result.output
-
-
-# ---------------------------------------------------------------------------
-# kitefs list — success paths
-# ---------------------------------------------------------------------------
 
 
 class TestListSuccess:
@@ -121,11 +111,6 @@ class TestListSuccess:
         assert "Output written to" in result.output
 
 
-# ---------------------------------------------------------------------------
-# kitefs list — error paths
-# ---------------------------------------------------------------------------
-
-
 class TestListOutsideProject:
     """``kitefs list`` outside a KiteFS project fails with exit 1."""
 
@@ -145,11 +130,6 @@ class TestListOutsideProject:
 
         combined = result.output + (result.stderr or "")
         assert "kitefs init" in combined
-
-
-# ---------------------------------------------------------------------------
-# kitefs list — None owner renders cleanly (no literal "None" in output)
-# ---------------------------------------------------------------------------
 
 
 class TestListOwnerNoneRenders:

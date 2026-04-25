@@ -18,10 +18,6 @@ from kitefs.exceptions import (
     ValidationError,
 )
 
-# ---------------------------------------------------------------------------
-# Importability
-# ---------------------------------------------------------------------------
-
 
 class TestImportability:
     """All exception classes are importable from kitefs.exceptions."""
@@ -47,11 +43,6 @@ class TestImportability:
         ]
         for cls in classes:
             assert issubclass(cls, Exception), f"{cls.__name__} is not an Exception subclass"
-
-
-# ---------------------------------------------------------------------------
-# Inheritance tree
-# ---------------------------------------------------------------------------
 
 
 class TestInheritanceTree:
@@ -118,11 +109,6 @@ class TestInheritanceTree:
         assert issubclass(ProviderError, KiteFSError)
 
 
-# ---------------------------------------------------------------------------
-# Sibling isolation — no accidental cross-inheritance
-# ---------------------------------------------------------------------------
-
-
 class TestSiblingIsolation:
     """Sibling exceptions must not inherit from one another."""
 
@@ -149,11 +135,6 @@ class TestSiblingIsolation:
     def test_provider_error_is_not_ingestion_error(self) -> None:
         """ProviderError does not inherit from IngestionError."""
         assert not issubclass(ProviderError, IngestionError)
-
-
-# ---------------------------------------------------------------------------
-# Catchability via base KiteFSError
-# ---------------------------------------------------------------------------
 
 
 class TestCatchabilityViaBase:
@@ -186,11 +167,6 @@ class TestCatchabilityViaBase:
         assert issubclass(KiteFSError, Exception)
 
 
-# ---------------------------------------------------------------------------
-# ValidationError as intermediate catch
-# ---------------------------------------------------------------------------
-
-
 class TestValidationErrorIntermediateCatch:
     """SchemaValidationError and DataValidationError are catchable via ValidationError."""
 
@@ -211,11 +187,6 @@ class TestValidationErrorIntermediateCatch:
                 raise ConfigurationError("bad config")
             except ValidationError:
                 pytest.fail("ConfigurationError should not be caught as ValidationError")
-
-
-# ---------------------------------------------------------------------------
-# Message preservation
-# ---------------------------------------------------------------------------
 
 
 class TestMessagePreservation:

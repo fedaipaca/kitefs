@@ -20,11 +20,6 @@ def _runner() -> CliRunner:
 _SIMPLE_DEF = MINIMAL_DEF.format(varname="listing_features", name="listing_features")
 
 
-# ---------------------------------------------------------------------------
-# kitefs apply --help
-# ---------------------------------------------------------------------------
-
-
 class TestApplyHelp:
     """``kitefs apply --help`` advertises no custom options or arguments."""
 
@@ -41,11 +36,6 @@ class TestApplyHelp:
         lines = result.output.strip().splitlines()
         option_lines = [line.strip() for line in lines if line.strip().startswith("--")]
         assert all("--help" in line for line in option_lines)
-
-
-# ---------------------------------------------------------------------------
-# kitefs apply — success paths
-# ---------------------------------------------------------------------------
 
 
 class TestApplySuccess:
@@ -94,11 +84,6 @@ class TestApplySuccess:
 
         assert result.exit_code == 0
         assert "2" in result.output
-
-
-# ---------------------------------------------------------------------------
-# kitefs apply — error paths
-# ---------------------------------------------------------------------------
 
 
 class TestApplyOutsideProject:

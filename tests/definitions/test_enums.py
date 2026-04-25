@@ -13,10 +13,6 @@ from kitefs import (
     ValidationMode,
 )
 
-# ---------------------------------------------------------------------------
-# Importability
-# ---------------------------------------------------------------------------
-
 
 class TestImportability:
     """All public definition symbols are importable from the top-level kitefs package."""
@@ -37,11 +33,6 @@ class TestImportability:
         ]
         for sym in symbols:
             assert sym is not None, f"{sym} was not importable"
-
-
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
 
 
 class TestFeatureType:

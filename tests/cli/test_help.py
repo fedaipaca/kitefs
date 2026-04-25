@@ -10,11 +10,6 @@ def _runner() -> CliRunner:
     return CliRunner()
 
 
-# ---------------------------------------------------------------------------
-# kitefs --help
-# ---------------------------------------------------------------------------
-
-
 class TestCLIHelp:
     """The top-level group exposes help and lists commands."""
 
@@ -31,11 +26,6 @@ class TestCLIHelp:
         assert "init" in result.output
 
 
-# ---------------------------------------------------------------------------
-# kitefs --help — shows apply command
-# ---------------------------------------------------------------------------
-
-
 class TestCLIHelpShowsApply:
     """The top-level help lists the apply command."""
 
@@ -45,11 +35,6 @@ class TestCLIHelpShowsApply:
 
         assert result.exit_code == 0
         assert "apply" in result.output
-
-
-# ---------------------------------------------------------------------------
-# kitefs --help — shows list and describe commands
-# ---------------------------------------------------------------------------
 
 
 class TestCLIHelpShowsListAndDescribe:

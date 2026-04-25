@@ -9,10 +9,6 @@ from helpers import MINIMAL_GROUP, write_definition
 from kitefs.exceptions import DefinitionError
 from kitefs.registry import _discover_definitions
 
-# ---------------------------------------------------------------------------
-# Success paths
-# ---------------------------------------------------------------------------
-
 
 class TestDiscoverDefinitionsSuccess:
     """Happy-path tests for _discover_definitions."""
@@ -162,11 +158,6 @@ class TestDiscoverDefinitionsSuccess:
         assert result[0].name == "real"
 
 
-# ---------------------------------------------------------------------------
-# Error paths
-# ---------------------------------------------------------------------------
-
-
 class TestDiscoverDefinitionsErrors:
     """Error-path tests for _discover_definitions."""
 
@@ -258,11 +249,6 @@ class TestDiscoverDefinitionsErrors:
         message = str(exc_info.value)
         assert "broken.py" in message
         assert "good" not in message
-
-
-# ---------------------------------------------------------------------------
-# Reference use case
-# ---------------------------------------------------------------------------
 
 
 class TestDiscoverDefinitionsReferenceUseCase:

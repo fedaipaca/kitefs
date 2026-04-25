@@ -15,11 +15,6 @@ def _runner() -> CliRunner:
     return CliRunner()
 
 
-# ---------------------------------------------------------------------------
-# kitefs init — success paths
-# ---------------------------------------------------------------------------
-
-
 class TestInitSuccess:
     """Successful ``kitefs init`` creates the full project scaffold."""
 
@@ -143,11 +138,6 @@ class TestInitCustomPath:
         assert (target / "kitefs.yaml").exists()
 
 
-# ---------------------------------------------------------------------------
-# kitefs init — .gitignore handling
-# ---------------------------------------------------------------------------
-
-
 class TestInitGitignore:
     """The init command creates or appends .gitignore correctly."""
 
@@ -193,11 +183,6 @@ class TestInitGitignore:
         assert "*.pyc\nfeature_store/data/" in content
 
 
-# ---------------------------------------------------------------------------
-# kitefs init — error paths
-# ---------------------------------------------------------------------------
-
-
 class TestInitAlreadyInitialized:
     """Re-initializing an existing project fails with a clear error."""
 
@@ -234,11 +219,6 @@ class TestInitAlreadyInitialized:
         assert "KiteFS project already initialized" in result.stderr
 
 
-# ---------------------------------------------------------------------------
-# kitefs init — atomicity: kitefs.yaml written last
-# ---------------------------------------------------------------------------
-
-
 class TestInitAtomicity:
     """kitefs.yaml is the sentinel file and is written last."""
 
@@ -252,11 +232,6 @@ class TestInitAtomicity:
 
         assert result.exit_code == 0
         assert (tmp_path / "kitefs.yaml").exists()
-
-
-# ---------------------------------------------------------------------------
-# kitefs init — OS error paths
-# ---------------------------------------------------------------------------
 
 
 class TestInitOSErrors:
@@ -277,11 +252,6 @@ class TestInitOSErrors:
             assert "Traceback" not in result.output
         finally:
             target.chmod(stat.S_IRWXU)
-
-
-# ---------------------------------------------------------------------------
-# kitefs init — nonexistent target path
-# ---------------------------------------------------------------------------
 
 
 class TestInitNonexistentPath:

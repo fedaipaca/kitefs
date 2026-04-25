@@ -16,10 +16,6 @@ from kitefs.definitions import (
 )
 from kitefs.registry import _validate_definitions
 
-# ---------------------------------------------------------------------------
-# Individual group validation
-# ---------------------------------------------------------------------------
-
 
 class TestValidateDefinitionsIndividual:
     """Per-group structural validation rules."""
@@ -124,11 +120,6 @@ class TestValidateDefinitionsIndividual:
 
         assert len(errors) == 1
         assert "Duplicate field name 'dup_feat'" in errors[0]
-
-
-# ---------------------------------------------------------------------------
-# Cross-group validation
-# ---------------------------------------------------------------------------
 
 
 class TestValidateDefinitionsCrossGroup:
@@ -317,11 +308,6 @@ class TestValidateDefinitionsCrossGroup:
         assert any("3 times" in e for e in errors)
 
 
-# ---------------------------------------------------------------------------
-# Collected errors
-# ---------------------------------------------------------------------------
-
-
 class TestValidateDefinitionsCollectedErrors:
     """Multiple errors from multiple groups are collected in one call."""
 
@@ -358,11 +344,6 @@ class TestValidateDefinitionsCollectedErrors:
         assert has_ts_error
         assert has_dup_error
         assert len(errors) >= 2
-
-
-# ---------------------------------------------------------------------------
-# Reference use case
-# ---------------------------------------------------------------------------
 
 
 class TestValidateDefinitionsReferenceUseCase:

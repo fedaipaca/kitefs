@@ -14,11 +14,6 @@ def _runner() -> CliRunner:
     return CliRunner()
 
 
-# ---------------------------------------------------------------------------
-# kitefs describe --help
-# ---------------------------------------------------------------------------
-
-
 class TestDescribeHelp:
     """``kitefs describe --help`` shows the name argument and options."""
 
@@ -45,11 +40,6 @@ class TestDescribeHelp:
         result = _runner().invoke(cli, ["describe", "--help"])
 
         assert "--target" in result.output
-
-
-# ---------------------------------------------------------------------------
-# kitefs describe — success paths
-# ---------------------------------------------------------------------------
 
 
 class TestDescribeSuccess:
@@ -139,11 +129,6 @@ class TestDescribeSuccess:
         assert "Output written to" in result.output
 
 
-# ---------------------------------------------------------------------------
-# kitefs describe — error paths
-# ---------------------------------------------------------------------------
-
-
 class TestDescribeOutsideProject:
     """``kitefs describe`` outside a KiteFS project fails with exit 1."""
 
@@ -209,11 +194,6 @@ class TestDescribeUnknownGroup:
             result = runner.invoke(cli, ["describe", "missing_group"])
 
         assert "Traceback" not in result.output
-
-
-# ---------------------------------------------------------------------------
-# kitefs describe — join keys section appears in output
-# ---------------------------------------------------------------------------
 
 
 class TestDescribeJoinKeysShown:

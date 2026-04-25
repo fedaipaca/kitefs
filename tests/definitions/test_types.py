@@ -18,10 +18,6 @@ from kitefs import (
     ValidationMode,
 )
 
-# ---------------------------------------------------------------------------
-# Expect fluent builder
-# ---------------------------------------------------------------------------
-
 
 class TestExpect:
     """Expect fluent builder produces correct constraints and is immutable."""
@@ -120,11 +116,6 @@ class TestExpect:
         assert constraint["values"] == ()
 
 
-# ---------------------------------------------------------------------------
-# EntityKey
-# ---------------------------------------------------------------------------
-
-
 class TestEntityKey:
     """EntityKey frozen dataclass."""
 
@@ -147,11 +138,6 @@ class TestEntityKey:
             ek.name = "other"  # type: ignore[misc]
 
 
-# ---------------------------------------------------------------------------
-# EventTimestamp
-# ---------------------------------------------------------------------------
-
-
 class TestEventTimestamp:
     """EventTimestamp frozen dataclass."""
 
@@ -172,11 +158,6 @@ class TestEventTimestamp:
         et = EventTimestamp(name="ts", dtype=FeatureType.DATETIME)
         with pytest.raises(dataclasses.FrozenInstanceError):
             et.name = "other"  # type: ignore[misc]
-
-
-# ---------------------------------------------------------------------------
-# Feature
-# ---------------------------------------------------------------------------
 
 
 class TestFeature:
@@ -203,11 +184,6 @@ class TestFeature:
             f.name = "other"  # type: ignore[misc]
 
 
-# ---------------------------------------------------------------------------
-# JoinKey
-# ---------------------------------------------------------------------------
-
-
 class TestJoinKey:
     """JoinKey frozen dataclass."""
 
@@ -222,11 +198,6 @@ class TestJoinKey:
         jk = JoinKey(field_name="town_id", referenced_group="town_market_features")
         with pytest.raises(dataclasses.FrozenInstanceError):
             jk.field_name = "other"  # type: ignore[misc]
-
-
-# ---------------------------------------------------------------------------
-# Metadata
-# ---------------------------------------------------------------------------
 
 
 class TestMetadata:
@@ -255,11 +226,6 @@ class TestMetadata:
         m = Metadata()
         with pytest.raises(dataclasses.FrozenInstanceError):
             m.description = "changed"  # type: ignore[misc]
-
-
-# ---------------------------------------------------------------------------
-# FeatureGroup
-# ---------------------------------------------------------------------------
 
 
 class TestFeatureGroup:
