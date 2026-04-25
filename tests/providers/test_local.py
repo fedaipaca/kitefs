@@ -200,3 +200,33 @@ class TestLocalProviderRegistryRoundtrip:
         provider.write_registry('{"version": "1.2"}')
 
         assert provider.read_registry() == '{"version": "1.2"}'
+
+
+class TestLocalProviderOfflineStubs:
+    """LocalProvider offline methods raise NotImplementedError until implemented."""
+
+    def test_write_offline_raises_not_implemented(self, tmp_path: Path) -> None:
+        """write_offline is stubbed and raises NotImplementedError."""
+        from pandas import DataFrame
+
+        config = make_local_config(tmp_path)
+        provider = LocalProvider(config)
+
+        with pytest.raises(NotImplementedError):
+            provider.write_offline("group", "year=2024/month=01", "file.parquet", DataFrame())
+
+    def test_read_offline_raises_not_implemented(self, tmp_path: Path) -> None:
+        """read_offline is stubbed and raises NotImplementedError."""
+        config = make_local_config(tmp_path)
+        provider = LocalProvider(config)
+
+        with pytest.raises(NotImplementedError):
+            provider.read_offline("group", ["year=2024/month=01"])
+
+    def test_list_partitions_raises_not_implemented(self, tmp_path: Path) -> None:
+        """list_partitions is stubbed and raises NotImplementedError."""
+        config = make_local_config(tmp_path)
+        provider = LocalProvider(config)
+
+        with pytest.raises(NotImplementedError):
+            provider.list_partitions("group")

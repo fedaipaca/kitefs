@@ -5,6 +5,8 @@ import tempfile
 from contextlib import suppress
 from pathlib import Path
 
+from pandas import DataFrame
+
 from kitefs.config import Config
 from kitefs.exceptions import ProviderError
 from kitefs.providers.base import StorageProvider
@@ -22,6 +24,44 @@ class LocalProvider(StorageProvider):
         """Initialise with a validated config."""
         self._storage_root: Path = config.storage_root
         self._registry_path: Path = self._storage_root / "registry.json"
+
+    # --- Offline Store ---
+
+    def write_offline(
+        self,
+        group_name: str,
+        partition_path: str,
+        file_name: str,
+        df: DataFrame,
+    ) -> None:
+        """Write a single Parquet file to the specified partition path.
+
+        Not yet implemented.
+        """
+        raise NotImplementedError("LocalProvider.write_offline is not yet implemented.")
+
+    def read_offline(
+        self,
+        group_name: str,
+        partition_paths: list[str],
+    ) -> DataFrame:
+        """Read and combine Parquet files from the specified partition paths.
+
+        Not yet implemented.
+        """
+        raise NotImplementedError("LocalProvider.read_offline is not yet implemented.")
+
+    def list_partitions(
+        self,
+        group_name: str,
+    ) -> list[str]:
+        """List available partition paths for a feature group.
+
+        Not yet implemented.
+        """
+        raise NotImplementedError("LocalProvider.list_partitions is not yet implemented.")
+
+    # --- Registry ---
 
     def read_registry(self) -> str:
         """Read registry.json as a UTF-8 string from the configured storage root.
