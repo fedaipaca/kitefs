@@ -5,6 +5,8 @@ import tempfile
 from contextlib import suppress
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 from pandas import DataFrame
 
 from kitefs.config import Config
@@ -16,7 +18,7 @@ class LocalProvider(StorageProvider):
     """Storage provider backed by the local filesystem.
 
     Registry: reads/writes registry.json at {storage_root}/registry.json.
-    Offline store: Parquet files under {storage_root}/data/offline_store/ (not yet implemented).
+    Offline store: Parquet files under {storage_root}/data/offline_store/ (write implemented; read/list not yet).
     Online store: SQLite at {storage_root}/data/online_store/online.db (not yet implemented).
     """
 
@@ -34,11 +36,37 @@ class LocalProvider(StorageProvider):
         file_name: str,
         df: DataFrame,
     ) -> None:
-        """Write a single Parquet file to the specified partition path.
+        """Write a DataFrame as a Parquet file to the local offline store.
 
-        Not yet implemented.
+        Creates the full directory structure under
+        ``{storage_root}/data/offline_store/{group_name}/{partition_path}/``
+        and writes the file atomically via a temporary file and ``os.replace``.
         """
-        raise NotImplementedError("LocalProvider.write_offline is not yet implemented.")
+        target_dir = self._storage_root / "data" / "offline_store" / group_name / Path(partition_path)
+        target_path = target_dir / file_name
+        temp_file_path: str | None = None
+
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            file_descriptor, temp_file_path = tempfile.mkstemp(
+                dir=target_dir,
+                prefix=f"{file_name}.",
+                suffix=".tmp",
+            )
+            os.close(file_descriptor)
+
+            table = pa.Table.from_pandas(df)
+            pq.write_table(table, temp_file_path)
+
+            os.replace(temp_file_path, target_path)
+        except (OSError, pa.lib.ArrowException) as exc:
+            if temp_file_path is not None:
+                with suppress(OSError):
+                    os.unlink(temp_file_path)
+            raise ProviderError(
+                f"Failed to write offline Parquet file to '{target_path}': {exc}. "
+                "Check file permissions and available disk space."
+            ) from exc
 
     def read_offline(
         self,
