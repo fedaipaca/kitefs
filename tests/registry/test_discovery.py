@@ -9,15 +9,12 @@ from helpers import MINIMAL_GROUP, write_definition
 from kitefs.exceptions import DefinitionError
 from kitefs.registry import _discover_definitions
 
-# ---------------------------------------------------------------------------
-# Success paths
-# ---------------------------------------------------------------------------
-
 
 class TestDiscoverDefinitionsSuccess:
     """Happy-path tests for _discover_definitions."""
 
     def test_discover_single_group(self, tmp_path: Path) -> None:
+        """A single .py file with a FeatureGroup is discovered."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         write_definition(defs, "my_group.py", MINIMAL_GROUP.format(name="my_group"))
@@ -28,6 +25,7 @@ class TestDiscoverDefinitionsSuccess:
         assert result[0].name == "my_group"
 
     def test_discover_multiple_groups_across_files(self, tmp_path: Path) -> None:
+        """Multiple .py files each with a FeatureGroup are all discovered."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         write_definition(defs, "alpha.py", MINIMAL_GROUP.format(name="alpha"))
@@ -40,6 +38,7 @@ class TestDiscoverDefinitionsSuccess:
         assert names == {"alpha", "beta"}
 
     def test_discover_multiple_groups_in_single_file(self, tmp_path: Path) -> None:
+        """Two FeatureGroup instances in one file are both discovered."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         content = dedent("""\
@@ -73,6 +72,7 @@ class TestDiscoverDefinitionsSuccess:
         assert names == {"first", "second"}
 
     def test_init_py_skipped(self, tmp_path: Path) -> None:
+        """__init__.py files are skipped during discovery."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         # __init__.py with a FeatureGroup that should be ignored
@@ -85,6 +85,7 @@ class TestDiscoverDefinitionsSuccess:
         assert result[0].name == "real"
 
     def test_non_featuregroup_attributes_ignored(self, tmp_path: Path) -> None:
+        """Non-FeatureGroup module attributes are ignored."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         content = dedent("""\
@@ -113,6 +114,7 @@ class TestDiscoverDefinitionsSuccess:
         assert result[0].name == "the_group"
 
     def test_non_py_files_ignored(self, tmp_path: Path) -> None:
+        """Non-.py files are ignored during discovery."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         (defs / "notes.txt").write_text("some notes")
@@ -156,15 +158,11 @@ class TestDiscoverDefinitionsSuccess:
         assert result[0].name == "real"
 
 
-# ---------------------------------------------------------------------------
-# Error paths
-# ---------------------------------------------------------------------------
-
-
 class TestDiscoverDefinitionsErrors:
     """Error-path tests for _discover_definitions."""
 
     def test_empty_directory_raises_definition_error(self, tmp_path: Path) -> None:
+        """An empty definitions directory raises DefinitionError."""
         defs = tmp_path / "definitions"
         defs.mkdir()
 
@@ -172,6 +170,7 @@ class TestDiscoverDefinitionsErrors:
             _discover_definitions(defs)
 
     def test_syntax_error_raises_definition_error_with_filepath(self, tmp_path: Path) -> None:
+        """A file with a syntax error raises DefinitionError naming the file."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         write_definition(defs, "broken.py", "def this is not valid python !!!")
@@ -180,6 +179,7 @@ class TestDiscoverDefinitionsErrors:
             _discover_definitions(defs)
 
     def test_import_error_raises_definition_error_with_filepath(self, tmp_path: Path) -> None:
+        """A file with a missing import raises DefinitionError naming the file."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         write_definition(defs, "bad_import.py", "import nonexistent_package_xyz_123")
@@ -188,6 +188,7 @@ class TestDiscoverDefinitionsErrors:
             _discover_definitions(defs)
 
     def test_only_non_py_files_raises_definition_error(self, tmp_path: Path) -> None:
+        """A directory with only non-.py files raises DefinitionError."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         (defs / "notes.txt").write_text("not python")
@@ -197,6 +198,7 @@ class TestDiscoverDefinitionsErrors:
             _discover_definitions(defs)
 
     def test_only_init_py_raises_definition_error(self, tmp_path: Path) -> None:
+        """A directory with only __init__.py raises DefinitionError."""
         defs = tmp_path / "definitions"
         defs.mkdir()
         write_definition(defs, "__init__.py", MINIMAL_GROUP.format(name="hidden"))
@@ -249,15 +251,11 @@ class TestDiscoverDefinitionsErrors:
         assert "good" not in message
 
 
-# ---------------------------------------------------------------------------
-# Reference use case
-# ---------------------------------------------------------------------------
-
-
 class TestDiscoverDefinitionsReferenceUseCase:
     """Verify discovery works with the reference use case definitions."""
 
     def test_reference_use_case_definitions_discovered(self, tmp_path: Path) -> None:
+        """Both reference use case feature groups are discovered from definition files."""
         defs = tmp_path / "definitions"
         defs.mkdir()
 

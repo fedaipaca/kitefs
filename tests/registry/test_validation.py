@@ -16,23 +16,22 @@ from kitefs.definitions import (
 )
 from kitefs.registry import _validate_definitions
 
-# ---------------------------------------------------------------------------
-# Individual group validation
-# ---------------------------------------------------------------------------
-
 
 class TestValidateDefinitionsIndividual:
     """Per-group structural validation rules."""
 
     def test_valid_single_group_returns_empty(self) -> None:
+        """A valid group produces no validation errors."""
         errors = _validate_definitions([make_feature_group()])
         assert errors == []
 
     def test_empty_group_list_returns_empty(self) -> None:
+        """An empty definitions list produces no errors."""
         errors = _validate_definitions([])
         assert errors == []
 
     def test_event_timestamp_non_datetime_dtype_error(self) -> None:
+        """EventTimestamp with non-DATETIME dtype produces an error."""
         group = make_feature_group(
             event_timestamp=EventTimestamp(name="ts", dtype=FeatureType.STRING),
         )
@@ -60,6 +59,7 @@ class TestValidateDefinitionsIndividual:
         assert "invalid dtype" in errors[0]
 
     def test_duplicate_field_names_entity_key_and_feature(self) -> None:
+        """Entity key sharing a name with a feature produces a duplicate error."""
         group = make_feature_group(
             entity_key=EntityKey(name="shared", dtype=FeatureType.INTEGER),
             features=[Feature(name="shared", dtype=FeatureType.FLOAT)],
@@ -71,6 +71,7 @@ class TestValidateDefinitionsIndividual:
         assert "Duplicate field name 'shared'" in errors[0]
 
     def test_duplicate_field_names_event_timestamp_and_feature(self) -> None:
+        """Event timestamp sharing a name with a feature produces a duplicate error."""
         group = make_feature_group(
             event_timestamp=EventTimestamp(name="ts", dtype=FeatureType.DATETIME),
             features=[Feature(name="ts", dtype=FeatureType.FLOAT)],
@@ -82,6 +83,7 @@ class TestValidateDefinitionsIndividual:
         assert "Duplicate field name 'ts'" in errors[0]
 
     def test_duplicate_field_names_entity_key_and_event_timestamp(self) -> None:
+        """Entity key and event timestamp sharing a name produces a duplicate error."""
         group = make_feature_group(
             entity_key=EntityKey(name="same", dtype=FeatureType.INTEGER),
             event_timestamp=EventTimestamp(name="same", dtype=FeatureType.DATETIME),
@@ -120,15 +122,11 @@ class TestValidateDefinitionsIndividual:
         assert "Duplicate field name 'dup_feat'" in errors[0]
 
 
-# ---------------------------------------------------------------------------
-# Cross-group validation
-# ---------------------------------------------------------------------------
-
-
 class TestValidateDefinitionsCrossGroup:
     """Cross-group validation rules (duplicates and join keys)."""
 
     def test_duplicate_group_names_error(self) -> None:
+        """Two groups with the same name produce a duplicate name error."""
         g1 = make_feature_group(name="dup")
         g2 = make_feature_group(name="dup")
 
@@ -138,6 +136,7 @@ class TestValidateDefinitionsCrossGroup:
         assert any("2 times" in e for e in errors)
 
     def test_join_key_references_nonexistent_group_error(self) -> None:
+        """A join key referencing a non-existent group produces an error."""
         group = make_feature_group(
             features=[Feature(name="fk", dtype=FeatureType.INTEGER)],
             join_keys=[JoinKey(field_name="fk", referenced_group="ghost")],
@@ -187,7 +186,7 @@ class TestValidateDefinitionsCrossGroup:
         assert "ref_group" in errors[0]
 
     def test_join_key_type_match_via_entity_key(self) -> None:
-        """Type check finds the field on entity_key when names match."""
+        """Type check passes when the join key field matches via entity_key."""
         referenced = make_feature_group(
             name="ref_group",
             entity_key=EntityKey(name="id", dtype=FeatureType.INTEGER),
@@ -309,11 +308,6 @@ class TestValidateDefinitionsCrossGroup:
         assert any("3 times" in e for e in errors)
 
 
-# ---------------------------------------------------------------------------
-# Collected errors
-# ---------------------------------------------------------------------------
-
-
 class TestValidateDefinitionsCollectedErrors:
     """Multiple errors from multiple groups are collected in one call."""
 
@@ -352,15 +346,11 @@ class TestValidateDefinitionsCollectedErrors:
         assert len(errors) >= 2
 
 
-# ---------------------------------------------------------------------------
-# Reference use case
-# ---------------------------------------------------------------------------
-
-
 class TestValidateDefinitionsReferenceUseCase:
     """Reference use case definitions pass validation."""
 
     def test_reference_use_case_passes_validation(self) -> None:
+        """Both reference use case definitions pass cross-group validation."""
         listing_features = FeatureGroup(
             name="listing_features",
             storage_target=StorageTarget.OFFLINE,

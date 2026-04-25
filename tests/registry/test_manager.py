@@ -14,15 +14,12 @@ from kitefs.exceptions import DefinitionError, FeatureGroupNotFoundError, Provid
 from kitefs.providers.local import LocalProvider
 from kitefs.registry import RegistryManager
 
-# ---------------------------------------------------------------------------
-# Successful apply
-# ---------------------------------------------------------------------------
-
 
 class TestRegistryManagerApplySuccess:
     """Happy-path tests for RegistryManager.apply()."""
 
     def test_apply_single_group_returns_apply_result(self, tmp_path: Path) -> None:
+        """apply() with one definition returns an ApplyResult with count 1."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "group.py").write_text(MINIMAL_DEF.format(varname="group", name="my_group"))
 
@@ -32,6 +29,7 @@ class TestRegistryManagerApplySuccess:
         assert result.registered_groups == ("my_group",)
 
     def test_apply_multiple_groups_returns_all(self, tmp_path: Path) -> None:
+        """apply() with two definitions returns both group names."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "alpha.py").write_text(MINIMAL_DEF.format(varname="alpha", name="alpha"))
         (manager._definitions_path / "beta.py").write_text(MINIMAL_DEF.format(varname="beta", name="beta"))
@@ -42,6 +40,7 @@ class TestRegistryManagerApplySuccess:
         assert result.registered_groups == ("alpha", "beta")
 
     def test_apply_writes_registry_json(self, tmp_path: Path) -> None:
+        """apply() persists the group to registry.json on disk."""
         config = make_local_config(tmp_path)
         config.storage_root.mkdir(parents=True, exist_ok=True)
         config.definitions_path.mkdir(parents=True, exist_ok=True)
@@ -58,6 +57,7 @@ class TestRegistryManagerApplySuccess:
         assert "my_group" in data["feature_groups"]
 
     def test_apply_version_field_is_1_0(self, tmp_path: Path) -> None:
+        """Registry version is always 1.0 after apply."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="g"))
         manager.apply()
@@ -65,6 +65,7 @@ class TestRegistryManagerApplySuccess:
         assert manager._registry["version"] == "1.0"
 
     def test_applied_at_is_valid_iso8601(self, tmp_path: Path) -> None:
+        """applied_at is a parseable ISO 8601 datetime string."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="g"))
         manager.apply()
@@ -75,6 +76,7 @@ class TestRegistryManagerApplySuccess:
         assert parsed is not None
 
     def test_last_materialized_at_null_for_new_group(self, tmp_path: Path) -> None:
+        """A newly registered group has null last_materialized_at."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="g"))
         manager.apply()
@@ -82,6 +84,7 @@ class TestRegistryManagerApplySuccess:
         assert manager._registry["feature_groups"]["g"]["last_materialized_at"] is None
 
     def test_last_materialized_at_preserved_on_reapply(self, tmp_path: Path) -> None:
+        """Re-applying preserves the existing last_materialized_at value."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="g"))
         manager.apply()
@@ -136,6 +139,7 @@ class TestRegistryManagerApplySuccess:
         assert first == second
 
     def test_json_uses_sort_keys_and_indent_2(self, tmp_path: Path) -> None:
+        """Registry JSON uses sorted keys and 2-space indentation."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="g"))
         manager.apply()
@@ -147,15 +151,11 @@ class TestRegistryManagerApplySuccess:
         assert raw.index('"feature_groups"') < raw.index('"version"')
 
 
-# ---------------------------------------------------------------------------
-# All-or-nothing behavior
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerApplyAllOrNothing:
     """Invalid definitions must leave the existing registry unchanged."""
 
     def test_invalid_definitions_raise_definition_error(self, tmp_path: Path) -> None:
+        """Broken definition syntax raises DefinitionError."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "bad.py").write_text("def this is broken!!!")
 
@@ -163,6 +163,7 @@ class TestRegistryManagerApplyAllOrNothing:
             manager.apply()
 
     def test_invalid_definitions_leave_registry_unchanged(self, tmp_path: Path) -> None:
+        """A broken definition leaves the existing registry file unchanged."""
         manager = setup_manager(tmp_path)
         # First apply: register a valid group.
         (manager._definitions_path / "good.py").write_text(MINIMAL_DEF.format(varname="good", name="good_group"))
@@ -189,15 +190,11 @@ class TestRegistryManagerApplyAllOrNothing:
             manager.apply()
 
 
-# ---------------------------------------------------------------------------
-# Lookup methods
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerLookup:
     """Tests for get_group(), list_groups(), and group_exists()."""
 
     def test_get_group_returns_correct_feature_group(self, tmp_path: Path) -> None:
+        """get_group returns a FeatureGroup with the correct name and fields."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="my_group"))
         manager.apply()
@@ -211,23 +208,27 @@ class TestRegistryManagerLookup:
         assert group.features[0].name == "value"
 
     def test_get_group_unknown_name_raises(self, tmp_path: Path) -> None:
+        """get_group with an unknown name raises FeatureGroupNotFoundError."""
         manager = setup_manager(tmp_path)
 
         with pytest.raises(FeatureGroupNotFoundError, match=r"ghost"):
             manager.get_group("ghost")
 
     def test_get_group_actionable_error_message(self, tmp_path: Path) -> None:
+        """Error message suggests running kitefs apply."""
         manager = setup_manager(tmp_path)
 
         with pytest.raises(FeatureGroupNotFoundError, match=r"kitefs apply"):
             manager.get_group("missing")
 
     def test_list_groups_empty_registry(self, tmp_path: Path) -> None:
+        """list_groups returns an empty list when the registry has no groups."""
         manager = setup_manager(tmp_path)
 
         assert manager.list_groups() == []
 
     def test_list_groups_returns_summaries(self, tmp_path: Path) -> None:
+        """list_groups returns summary dicts with name, entity_key, storage_target, and feature_count."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="my_group"))
         manager.apply()
@@ -242,6 +243,7 @@ class TestRegistryManagerLookup:
         assert s["feature_count"] == 1
 
     def test_list_groups_multiple(self, tmp_path: Path) -> None:
+        """list_groups returns summaries for all registered groups."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "a.py").write_text(MINIMAL_DEF.format(varname="a", name="alpha"))
         (manager._definitions_path / "b.py").write_text(MINIMAL_DEF.format(varname="b", name="beta"))
@@ -251,6 +253,7 @@ class TestRegistryManagerLookup:
         assert names == {"alpha", "beta"}
 
     def test_group_exists_true(self, tmp_path: Path) -> None:
+        """group_exists returns True for a registered group."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "g.py").write_text(MINIMAL_DEF.format(varname="g", name="my_group"))
         manager.apply()
@@ -258,6 +261,7 @@ class TestRegistryManagerLookup:
         assert manager.group_exists("my_group") is True
 
     def test_group_exists_false(self, tmp_path: Path) -> None:
+        """group_exists returns False for a non-existent group."""
         manager = setup_manager(tmp_path)
 
         assert manager.group_exists("nonexistent") is False
@@ -309,28 +313,20 @@ g = FeatureGroup(
         assert group.features[0].expect is None
 
 
-# ---------------------------------------------------------------------------
-# Stubs
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerStubs:
     """Stub methods raise NotImplementedError with informative messages."""
 
     def test_update_materialized_at_not_implemented(self, tmp_path: Path) -> None:
+        """update_materialized_at raises NotImplementedError."""
         manager = setup_manager(tmp_path)
         with pytest.raises(NotImplementedError, match=r"Task 18"):
             manager.update_materialized_at("any_group", datetime.now(UTC))
 
     def test_validate_query_params_not_implemented(self, tmp_path: Path) -> None:
+        """validate_query_params raises NotImplementedError."""
         manager = setup_manager(tmp_path)
         with pytest.raises(NotImplementedError, match=r"Task"):
             manager.validate_query_params("g", "*", None, None, "get_historical_features")
-
-
-# ---------------------------------------------------------------------------
-# _load_registry error handling
-# ---------------------------------------------------------------------------
 
 
 def _make_provider_error_with_cause(message: str, cause: Exception) -> ProviderError:
@@ -391,11 +387,6 @@ class TestRegistryManagerLoadRegistry:
             RegistryManager(provider, config.definitions_path)
 
 
-# ---------------------------------------------------------------------------
-# applied_at timezone and new-group null materialized_at
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerApplyTimestamps:
     """Tests for applied_at timezone correctness and last_materialized_at edge cases."""
 
@@ -434,18 +425,11 @@ class TestRegistryManagerApplyTimestamps:
         assert fg["newgroup"]["last_materialized_at"] is None
 
 
-# ---------------------------------------------------------------------------
-# get_group enum deserialization
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerGetGroupDeserialization:
     """Tests that get_group() returns correctly typed enum values, not raw strings."""
 
     def test_get_group_deserializes_storage_target_and_validation_modes(self, tmp_path: Path) -> None:
-        """storage_target, ingestion_validation, and offline_retrieval_validation
-        are deserialized back to enum members, not left as strings.
-        """
+        """Enum fields are deserialized to proper enum members, not strings."""
         content = """\
 from kitefs import (
     EntityKey, EventTimestamp, Feature, FeatureGroup,
@@ -472,15 +456,11 @@ g = FeatureGroup(
         assert group.offline_retrieval_validation is ValidationMode.ERROR
 
 
-# ---------------------------------------------------------------------------
-# Reference use case
-# ---------------------------------------------------------------------------
-
-
 class TestRegistryManagerReferenceUseCase:
     """Full reference use case produces a correct registry."""
 
     def test_reference_use_case_apply_succeeds(self, tmp_path: Path) -> None:
+        """Reference use case definitions apply successfully."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "listing_features.py").write_text(LISTING_DEF)
         (manager._definitions_path / "town_market_features.py").write_text(TOWN_DEF)
@@ -491,6 +471,7 @@ class TestRegistryManagerReferenceUseCase:
         assert set(result.registered_groups) == {"listing_features", "town_market_features"}
 
     def test_reference_use_case_registry_structure(self, tmp_path: Path) -> None:
+        """Registry JSON has correct structure for both reference use case groups."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "listing_features.py").write_text(LISTING_DEF)
         (manager._definitions_path / "town_market_features.py").write_text(TOWN_DEF)
@@ -514,6 +495,7 @@ class TestRegistryManagerReferenceUseCase:
         assert town["entity_key"]["name"] == "town_id"
 
     def test_reference_use_case_get_group_round_trip(self, tmp_path: Path) -> None:
+        """get_group round-trips all reference use case fields correctly."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "listing_features.py").write_text(LISTING_DEF)
         (manager._definitions_path / "town_market_features.py").write_text(TOWN_DEF)
@@ -534,6 +516,7 @@ class TestRegistryManagerReferenceUseCase:
         assert town.features[0].expect is not None
 
     def test_reference_use_case_list_groups(self, tmp_path: Path) -> None:
+        """list_groups includes correct summaries for both reference use case groups."""
         manager = setup_manager(tmp_path)
         (manager._definitions_path / "listing_features.py").write_text(LISTING_DEF)
         (manager._definitions_path / "town_market_features.py").write_text(TOWN_DEF)
