@@ -11,7 +11,7 @@ Before planning:
 
 1. Follow the project instructions (`.github/copilot-instructions.md` and any applicable `.github/instructions/*.instructions.md` files).
 2. Read the `docs/` files relevant to the task. Follow traces to related requirements, decisions, or building blocks as needed for full context.
-3. Read existing test files (`tests/`) to understand conventions: naming patterns, fixture usage, helpers in `tests/helpers.py` and `tests/conftest.py`.
+3. Read existing test files in the `tests/<module>/` subdirectories (e.g., `tests/cli/`, `tests/registry/`, `tests/e2e/`) to understand conventions: naming patterns, fixture usage, helpers in `tests/helpers.py` and `tests/conftest.py`.
 4. Read the existing source code — understand current interfaces, types, imports, and public API surface.
 
 Follow the **Source Precedence** rules and all **code style and testing conventions** from `copilot-instructions.md`.
