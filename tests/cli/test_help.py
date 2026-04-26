@@ -53,3 +53,49 @@ class TestCLIHelpShowsListAndDescribe:
 
         assert result.exit_code == 0
         assert "describe" in result.output
+
+
+class TestCLIHelpShowsPlaceholderCommands:
+    """The top-level help lists all placeholder commands."""
+
+    def test_help_shows_ingest_command(self) -> None:
+        """kitefs --help output includes the ingest command."""
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "ingest" in result.output
+
+    def test_help_shows_materialize_command(self) -> None:
+        """kitefs --help output includes the materialize command."""
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "materialize" in result.output
+
+    def test_help_shows_registry_sync_command(self) -> None:
+        """kitefs --help output includes the registry-sync command."""
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "registry-sync" in result.output
+
+    def test_help_shows_registry_pull_command(self) -> None:
+        """kitefs --help output includes the registry-pull command."""
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "registry-pull" in result.output
+
+    def test_help_shows_mock_command(self) -> None:
+        """kitefs --help output includes the mock command."""
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "mock" in result.output
+
+    def test_help_shows_sample_command(self) -> None:
+        """kitefs --help output includes the sample command."""
+        result = _runner().invoke(cli, ["--help"])
+
+        assert result.exit_code == 0
+        assert "sample" in result.output

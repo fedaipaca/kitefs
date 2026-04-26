@@ -1,86 +1,109 @@
-# kitefs
+# KiteFS
 
-A Python feature store library for offline/online feature storage, registry, materialization, validation, and serving. Designed for Machine Learning practitioners who need feature management with minimal operational overhead.
+KiteFS is a Python feature store library for machine learning. It manages the full lifecycle of ML features — defining feature groups as Python code, registering them in a versioned registry, storing historical data in Parquet files, and serving the latest values for real-time predictions.
 
-- **SDK**: Python API for notebooks, scripts, and applications (`from kitefs import FeatureStore`)
-- **CLI**: Command-line interface (`kitefs init`, `kitefs apply`, `kitefs ingest`, etc.)
-- **Library-first**: No running server, no Docker — just `pip install` and go
+KiteFS is library-first: no running server, no Docker, no infrastructure to manage. Install it with `pip`, define your features, and start building.
 
-## Install from TestPyPI
+- **SDK**: `from kitefs import FeatureStore`
+- **CLI**: `kitefs init`, `kitefs apply`, `kitefs list`, `kitefs describe`, and more
+- **Python 3.12+** required
 
-> TestPyPI is a separate package index used for testing. The `--extra-index-url` flag tells pip to fetch dependencies (like `click` and `pyyaml`) from the real PyPI, since TestPyPI may not have them.
+## Installation
+
+KiteFS is currently in alpha. To install the latest pre-release version:
 
 ```bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ kitefs==0.1.0
+pip install --pre kitefs
 ```
 
-Verify the installation:
+## Usage
+
+### Quick Start (CLI)
 
 ```bash
-# Should display the available commands
-kitefs --help
-
-# Create a new KiteFS project in the current directory
+# 1. Initialize a new KiteFS project
 kitefs init
+
+# 2. Edit feature_store/definitions/example_features.py
+#    to define your feature groups as Python code
+
+# 3. Register definitions into the registry
+kitefs apply
+
+# 4. List registered feature groups
+kitefs list
+
+# 5. Inspect a specific feature group
+kitefs describe <feature_group_name>
 ```
 
-## Prerequisites
+### SDK
+
+```python
+from kitefs import FeatureStore
+
+# Initialize — finds kitefs.yaml by walking up from cwd
+fs = FeatureStore()
+
+# Register all feature group definitions
+result = fs.apply()
+print(f"Registered {result.group_count} group(s)")
+
+# List all registered feature groups
+groups = fs.list_feature_groups()
+
+# Describe a specific feature group
+details = fs.describe_feature_group("listing_features")
+
+# Export as JSON
+json_output = fs.list_feature_groups(format="json")
+
+# Write JSON to a file
+fs.describe_feature_group("listing_features", target="output.json")
+```
+
+### Available Features
+
+- **Project scaffolding** (`kitefs init`) — initialize a new KiteFS project with config, directory structure, and example definitions
+- **Feature group definitions** — define feature groups as Python code using frozen dataclasses (`FeatureGroup`, `Feature`, `EntityKey`, `EventTimestamp`, `Expect`, etc.)
+- **Registry** (`kitefs apply`, `kitefs list`, `kitefs describe`) — register, list, and inspect feature groups via a deterministic JSON registry suitable for Git versioning
+- **Local provider** — local filesystem storage with Hive-style Parquet partitioning for the offline store
+- **Configuration** — YAML-based project configuration (`kitefs.yaml`) with environment variable overrides
+
+### In Development
+
+The following features are planned but not yet available:
+
+- **Data validation** — schema and data validation engine with configurable strictness modes (ERROR, FILTER, NONE) to enforce quality constraints on ingested data
+- **Data ingestion** (`kitefs ingest`) — ingest DataFrames, CSV, or Parquet files into the offline store with automatic partitioning and validation
+- **Historical retrieval** — query the offline store with column selection and time-range filtering for training dataset generation
+- **Point-in-time joins** — temporally correct joins across feature groups to prevent data leakage in training sets
+- **Materialization** (`kitefs materialize`) — sync the latest feature values from the offline store to a SQLite-backed online store
+- **Online serving** — single-key lookups for real-time feature serving from the online store
+- **AWS provider** — S3 + DynamoDB backend for production deployments, installable via `pip install kitefs[aws]`
+- **Registry sync** — push and pull the registry between local and remote storage
+- **Mock data generation** (`kitefs mock`) — generate synthetic test data that respects schema and expectations
+- **Smart sampling** (`kitefs sample`) — pull a representative data subset from a remote store for local development
+
+## Contributing
+
+### Prerequisites
 
 - **Python 3.12+**
-- **[uv](https://docs.astral.sh/uv/)** — Fast Python package manager
-- **[just](https://github.com/casey/just)** — Command runner (like `make`, but simpler)
+- **[uv](https://docs.astral.sh/uv/)** — Python package manager
+- **[just](https://github.com/casey/just)** — command runner
 
-### Install uv
-
-Follow the instructions at https://github.com/astral-sh/uv?tab=readme-ov-file#installation to install `uv` for your platform.
-
-### Install just
-
-Follow the instructions at https://github.com/astral-sh/uv?tab=readme-ov-file#installation to install `just` for your platform.
-
-## Getting Started
+### Setup
 
 ```bash
-# To clone the repository and set up the project, run:
 git clone https://github.com/fedaipaca/kitefs.git
 cd kitefs
-
-# To install dependencies, run:
 uv sync
-
-# To list available commands, run:
-just
 ```
 
-## Available Commands
-
-Run `just` with no arguments to see all commands:
+### Run checks
 
 ```bash
-just
-```
-
-| Command           | Description                              |
-| ----------------- | ---------------------------------------- |
-| `just dev`        | Run the project locally                  |
-| `just test`       | Run all tests                            |
-| `just lint`       | Check code for lint issues               |
-| `just format`     | Auto-format code                         |
-| `just fix`        | Auto-fix lint issues                     |
-| `just check`      | Run lint + tests (quick pre-commit check)|
-| `just build`      | Build the package                        |
-| `just clean`      | Remove build artifacts and caches        |
-| `just clean-build`| Clean then build from scratch            |
-
-## Project Structure
-
-```
-kitefs/
-├── src/
-│   └── kitefs/          # Directory contains source code files
-├── tests/               # Directory contains test files
-├── docs/                # Design documents
-├── pyproject.toml       # Project config, dependencies, tool settings
-├── justfile             # Task runner commands
-└── uv.lock              # Locked dependencies
+# Lint + format check + type check + tests
+just check
 ```

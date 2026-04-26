@@ -251,3 +251,47 @@ def _render_describe(entry: dict) -> None:
         click.echo(f"  Join Keys ({len(join_keys)}):")
         for jk in join_keys:
             click.echo(f"    - {jk['field_name']} -> {jk['referenced_group']}")
+
+
+_NOT_IMPLEMENTED_MSG = "Not implemented yet, in development."
+
+
+@cli.command()
+@click.argument("feature_group_name")
+@click.argument("file_path", type=click.Path(exists=False))
+def ingest(feature_group_name: str, file_path: str) -> None:
+    """Ingest data from a CSV or Parquet file into the offline store."""
+    click.echo(_NOT_IMPLEMENTED_MSG)
+
+
+@cli.command()
+@click.argument("feature_group_name", required=False, default=None)
+def materialize(feature_group_name: str | None) -> None:
+    """Materialize feature data from offline to online store."""
+    click.echo(_NOT_IMPLEMENTED_MSG)
+
+
+@cli.command(name="registry-sync")
+def registry_sync() -> None:
+    """Upload local registry to remote storage."""
+    click.echo(_NOT_IMPLEMENTED_MSG)
+
+
+@cli.command(name="registry-pull")
+def registry_pull() -> None:
+    """Download remote registry to local storage."""
+    click.echo(_NOT_IMPLEMENTED_MSG)
+
+
+@cli.command()
+@click.argument("feature_group_name", required=False, default=None)
+def mock(feature_group_name: str | None) -> None:
+    """Generate synthetic test data for a feature group."""
+    click.echo(_NOT_IMPLEMENTED_MSG)
+
+
+@cli.command()
+@click.argument("feature_group_name")
+def sample(feature_group_name: str) -> None:
+    """Pull a filtered data subset from remote to local offline store."""
+    click.echo(_NOT_IMPLEMENTED_MSG)
