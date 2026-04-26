@@ -164,7 +164,10 @@ raise ValueError("Not found")
 ## Testing
 
 - Write tests for every new module and feature
-- Tests live in `tests/`, mirroring `src/kitefs/` module structure (one test file per source module)
+- Tests are organized into subdirectories mirroring `src/kitefs/` modules: `tests/cli/`, `tests/config/`, `tests/definitions/`, `tests/registry/`, `tests/providers/`, `tests/feature_store/`, `tests/exceptions/`, etc. Each subdirectory has an `__init__.py`
+- Within each subdirectory, split tests by concern: `test_<concern>.py` (e.g., `tests/cli/test_init.py`, `tests/cli/test_apply.py`)
+- `tests/e2e/` contains end-to-end tests that exercise cross-module workflows through the SDK and CLI — use these for integration-level coverage, not unit-level assertions
+- Shared helpers live in `tests/helpers.py`; shared fixtures in `tests/conftest.py` — both at the top level
 - Use descriptive test names: `test_<function>_<scenario>_<expected>`
 - Always use `tmp_path` fixture for any test that reads/writes files — never write to the real project directory
 - Test both **success paths** and **error paths** for every public function

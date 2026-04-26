@@ -637,7 +637,7 @@ Write tests covering: list with groups, list empty, describe existing group, des
 
 **What this phase covers:**
 
-- Parquet I/O with Hive-style partitioning in the local provider (Task 10)
+- Provider ABC offline method signatures (Task 10a), atomic Parquet writes (Task 10b), Parquet reads + partition listing (Task 10c)
 - The validation engine — schema and data validation with three modes (Task 11)
 - The offline store manager — partitioning and filtered reads (Task 12)
 - End-to-end ingestion via SDK and CLI (Task 13)
@@ -647,56 +647,135 @@ Write tests covering: list with groups, list empty, describe existing group, des
 
 ---
 
-### Task 10 — Local Provider: Offline Store I/O
+### Task 10a — Provider ABC: Offline Store Method Signatures
 
-|                     |                                                                                         |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| **Branch**          | `feat/task-10/provider-offline-io`                                                      |
-| **Goal**            | `LocalProvider` can read and write Parquet files in Hive-style partitioned directories. |
-| **Building blocks** | BB-09 (Provider Layer — offline store methods)                                          |
+|                     |                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Branch**          | `feat/task-10a/provider-offline-abc`                                                                                                                   |
+| **Goal**            | The `StorageProvider` ABC declares the three offline store methods — `write_offline`, `read_offline`, `list_partitions` — enforcing the contract for all providers. |
+| **Building blocks** | BB-09 (Provider Layer — offline store interface only)                                                                                                  |
 
 **What to implement:**
 
-Extend the provider ABC and `LocalProvider` with offline store methods per [API Contracts §5.5](docs-03-03-api-contracts.md):
+Extend `StorageProvider` in `src/kitefs/providers/base.py` with three new `@abstractmethod` signatures per [API Contracts §5.5](docs-03-03-api-contracts.md):
 
-- **`write_offline(group_name, partition_path, file_name, df: DataFrame) -> None`:**
-  - Write a single Parquet file to a specific partition path (e.g., `year=2024/month=03`).
-  - The provider handles raw I/O only — BB-06 (Offline Store Manager) derives partition paths and generates file names before calling this method.
-  - Use PyArrow for Parquet writes. Atomic write (write-to-temp-then-rename on local).
-- **`read_offline(group_name, partition_paths: list[str]) -> DataFrame`:**
-  - Read Parquet files from specific partition paths (provided by BB-06 after pruning).
-  - Returns a combined DataFrame from all files across the listed partitions.
-  - Returns an empty DataFrame if no files exist.
-  - Use PyArrow for Parquet reads.
-- **`list_partitions(group_name) -> list[str]`:**
-  - List available partition paths for a feature group (e.g., `["year=2024/month=01", "year=2024/month=02"]`).
-  - Used by BB-06 for partition pruning decisions.
+- **`write_offline(self, group_name: str, partition_path: str, file_name: str, df: DataFrame) -> None`** — Write a single Parquet file to a specific partition path.
+- **`read_offline(self, group_name: str, partition_paths: list[str]) -> DataFrame`** — Read and combine Parquet files from specified partition paths.
+- **`list_partitions(self, group_name: str) -> list[str]`** — List available partition paths for a feature group.
 
-The layout is identical for both local and S3 (FR-ING-006) — the abstraction ensures this. Note: partition derivation, file naming (`{source}_{timestamp}_{id}.parquet`), and pruning logic are BB-06's responsibility (Task 12), not the provider's. The provider is a primitive I/O layer.
+The `DataFrame` type annotation requires importing from `pandas`. Both `pandas` and `pyarrow` are introduced as runtime dependencies in this subtask.
 
-Write tests covering: write creates correct directory structure, read returns correct data from specified partitions, list_partitions returns available paths, append-only (second write doesn't overwrite first), empty partition read returns empty DataFrame.
+Write tests covering: subclass missing any of the three new methods raises `TypeError` on instantiation (extend existing ABC enforcement tests), a complete subclass implementing all methods (including the existing registry methods) can be instantiated.
 
 **Dependencies introduced:**
 
-| Package   | Scope   | Purpose                                     |
-| --------- | ------- | ------------------------------------------- |
-| `pyarrow` | runtime | Parquet read/write, Hive-style partitioning |
-| `pandas`  | runtime | DataFrame interface (CON-003)               |
+| Package   | Scope   | Purpose                                              |
+| --------- | ------- | ---------------------------------------------------- |
+| `pyarrow` | runtime | Parquet read/write (used by LocalProvider in 10b/10c) |
+| `pandas`  | runtime | DataFrame interface for method signatures (CON-003)  |
 
 **Demonstrable outcome:**
 
-- Tests write Parquet to `year=.../month=.../` partitions and read back from specified partition paths.
-- Tests pass realistic file names (e.g., `ing_20240315_abc.parquet`) as arguments — the provider stores whatever name it receives; naming conventions are BB-06's responsibility (Task 12).
+- `StorageProvider` ABC enforces the three new offline methods alongside the existing registry methods.
+- All ABC enforcement tests pass.
 
 **Traces:**
 
-| Document                                                   | Look for                                          | What you'll find                                                |
-| ---------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------- |
-| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.3 Data Ingestion — FR-ING-006, FR-ING-007      | Parquet layout, file naming requirements                        |
-| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.4 Offline Store — FR-OFF-001                   | Storage format requirement                                      |
-| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §2.9 Provider Layer (BB-09)                       | Provider ABC offline methods                                    |
-| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §3.3 Offline Store Layout                         | Directory structure, Hive-style partitioning                    |
-| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)  | §5 Internal Interfaces — Provider offline methods | Method signatures: write_offline, read_offline, list_partitions |
+| Document                                                   | Look for                         | What you'll find                                    |
+| ---------------------------------------------------------- | -------------------------------- | --------------------------------------------------- |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §2.9 Provider Layer (BB-09)      | Provider ABC offline methods, behavioral rules      |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)  | §5.5 Provider Layer              | Method signatures: write_offline, read_offline, list_partitions |
+
+---
+
+### Task 10b — LocalProvider: `write_offline` (Atomic Parquet Writes)
+
+|                     |                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-10b/provider-offline-write`                                                                                            |
+| **Goal**            | `LocalProvider.write_offline()` atomically writes Parquet files into Hive-style partition directories — the offline store write path. |
+| **Building blocks** | BB-09 (Provider Layer — `write_offline` implementation)                                                                           |
+| **Depends on**      | Task 10a (ABC signatures)                                                                                                         |
+
+**What to implement:**
+
+Implement `write_offline` in `LocalProvider`:
+
+- Compute the full path: `{storage_root}/data/offline_store/{group_name}/{partition_path}/{file_name}`.
+- Create the partition directory lazily (`os.makedirs(exist_ok=True)`).
+- Use PyArrow to convert the DataFrame to a Parquet table and write it.
+- **Atomic write:** write-to-temp-then-rename on local (same pattern as `write_registry`). This prevents partial files from appearing if the write is interrupted.
+- The provider stores whatever `partition_path` and `file_name` it receives — it does not derive or validate them. Partition derivation, file naming (`{source}_{timestamp}_{id}.parquet`), and pruning logic are BB-06's responsibility (Task 12).
+- Wrap `OSError` and PyArrow exceptions in `ProviderError` with context (operation, path, original exception).
+
+Stub `read_offline` and `list_partitions` with `raise NotImplementedError` to satisfy the ABC until Task 10c implements them.
+
+Write tests covering: write creates correct directory structure (`{storage_root}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}`), written Parquet file is readable by PyArrow and contains expected data, append-only (second write with a different file name to the same partition does not overwrite the first — both files coexist), parent directories created lazily, realistic file names passed as arguments (e.g., `ing_20240315T120000_a1b2c3d4.parquet`), `ProviderError` raised on I/O failure.
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- Tests prove Parquet files land in the correct Hive-style directory structure and are append-only.
+- Atomic write pattern prevents partial files.
+
+**Traces:**
+
+| Document                                                   | Look for                                     | What you'll find                                           |
+| ---------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------- |
+| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.3 Data Ingestion — FR-ING-006, FR-ING-007 | Parquet layout, file naming requirements                   |
+| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.4 Offline Store — FR-OFF-001              | Storage format requirement                                 |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §3.2 Offline Store (Parquet Files)           | Directory structure, type mapping, Hive-style partitioning |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)  | §5.5 Provider Layer — `write_offline`        | Method contract, atomicity guarantee                       |
+
+---
+
+### Task 10c — LocalProvider: `read_offline` + `list_partitions` (Parquet Reads)
+
+|                     |                                                                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-10c/provider-offline-read`                                                                                                                 |
+| **Goal**            | `LocalProvider` can read Parquet files from specified partitions and list available partitions — the offline store read path is complete.              |
+| **Building blocks** | BB-09 (Provider Layer — `read_offline` and `list_partitions` implementation)                                                                          |
+| **Depends on**      | Task 10b (`write_offline` for producing test data)                                                                                                    |
+
+**What to implement:**
+
+Implement `read_offline` in `LocalProvider`:
+
+- For each partition path in `partition_paths`, read all `.parquet` files under `{storage_root}/data/offline_store/{group_name}/{partition_path}/` using PyArrow.
+- Combine all read tables into a single DataFrame.
+- Return an **empty DataFrame** if no files exist in any of the specified partitions (not an error).
+- Skip non-existent partition paths gracefully (a path with no directory contributes zero rows).
+- Wrap PyArrow/OS exceptions in `ProviderError`.
+
+Implement `list_partitions` in `LocalProvider`:
+
+- Enumerate subdirectories under `{storage_root}/data/offline_store/{group_name}/` that follow the `year=YYYY/month=MM` pattern.
+- Return a sorted `list[str]` of relative partition paths (e.g., `["year=2024/month=01", "year=2024/month=02"]`).
+- Return an empty list if the group directory does not exist or has no partitions.
+
+The layout is identical for both local and S3 (FR-ING-006) — the abstraction ensures this. Note: partition derivation, file naming (`{source}_{timestamp}_{id}.parquet`), and pruning logic are BB-06's responsibility (Task 12), not the provider's. The provider is a primitive I/O layer.
+
+Write tests covering: read returns correct data from specified partition paths, read from multiple partitions combines data correctly, empty partition read returns empty DataFrame, non-existent partition path returns empty DataFrame (not an error), `list_partitions` returns available paths after writes, `list_partitions` returns empty list for non-existent group, `list_partitions` results are sorted, end-to-end roundtrip (write via `write_offline` → `list_partitions` → `read_offline` → verify data).
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- Full write → list → read roundtrip works.
+- Empty reads are graceful (empty DataFrame, not an error).
+- This completes the offline store I/O — `LocalProvider` has full `write_offline`, `read_offline`, and `list_partitions`.
+
+**Traces:**
+
+| Document                                                   | Look for                                                  | What you'll find                                                |
+| ---------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- |
+| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.3 Data Ingestion — FR-ING-006                          | Hive-style layout requirement                                   |
+| [Requirements (docs-02)](docs-02-project-requirements.md)  | §1.4 Offline Store — FR-OFF-001                           | Storage format requirement                                      |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §2.9 Provider Layer (BB-09)                               | Provider ABC offline methods                                    |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md) | §3.2 Offline Store (Parquet Files)                        | Directory structure, Hive-style partitioning                    |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)  | §5.5 Provider Layer — `read_offline`, `list_partitions`   | Method contracts, empty-result behavior                         |
 
 ---
 
@@ -728,7 +807,7 @@ Implement BB-05 as defined in [Internals §2.5](docs-03-02-internals-and-data.md
 
 Write tests covering: every expectation type, all three modes, schema as hard gate (fails before data validation), report structure, edge cases (empty DataFrame, all rows filtered).
 
-**Dependencies introduced:** None new (operates on Pandas DataFrames already available from Task 10).
+**Dependencies introduced:** None new (operates on Pandas DataFrames already available from Task 10a).
 
 **Demonstrable outcome:**
 
@@ -1325,8 +1404,8 @@ Phase 2 — Define & Register
              (validation)
 
 Phase 3 — Ingest & Query
-  Task 10 → Task 11 → Task 12 → Task 13 → Task 14
-  (parquet) (valid.) (offline) (ingest) (retrieval)
+  Task 10a → Task 10b → Task 10c → Task 11 → Task 12 → Task 13 → Task 14
+  (ABC)     (write)    (read)     (valid.)  (offline)  (ingest)  (retrieval)
 
 Phase 4 — Point-in-Time Joins
   Task 15 → Task 16
@@ -1354,7 +1433,8 @@ Phase 6 — AWS & Extras
 | 4     | `pyyaml`                         | —                           |
 | 5     | `click`                          | —                           |
 | 6–9   | —                                | —                           |
-| 10    | `pyarrow`, `pandas`              | —                           |
+| 10a   | `pyarrow`, `pandas`              | —                           |
+| 10b–10c | —                              | —                           |
 | 11–19 | —                                | —                           |
 | 20    | `boto3` (optional `[aws]` extra) | —                           |
 | 21–23 | —                                | —                           |
@@ -1371,13 +1451,13 @@ Phase 6 — AWS & Extras
 | Feature Registry (apply)     | FR-REG-001, FR-REG-002                                       | 8c              |
 | Feature Registry (inspect)   | FR-REG-005, FR-REG-006                                       | 9               |
 | Feature Registry (sync/pull) | FR-REG-008, FR-REG-009                                       | 21              |
-| Data Ingestion               | FR-ING-001 through FR-ING-007                                | 10, 12, 13      |
-| Offline Store & Historical   | FR-OFF-001, FR-OFF-002, FR-OFF-006, FR-OFF-007               | 10, 12, 14      |
+| Data Ingestion               | FR-ING-001 through FR-ING-007                                | 10a–10c, 12, 13 |
+| Offline Store & Historical   | FR-OFF-001, FR-OFF-002, FR-OFF-006, FR-OFF-007               | 10a–10c, 12, 14 |
 | Offline Store (joins)        | FR-OFF-003 through FR-OFF-005, FR-OFF-008 through FR-OFF-010 | 15, 16          |
 | Online Store & Serving       | FR-ONL-001, FR-ONL-002                                       | 17, 19          |
 | Materialization              | FR-MAT-001 through FR-MAT-005                                | 18              |
 | Validation Engine            | FR-VAL-001 through FR-VAL-009                                | 11              |
-| Provider Abstraction         | FR-PROV-001, FR-PROV-003, FR-PROV-005                        | 7, 10, 17       |
+| Provider Abstraction         | FR-PROV-001, FR-PROV-003, FR-PROV-005                        | 7, 10a–10c, 17  |
 | Provider Abstraction (AWS)   | FR-PROV-002, FR-PROV-004                                     | 20              |
 | Configuration                | FR-CFG-001 through FR-CFG-006                                | 4               |
 | CLI                          | FR-CLI-001, FR-CLI-002                                       | 5               |
