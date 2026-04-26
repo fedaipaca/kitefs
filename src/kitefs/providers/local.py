@@ -1,6 +1,7 @@
 """Local filesystem provider — reads and writes storage on the local filesystem."""
 
 import os
+import re
 import tempfile
 from contextlib import suppress
 from pathlib import Path
@@ -13,12 +14,15 @@ from kitefs.config import Config
 from kitefs.exceptions import ProviderError
 from kitefs.providers.base import StorageProvider
 
+_YEAR_PATTERN = re.compile(r"year=\d{4}")
+_MONTH_PATTERN = re.compile(r"month=\d{2}")
+
 
 class LocalProvider(StorageProvider):
     """Storage provider backed by the local filesystem.
 
     Registry: reads/writes registry.json at {storage_root}/registry.json.
-    Offline store: Parquet files under {storage_root}/data/offline_store/ (write implemented; read/list not yet).
+    Offline store: Parquet files under {storage_root}/data/offline_store/.
     Online store: SQLite at {storage_root}/data/online_store/online.db (not yet implemented).
     """
 
@@ -73,21 +77,64 @@ class LocalProvider(StorageProvider):
         group_name: str,
         partition_paths: list[str],
     ) -> DataFrame:
-        """Read and combine Parquet files from the specified partition paths.
+        """Read and combine Parquet files from the specified local partition paths.
 
-        Not yet implemented.
+        For each partition path, reads all ``.parquet`` files under
+        ``{storage_root}/data/offline_store/{group_name}/{partition_path}/``.
+        Non-existent partition directories are skipped gracefully.
+        Returns an empty DataFrame when no files are found across all partitions.
         """
-        raise NotImplementedError("LocalProvider.read_offline is not yet implemented.")
+        group_base = self._storage_root / "data" / "offline_store" / group_name
+        tables: list[pa.Table] = []
+
+        try:
+            for partition_path in partition_paths:
+                partition_dir = group_base / Path(partition_path)
+                if not partition_dir.is_dir():
+                    continue
+                for parquet_file in sorted(partition_dir.glob("*.parquet")):
+                    tables.append(pq.read_table(parquet_file))
+
+            if not tables:
+                return DataFrame()
+
+            return pa.concat_tables(tables).to_pandas()
+        except (OSError, pa.lib.ArrowException) as exc:
+            raise ProviderError(
+                f"Failed to read offline Parquet files for '{group_name}': {exc}. "
+                "Check file permissions and that the Parquet files are not corrupted."
+            ) from exc
 
     def list_partitions(
         self,
         group_name: str,
     ) -> list[str]:
-        """List available partition paths for a feature group.
+        """List available Hive-style partition paths for a feature group.
 
-        Not yet implemented.
+        Enumerates ``year=YYYY/month=MM`` subdirectories under the group's
+        offline store directory. Returns a sorted list of relative partition
+        paths, or an empty list if the group directory does not exist.
         """
-        raise NotImplementedError("LocalProvider.list_partitions is not yet implemented.")
+        group_base = self._storage_root / "data" / "offline_store" / group_name
+        if not group_base.is_dir():
+            return []
+
+        partitions: list[str] = []
+        try:
+            for year_dir in sorted(group_base.iterdir()):
+                if not year_dir.is_dir() or not _YEAR_PATTERN.fullmatch(year_dir.name):
+                    continue
+                for month_dir in sorted(year_dir.iterdir()):
+                    if not month_dir.is_dir() or not _MONTH_PATTERN.fullmatch(month_dir.name):
+                        continue
+                    partitions.append(f"{year_dir.name}/{month_dir.name}")
+        except OSError as exc:
+            raise ProviderError(
+                f"Failed to list partitions for '{group_name}': {exc}. "
+                "Check that the offline store directory is readable."
+            ) from exc
+
+        return partitions
 
     # --- Registry ---
 
