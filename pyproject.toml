@@ -1,6 +1,6 @@
 [project]
 name = "kitefs"
-version = "0.1.1"
+version = "0.2.0a1"
 description = "A Python feature store library for offline/online feature storage, registry, validation, and serving"
 readme = "README.md"
 license = "Apache-2.0"
