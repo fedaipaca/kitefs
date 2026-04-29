@@ -46,6 +46,11 @@ class Expect:
 
     _constraints: tuple[dict, ...] = ()
 
+    @property
+    def constraints(self) -> tuple[dict, ...]:
+        """Public accessor for the constraint tuple."""
+        return self._constraints
+
     def not_null(self) -> "Expect":
         """Require non-null values."""
         return Expect(_constraints=(*self._constraints, {"type": "not_null"}))
