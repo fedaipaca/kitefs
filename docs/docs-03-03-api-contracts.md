@@ -394,7 +394,7 @@ Writes feature data to the offline store for a registered feature group. Validat
 - Existing offline store data is untouched (append-only)
 
 **Behavioral notes:**
-- Extra columns in `data` that are not in the definition are silently dropped _(FR-ING-002)_
+- Extra columns in `data` that are not in the definition are silently dropped by schema validation (BB-05 Phase 1) _(FR-ING-002)_
 - Schema validation (missing columns, null structural columns) always runs, regardless of validation mode _(BB-05)_
 - In `FILTER` mode, failing records are excluded; if all rows are filtered, returns with 0 rows written (not an error)
 - In `NONE` mode, data validation (Phase 2) is skipped; schema validation still runs
@@ -1199,16 +1199,16 @@ No callable interface. BB-03 provides **type definitions** only (§1.2 and §1.3
 def validate_schema(
     definition: FeatureGroup,
     df: DataFrame,
-) -> ValidationReport: ...
+) -> tuple[ValidationReport, DataFrame]: ...
 ```
 
-Checks that the DataFrame's columns match the schema derived from the definition (`entity_key.name`, `event_timestamp.name`, all `feature.name`). Extra columns are silently dropped. Null values in entity key or event timestamp columns are reported as failures.
+Checks that the DataFrame's columns match the schema derived from the definition (`entity_key.name`, `event_timestamp.name`, all `feature.name`). Extra columns are silently dropped. Null values in entity key or event timestamp columns are reported as failures. On success, returns the cleaned DataFrame with only declared columns in definition order (entity key, event timestamp, features).
 
 | Parameter | Type | Description |
 | --- | --- | --- |
 | `definition` | `FeatureGroup` | The feature group definition |
 | `df` | `DataFrame` | Input DataFrame to validate |
-| **Returns** | `ValidationReport` | Schema validation result |
+| **Returns** | `tuple[ValidationReport, DataFrame]` | Schema validation report and cleaned DataFrame with extra columns dropped. On failure, raises instead of returning. |
 | **Raises** | `SchemaValidationError` | If missing columns or null structural columns detected |
 
 ---

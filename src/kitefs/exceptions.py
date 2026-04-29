@@ -1,5 +1,12 @@
 """Exception hierarchy for KiteFS — all user-facing errors raised by the SDK and CLI."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kitefs.validation import ValidationReport
+
 
 class KiteFSError(Exception):
     """Base exception for all KiteFS errors.
@@ -65,6 +72,13 @@ class SchemaValidationError(ValidationError):
     contains null values. The message lists all schema issues found.
     """
 
+    report: ValidationReport | None
+
+    def __init__(self, message: str, *, report: ValidationReport | None = None) -> None:
+        """Initialise with an actionable message and optional structured report."""
+        super().__init__(message)
+        self.report = report
+
 
 class DataValidationError(ValidationError):
     """Raised when data fails type checks or feature expectation checks in ERROR mode.
@@ -74,6 +88,13 @@ class DataValidationError(ValidationError):
     validation report: passed count, failed count, and per-failure details
     (entity key, field, expected constraint, actual value).
     """
+
+    report: ValidationReport | None
+
+    def __init__(self, message: str, *, report: ValidationReport | None = None) -> None:
+        """Initialise with an actionable message and optional structured report."""
+        super().__init__(message)
+        self.report = report
 
 
 class IngestionError(KiteFSError):

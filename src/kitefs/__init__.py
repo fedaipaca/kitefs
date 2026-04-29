@@ -14,12 +14,14 @@ from kitefs.definitions import (
 )
 from kitefs.feature_store import FeatureStore
 from kitefs.registry import ApplyResult
+from kitefs.validation import FailureDetail, ValidationReport
 
 __all__ = [
     "ApplyResult",
     "EntityKey",
     "EventTimestamp",
     "Expect",
+    "FailureDetail",
     "Feature",
     "FeatureGroup",
     "FeatureStore",
@@ -28,4 +30,5 @@ __all__ = [
     "Metadata",
     "StorageTarget",
     "ValidationMode",
+    "ValidationReport",
 ]

@@ -884,8 +884,7 @@ Write tests covering: partition columns derived correctly, filtered reads return
   - `str` ending in `.csv` → load via Pandas.
   - `str` ending in `.parquet` → load via PyArrow/Pandas.
   - Other → raise `IngestionError`.
-- Drop extra columns not in the definition (FR-ING-002 — silently).
-- Run schema validation via BB-05 (always runs).
+- Run schema validation via BB-05 (always runs) — this also drops extra columns not in the definition (FR-ING-002).
 - Run data validation via BB-05 (per ingestion validation mode).
 - Write validated data via BB-06 (Offline Store Manager) with `ing` source prefix.
 - Return result with rows written and partitions affected.

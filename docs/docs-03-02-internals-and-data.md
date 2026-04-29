@@ -443,7 +443,7 @@ The Validation Engine does NOT validate `FeatureGroup` Python objects — that i
 
 **Interface Contract:**
 
-- **Exposes to BB-02:** `validate_schema(definition, df) → ValidationReport`, `validate_data(definition, df, mode) → (ValidationReport, filtered_df)`. The SDK calls `validate_schema` first; if it passes, calls `validate_data` with the configured mode.
+- **Exposes to BB-02:** `validate_schema(definition, df) → (ValidationReport, cleaned_df)`, `validate_data(definition, df, mode) → (ValidationReport, filtered_df)`. The SDK calls `validate_schema` first; if it passes, calls `validate_data` with the cleaned DataFrame and configured mode. `validate_schema` returns the DataFrame with extra columns dropped and columns reordered to definition order — this is the structural boundary between raw input and validated data.
 - **Depends on:** Nothing. BB-05 is a stateless leaf module with zero module dependencies. It receives everything it needs as function arguments.
 
 **Error Scenarios:**

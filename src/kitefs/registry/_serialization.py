@@ -23,7 +23,7 @@ def _serialize_expect(expect: Expect | None) -> list[dict] | None:
     if expect is None:
         return None
     result: list[dict] = []
-    for constraint in expect._constraints:
+    for constraint in expect.constraints:
         constraint_type = constraint["type"]
         if constraint_type == "not_null":
             result.append({"not_null": True})
