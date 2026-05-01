@@ -27,9 +27,17 @@ The plan must include:
 3. **Step-by-step implementation** — ordered steps, each describing what to do and why. Group into logical phases if the task is large.
 4. **-if needed- Assumptions** — any design decisions not explicitly specified, with rationale.
 5. **-if needed- Conflicts or open questions** — any mismatches found between docs, existing code, or the task description. For each, state what the conflict is and recommend a resolution.
-6. **Verification** — how to confirm the implementation is correct (specific test commands, checks, expected outcomes).
-7. **Branch name** — suggest a branch name following `feat/task-{n}/{short-description}`. If branch is already created skip branch creation. This information can be provided by user, or can be understand before implementation by checking the current branch.
-8. **just commands** - mention related just commands to run, and explicitly mention `just clean build` should pass.
+6. **Branch name** — suggest a branch name following `feat/task-{n}/{short-description}`. If branch is already created skip branch creation. This information can be provided by user, or can be understand before implementation by checking the current branch.
+7. **Verification** — describe the exact steps to confirm the implementation is correct. The verification procedure is always:
+   1. Run `just clean-build` (this runs: clean → lint → format-check → typecheck → test → build).
+   2. If it fails, identify which stage failed and apply the appropriate fix:
+      - **Formatting errors** → run `just format`, then re-run `just clean-build`.
+      - **Lint errors (auto-fixable)** → run `just fix`, then re-run `just clean-build`.
+      - **Lint errors (manual)** → fix the flagged code manually, then re-run `just clean-build`.
+      - **Type errors** → fix type annotations or signatures manually, then re-run `just clean-build`.
+      - **Test failures** → fix the failing code or tests manually, then re-run `just clean-build`.
+   3. Repeat step 2 until `just clean-build` passes with zero errors.
+   4. Once `just clean-build` passes fully, verification is complete.
 
 Do **not** implement anything — only produce the plan.
 
