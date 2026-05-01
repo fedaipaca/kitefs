@@ -491,7 +491,7 @@ The Offline Store Manager does NOT validate data — that is BB-05's job, invoke
 
 **Interface Contract:**
 
-- **Exposes to BB-02:** `write(group_name, df, source_prefix)` for ingestion, `read(group_name, where=None, upper_bound=None) → DataFrame` for retrieval and materialization.
+- **Exposes to BB-02:** `write(group_name, df, event_timestamp_col, source_prefix)` for ingestion, `read(group_name, event_timestamp_col, where=None, upper_bound=None) → DataFrame` for retrieval and materialization. The caller passes `definition.event_timestamp.name` as `event_timestamp_col` — BB-06 does not depend on the definition module (same pattern as BB-08).
 - **Depends on:** BB-09 (Provider Layer) — all Parquet I/O is delegated.
 
 **Architectural Decisions:**
@@ -563,7 +563,7 @@ The Online Store Manager does NOT read from the offline store — BB-06 handles 
 
 **Interface Contract:**
 
-- **Exposes to BB-02:** `materialize(group_name, df)` for materialization write (receives a full offline DataFrame, extracts latest internally), `get(group_name, entity_key_name, entity_key_value, select) → dict | None` for serving read. The `entity_key_name` and `entity_key_value` are extracted from the user-facing unified `where` parameter by BB-02 before calling BB-07 — BB-07 receives resolved values, not the raw `where` dict.
+- **Exposes to BB-02:** `materialize(group_name, df, event_timestamp_col, entity_key_col)` for materialization write (receives a full offline DataFrame, extracts latest internally), `get(group_name, entity_key_name, entity_key_value, select) → dict | None` for serving read. The caller passes `definition.event_timestamp.name` and `definition.entity_key.name` — BB-07 does not depend on the definition module (same pattern as BB-08). The `entity_key_name` and `entity_key_value` in `get()` are extracted from the user-facing unified `where` parameter by BB-02 before calling BB-07 — BB-07 receives resolved values, not the raw `where` dict.
 - **Depends on:** BB-09 (Provider Layer) — all SQLite/DynamoDB I/O is delegated.
 
 **Architectural Decisions:**
