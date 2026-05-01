@@ -267,6 +267,8 @@ town_market_features = FeatureGroup(
 )
 ```
 
+> **Note on `EventTimestamp.name`:** The examples above use `name="event_timestamp"` because the reference use case's ingestion SQL aliases source columns to that name. This is a convention, not a requirement. Users may choose any column name (e.g., `"sold_at"`, `"computed_at"`, `"recorded_at"`). The system resolves the event timestamp column by its structural role via `definition.event_timestamp.name`, never by hardcoding a specific string. See API Contracts §6.6.
+
 **Behavioral Rules:**
 
 - `FeatureGroup`, `EntityKey`, `EventTimestamp`, `Feature`, `Expect`, and `Metadata` instances are **immutable after creation** (frozen dataclasses). To change a definition, the user edits the `.py` source file and re-runs `apply()`. There is no programmatic mutation API.
@@ -472,24 +474,24 @@ The Offline Store Manager does NOT validate data — that is BB-05's job, invoke
 
 | Component | Responsibility | Notes |
 | --- | --- | --- |
-| Partition Manager | Derives Hive-style partition path (`year=YYYY/month=MM/`) from `event_timestamp` values in a DataFrame | FR-ING-006. See KTD-10 for granularity rationale. |
+| Partition Manager | Derives Hive-style partition path (`year=YYYY/month=MM/`) from the event timestamp column (identified by `definition.event_timestamp.name`) | FR-ING-006. See KTD-10 for granularity rationale. |
 | File Namer | Generates unique file names: `{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet` | FR-ING-007. See KTD-11 for naming rationale. |
 | Write Orchestrator | Groups a DataFrame by partition, generates a file name per partition, delegates per-partition Parquet writes to BB-09 | Append-only — never modifies existing files (FR-ING-004) |
 | Read Orchestrator | Determines which partitions to read (pruning), delegates reads to BB-09, combines multi-partition results into a single DataFrame | PyArrow handles multi-file reads within a partition natively |
-| Partition Pruner | Given a time range (from `where` clause) or an upper-bound timestamp, determines which `year=YYYY/month=MM/` partitions to read vs. skip | Reduces I/O for time-bounded queries |
-| Where Filter | Applies row-level `event_timestamp` filters after partition-level pruning | Partition pruning is coarse (month granularity); row-level filter is precise |
+| Partition Pruner | Given a time range (from `time_filter`) or an upper-bound timestamp, determines which `year=YYYY/month=MM/` partitions to read vs. skip | Reduces I/O for time-bounded queries |
+| Time Filter | Applies row-level filter on `event_timestamp_col` using operator→value pairs from `time_filter` after partition-level pruning | Partition pruning is coarse (month granularity); row-level filter is precise |
 
 **Behavioral Rules:**
 
 - **Writes are append-only (FR-ING-004, KTD-11).** Each ingestion creates new Parquet file(s). Existing files are never modified, overwritten, or deleted by BB-06. This eliminates conflict resolution and supports idempotent re-ingestion (same data ingested twice creates additional files — no data loss, no corruption).
 - **Partition paths are deterministic from `event_timestamp`.** A record with `event_timestamp = 2024-03-15 11:00:00` is written to `{group_name}/year=2024/month=03/`. Records in the same ingestion batch may span multiple partitions.
 - **All `.parquet` files in a partition are read regardless of source prefix (FR-ING-007).** The `source` prefix in the file name (`ing_`, `mock_`, etc.) is informational only. BB-06 reads everything in a partition directory.
-- **Partition pruning for reads.** When a `where` clause specifies a time range, only partitions that could contain matching records are read. For joined group reads during `get_historical_features()`, the upper bound for pruning comes from the base group's maximum `event_timestamp` — joined data after the latest base record is irrelevant.
-- **Row-level where filter is applied after read.** Partition pruning operates at month granularity. The row-level filter on `event_timestamp` applies the precise time conditions (`gt`, `gte`, `lt`, `lte`) from the `where` clause.
+- **Partition pruning for reads.** When `time_filter` is provided, only partitions that could contain matching records are read. For joined group reads during `get_historical_features()`, the upper bound for pruning comes from the base group's maximum `event_timestamp` — joined data after the latest base record is irrelevant.
+- **Row-level time filter is applied after read.** Partition pruning operates at month granularity. The row-level filter on `event_timestamp_col` applies the precise time conditions (`gt`, `gte`, `lt`, `lte`) from `time_filter`.
 
 **Interface Contract:**
 
-- **Exposes to BB-02:** `write(group_name, df, source_prefix)` for ingestion, `read(group_name, where=None, upper_bound=None) → DataFrame` for retrieval and materialization.
+- **Exposes to BB-02:** `write(group_name, df, event_timestamp_col, source_prefix)` for ingestion, `read(group_name, event_timestamp_col, time_filter=None, upper_bound=None) → DataFrame` for retrieval and materialization. The caller passes `definition.event_timestamp.name` as `event_timestamp_col` — BB-06 does not depend on the definition module (same pattern as BB-08). BB-02 extracts `time_filter = where.get("event_timestamp") if where else None` before calling BB-06 — BB-06 receives only the flat operator→value dict (e.g., `{"gte": datetime(...), "lte": datetime(...)}`), not the full user-facing `where` dict.
 - **Depends on:** BB-09 (Provider Layer) — all Parquet I/O is delegated.
 
 **Architectural Decisions:**
@@ -561,7 +563,7 @@ The Online Store Manager does NOT read from the offline store — BB-06 handles 
 
 **Interface Contract:**
 
-- **Exposes to BB-02:** `materialize(group_name, df)` for materialization write (receives a full offline DataFrame, extracts latest internally), `get(group_name, entity_key_name, entity_key_value, select) → dict | None` for serving read. The `entity_key_name` and `entity_key_value` are extracted from the user-facing unified `where` parameter by BB-02 before calling BB-07 — BB-07 receives resolved values, not the raw `where` dict.
+- **Exposes to BB-02:** `materialize(group_name, df, event_timestamp_col, entity_key_col)` for materialization write (receives a full offline DataFrame, extracts latest internally), `get(group_name, entity_key_name, entity_key_value, select) → dict | None` for serving read. The caller passes `definition.event_timestamp.name` and `definition.entity_key.name` — BB-07 does not depend on the definition module (same pattern as BB-08). The `entity_key_name` and `entity_key_value` in `get()` are extracted from the user-facing unified `where` parameter by BB-02 before calling BB-07 — BB-07 receives resolved values, not the raw `where` dict.
 - **Depends on:** BB-09 (Provider Layer) — all SQLite/DynamoDB I/O is delegated.
 
 **Architectural Decisions:**
@@ -653,7 +655,7 @@ A single module with one primary function: the point-in-time join. No internal c
    - `direction='backward'` — for each left row, find the most recent right row where `right.event_timestamp ≤ left.event_timestamp`
    - `suffixes=('', '_joined__')` — temporary suffixes to disambiguate overlapping column names; the base side gets no suffix, the joined side gets a temporary marker
 4. **Handle unmatched rows:** `merge_asof` automatically fills unmatched joined columns with `NaN` (Pandas convention for missing values). This satisfies FR-OFF-005.
-5. **Resolve column name conflicts (FR-OFF-010):** Identify any joined-side columns whose original names (before the merge) conflict with base-side column names. Rename each conflicting joined column by prefixing it with `{joined_group_name}_` (e.g., the joined `event_timestamp` becomes `town_market_features_event_timestamp`). Remove the temporary suffix applied in step 3 and apply the final prefixed name. Non-conflicting joined columns retain their original names.
+5. **Resolve column name conflicts (FR-OFF-010):** Identify any joined-side columns whose original names (before the merge) conflict with base-side column names. Rename each conflicting joined column by prefixing it with `{joined_group_name}_`. The joined group's event timestamp column is **always prefixed** regardless of whether its actual name conflicts — this is a structural role-based rule (see API Contracts §6.6). The output column name is `{joined_group_name}_{joined_group.event_timestamp.name}` (e.g., if the joined group's event timestamp is named `"event_timestamp"`, it becomes `town_market_features_event_timestamp`). Remove the temporary suffix applied in step 3 and apply the final prefixed name. Non-conflicting joined columns (other than event timestamp) retain their original names.
 6. **Return** the merged DataFrame.
 
 **Boundary conditions (with concrete examples from the reference use case):**
@@ -1300,7 +1302,7 @@ Materialized data persists in the online store until the next materialization ov
 
 **Limitation 8: No Entity Key Filtering in Historical Retrieval**
 
-The `where` parameter in `get_historical_features()` uses the unified where format (`{field: {operator: value}}` — see FR-OFF-007), which structurally supports arbitrary field names. However, the MVP restricts `get_historical_features()` to accept only `event_timestamp` as a field name. Entity key filtering (e.g., retrieving training data for specific towns or specific listings only) is not supported at the query level. Users can filter the returned DataFrame in Python after retrieval. Adding entity key filtering requires only relaxing the per-method validation rule to accept additional field names and passing the predicates through to the partition reader — no API signature or format change needed.
+The `where` parameter in `get_historical_features()` uses the unified where format (`{field: {operator: value}}` — see FR-OFF-007), which structurally supports arbitrary field names. However, the MVP restricts `get_historical_features()` to accept only `event_timestamp` as a field name (a logical alias resolved to the base group's actual event timestamp column via `definition.event_timestamp.name` — see API Contracts §6.6). Entity key filtering (e.g., retrieving training data for specific towns or specific listings only) is not supported at the query level. Users can filter the returned DataFrame in Python after retrieval. Adding entity key filtering requires only relaxing the per-method validation rule to accept additional field names and passing the predicates through to the partition reader — no API signature or format change needed.
 
 ---
 

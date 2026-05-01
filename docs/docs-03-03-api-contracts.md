@@ -376,7 +376,19 @@ Writes feature data to the offline store for a registered feature group. Validat
 | `feature_group_name` | `str` | _(required)_ | Name of the registered feature group |
 | `data` | `DataFrame \| str` | _(required)_ | Pandas DataFrame, or path to a local CSV or Parquet file |
 
-**Returns:** A result describing the outcome of the ingestion — rows written, partitions affected.
+**Returns:** `IngestResult` — frozen dataclass:
+
+```python
+@dataclass(frozen=True)
+class IngestResult:
+    rows_written: int
+    partitions_affected: tuple[str, ...]
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `rows_written` | `int` | Number of rows successfully written to the offline store (after validation filtering, if applicable) |
+| `partitions_affected` | `tuple[str, ...]` | Partition paths that received data (e.g., `("year=2024/month=03", "year=2024/month=04")`) |
 
 **Raises:**
 - `FeatureGroupNotFoundError` — if `feature_group_name` is not in the registry
@@ -439,7 +451,7 @@ where = {
 
 Operators: `eq`, `in`, `gt`, `gte`, `lt`, `lte`. Multiple operators on the same field combine with AND semantics.
 
-**MVP restriction:** Only `event_timestamp` is accepted as a field name, and only `gt`, `gte`, `lt`, `lte` operators are accepted. _(FR-OFF-007)_
+**MVP restriction:** Only `event_timestamp` is accepted as a field name (a logical alias resolved to the base group's `definition.event_timestamp.name` — see §6.6), and only `gt`, `gte`, `lt`, `lte` operators are accepted. _(FR-OFF-007)_
 
 Example:
 ```python
@@ -572,7 +584,21 @@ Reads the latest value per entity key from the offline store and writes it to th
 | --- | --- | --- | --- |
 | `feature_group_name` | `str \| None` | `None` | If provided, materialize only this group. If `None`, materialize all `OFFLINE_AND_ONLINE` groups. |
 
-**Returns:** A result describing the outcome — groups processed, entity key counts written per group. If materializing all groups, the result includes per-group status (success, skipped, or failed).
+**Returns:** `MaterializeResult` — frozen dataclass:
+
+```python
+@dataclass(frozen=True)
+class MaterializeResult:
+    groups_processed: tuple[str, ...]
+    groups_skipped: tuple[str, ...]
+    entity_counts: dict[str, int]
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `groups_processed` | `tuple[str, ...]` | Names of groups successfully materialized |
+| `groups_skipped` | `tuple[str, ...]` | Names of groups skipped (empty offline store) |
+| `entity_counts` | `dict[str, int]` | Mapping of group name → number of entity keys written, for each processed group |
 
 **Raises:**
 - `FeatureGroupNotFoundError` — if specified group is not in the registry
@@ -1424,28 +1450,46 @@ class OfflineStoreManager:
         self,
         group_name: str,
         df: DataFrame,
+        event_timestamp_col: str,
         source_prefix: str = "ing",
     ) -> WriteResult: ...
 
     def read(
         self,
         group_name: str,
-        where: dict[str, dict[str, Any]] | None = None,
+        event_timestamp_col: str,
+        time_filter: dict[str, Any] | None = None,
         upper_bound: datetime | None = None,
     ) -> DataFrame: ...
 ```
 
+**`WriteResult`** — frozen dataclass (internal to BB-06, returned to BB-02):
+
+```python
+@dataclass(frozen=True)
+class WriteResult:
+    rows_written: int
+    partitions_affected: tuple[str, ...]
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `rows_written` | `int` | Number of rows written across all partitions |
+| `partitions_affected` | `tuple[str, ...]` | Partition paths that received data (e.g., `("year=2024/month=03",)`) |
+
 | Method | Description | Raises |
 | --- | --- | --- |
-| `write(group_name, df, source_prefix)` | Derives partitions from `event_timestamp`, generates file names (`{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet`), writes Parquet files via provider. Append-only. | `ProviderError` |
-| `read(group_name, where, upper_bound)` | Lists partitions, applies partition pruning (from `where` time range or `upper_bound`), reads Parquet via provider, applies row-level where filter. Returns empty DataFrame if no data exists. | `ProviderError` |
+| `write(group_name, df, event_timestamp_col, source_prefix)` | Derives partitions from the column identified by `event_timestamp_col`, generates file names (`{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet`), writes Parquet files via provider. Append-only. | `ProviderError` |
+| `read(group_name, event_timestamp_col, time_filter, upper_bound)` | Lists partitions, applies partition pruning (from `time_filter` or `upper_bound`), reads Parquet via provider, applies row-level time filter on `event_timestamp_col`. Returns empty DataFrame if no data exists. | `ProviderError` |
 
-**Partition derivation:** `event_timestamp → year=YYYY/month=MM/`. Records in a single ingestion may span multiple partitions.
+**Partition derivation:** `event_timestamp_col → year=YYYY/month=MM/`. Records in a single ingestion may span multiple partitions.
+
+**Caller responsibility:** The caller (BB-02) passes `definition.event_timestamp.name` as `event_timestamp_col`. BB-06 does not depend on the definition module — it receives the column name as a parameter, following the same pattern as BB-08 (§5.4). See §6.6 for event timestamp column name resolution. Additionally, BB-02 extracts `time_filter = where.get("event_timestamp") if where else None` before calling BB-06. BB-06 receives only the flat operator→value dict (e.g., `{"gte": datetime(...), "lte": datetime(...)}`) — not the full user-facing `where` dict. This matches BB-07's pattern where `entity_key_name`/`entity_key_value` are extracted from `where` by BB-02.
 
 **File naming:** `{source_prefix}_{YYYYMMDDTHHMMSS}_{short_id}.parquet`. The `source_prefix` is informational only — all `.parquet` files in a partition are read regardless of prefix. _(FR-ING-006, FR-ING-007)_
 
 **Partition pruning:**
-- For `where` time range: only partitions that could contain matching records are read
+- For `time_filter`: only partitions that could contain matching records are read
 - For `upper_bound`: only partitions up to the month containing the upper bound are read (used for joined groups during `get_historical_features`)
 
 _(FR-ING-004, FR-ING-006, FR-ING-007, FR-OFF-001)_
@@ -1465,6 +1509,8 @@ class OnlineStoreManager:
         self,
         group_name: str,
         df: DataFrame,
+        event_timestamp_col: str,
+        entity_key_col: str,
     ) -> MaterializeGroupResult: ...
 
     def get(
@@ -1476,12 +1522,28 @@ class OnlineStoreManager:
     ) -> dict | None: ...
 ```
 
+**`MaterializeGroupResult`** — frozen dataclass (internal to BB-07, returned to BB-02):
+
+```python
+@dataclass(frozen=True)
+class MaterializeGroupResult:
+    group_name: str
+    entity_count: int
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `group_name` | `str` | Name of the feature group that was materialized |
+| `entity_count` | `int` | Number of unique entity keys written to the online store |
+
 | Method | Description | Raises |
 | --- | --- | --- |
-| `materialize(group_name, df)` | Extracts latest record per entity key (group by entity key, max `event_timestamp`). Delegates full-overwrite write to provider. Returns count of entity keys written. | `ProviderError` |
+| `materialize(group_name, df, event_timestamp_col, entity_key_col)` | Extracts latest record per entity key (group by `entity_key_col`, max `event_timestamp_col`). Delegates full-overwrite write to provider. Returns `MaterializeGroupResult`. | `ProviderError` |
 | `get(group_name, entity_key_name, entity_key_value, select)` | Delegates key-based lookup to provider. Applies `select` to limit returned features. Structural columns always included. | `MaterializationError` (if table doesn't exist), `ProviderError` |
 
-**Latest-per-entity extraction:** `df.sort_values(event_timestamp).groupby(entity_key).last()` — produces exactly one row per entity key.
+**Latest-per-entity extraction:** `df.sort_values(event_timestamp_col).groupby(entity_key_col).last()` — produces exactly one row per entity key.
+
+**Caller responsibility:** The caller (BB-02) passes `definition.event_timestamp.name` as `event_timestamp_col` and `definition.entity_key.name` as `entity_key_col`. BB-07 does not depend on the definition module — it receives column names as parameters, following the same pattern as BB-08 (§5.4). See §6.6 for event timestamp column name resolution.
 
 **BB-02 is responsible for:** extracting entity key name/value from the user-facing `where` dict before calling `get()`. BB-07 receives resolved values, not the raw `where` dict.
 
@@ -1589,3 +1651,17 @@ Multiple operators on the same field combine with AND semantics.
 | `get_online_features()` | Entity key field only | `eq` only |
 
 These restrictions are enforced by BB-04's `validate_query_params()`. The format itself supports arbitrary fields and operators — relaxing restrictions requires only changing validation rules, not the API signature. _(FR-OFF-007)_
+
+> **Note:** In the `get_historical_features()` row, `"event_timestamp"` is a logical alias — see §6.6 for resolution semantics.
+
+---
+
+### 6.6 Event Timestamp Column Name Resolution
+
+The `EventTimestamp.name` field in a feature group definition declares which column in the user's data serves as the event timestamp. The name is **user-chosen** — it can be any valid column name (e.g., `"sold_at"`, `"event_timestamp"`, `"computed_at"`). The reference use case uses `name="event_timestamp"` as a convention (the ingestion SQL aliases source columns to this name), but this is not a system requirement.
+
+**Runtime resolution rule:** All system behavior referencing "the event timestamp" resolves to the actual column name via `definition.event_timestamp.name`. No module hardcodes a specific column name string.
+
+**`where` clause logical alias:** In the `where` parameter of `get_historical_features()`, `"event_timestamp"` is a **logical alias** for the base group's event timestamp column. The system resolves it to `definition.event_timestamp.name` before applying filters. Users always write `where={"event_timestamp": {...}}` regardless of the actual column name in their data. This provides a consistent API without requiring users to remember each group's specific timestamp column name.
+
+**Join output column naming:** In join output, the joined group's event timestamp column is **always prefixed** with `{joined_group_name}_` — regardless of whether its actual column name conflicts with a base group column name. This is a structural role-based rule (both groups have an event timestamp column), not a name-based conflict detection. The output column name is `{joined_group_name}_{joined_group.event_timestamp.name}` (e.g., if `town_market_features` has `event_timestamp.name="computed_at"`, the output column is `town_market_features_computed_at`). This ensures predictable, consistent output naming.

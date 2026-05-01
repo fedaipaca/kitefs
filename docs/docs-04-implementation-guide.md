@@ -838,13 +838,15 @@ Write tests covering: every expectation type, all three modes, schema as hard ga
 
 Implement BB-06 as defined in [Internals §2.6](docs-03-02-internals-and-data.md):
 
-- **Partition column derivation:** Extract `year` and `month` from `event_timestamp` for Hive-style partitioning.
-- **Write orchestration:** Add partition columns, delegate to provider's `write_offline()` with source prefix.
-- **Read orchestration with where-filter:**
-  - Translate the unified `where` format (see FR-OFF-007) into partition-level pruning (month-level) and row-level filtering.
-  - MVP restriction: only `event_timestamp` field with `gt`/`gte`/`lt`/`lte` operators.
-  - Delegate partition-pruned read to provider, then apply row-level `event_timestamp` filter.
+- **Partition column derivation:** Extract `year` and `month` from the column identified by `event_timestamp_col` for Hive-style partitioning.
+- **Write orchestration:** `write(group_name, df, event_timestamp_col, source_prefix)` — add partition columns derived from `event_timestamp_col`, delegate to provider's `write_offline()` with source prefix.
+- **Read orchestration with time-filter:** `read(group_name, event_timestamp_col, time_filter, upper_bound)`
+  - Apply `time_filter` operators (`gt`/`gte`/`lt`/`lte`) against `event_timestamp_col` for partition-level pruning (month-level) and row-level filtering.
+  - BB-02 extracts `time_filter = where.get("event_timestamp") if where else None` before calling BB-06. BB-06 receives only the flat operator→value dict — it does not understand the user-facing `where` format or perform alias resolution.
+  - Delegate partition-pruned read to provider, then apply row-level filter on `event_timestamp_col`.
 - **Read for materialization:** Read all data for a group (no filtering) — used by `materialize()` later.
+
+**Note:** BB-06 does not depend on the definition module (BB-03) or registry (BB-04). The caller (BB-02) passes `definition.event_timestamp.name` as `event_timestamp_col`. This follows the same pattern as BB-08's `left_timestamp`/`right_timestamp` parameters (see [API Contracts §5.4](docs-03-03-api-contracts.md)).
 
 Write tests covering: partition columns derived correctly, filtered reads return correct subsets, partition pruning reduces I/O, full-group read returns everything.
 
@@ -853,7 +855,7 @@ Write tests covering: partition columns derived correctly, filtered reads return
 **Demonstrable outcome:**
 
 - Data partitioned correctly by year/month on write.
-- Filtered reads with time-range `where` return expected subsets.
+- Filtered reads with time-range `time_filter` return expected subsets.
 
 **Traces:**
 
@@ -886,7 +888,7 @@ Write tests covering: partition columns derived correctly, filtered reads return
   - Other → raise `IngestionError`.
 - Run schema validation via BB-05 (always runs) — this also drops extra columns not in the definition (FR-ING-002).
 - Run data validation via BB-05 (per ingestion validation mode).
-- Write validated data via BB-06 (Offline Store Manager) with `ing` source prefix.
+- Write validated data via BB-06 (Offline Store Manager) with `ing` source prefix. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `write()`.
 - Return result with rows written and partitions affected.
 
 **CLI `ingest` command** — as defined in [API Contracts §3.3](docs-03-03-api-contracts.md):
@@ -928,8 +930,8 @@ Write tests covering: DataFrame ingestion, CSV ingestion, Parquet ingestion, ext
 
 Implement the non-join path of `get_historical_features()` as defined in [API Contracts §2.3](docs-03-03-api-contracts.md):
 
-- **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` only, `gt`/`gte`/`lt`/`lte` only). Invalid params → `RetrievalError`.
-- **Read:** Delegate to BB-06 with partition pruning via `where`.
+- **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid params → `RetrievalError`.
+- **Read:** Delegate to BB-06 with partition pruning. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `read()`. Extract `time_filter = where.get("event_timestamp") if where else None` and pass it as `time_filter` to BB-06 — BB-06 receives the flat operator→value dict, not the full user-facing `where`.
 - **Select application:** Keep entity key + event timestamp (always) + selected features. `"*"` returns all fields.
 - **Retrieval-gate validation:** Run BB-05 on selected features per the group's `offline_retrieval_validation` mode.
 - **Return:** Pandas DataFrame.
@@ -990,7 +992,7 @@ Implement BB-08 as defined in [Internals §2.8](docs-03-02-internals-and-data.md
 - **Column conflict resolution** (FR-OFF-010):
   - Conflicting joined columns are prefixed with `{joined_group_name}_`.
   - Base group columns are never renamed.
-  - Joined group's `event_timestamp` always conflicts → always prefixed.
+  - Joined group's event timestamp column is always prefixed with `{joined_group_name}_` — structural role-based rule, not name-based conflict detection (see API Contracts §6.6).
   - Join key column appears once (from base group — not duplicated).
 
 The engine is **stateless** — receives DataFrames + join metadata, returns a merged DataFrame. No I/O, no module dependencies.
@@ -1136,14 +1138,14 @@ Write tests covering: write → read roundtrip, entity key lookup returns correc
 
 **BB-07 (Online Store Manager)** — as defined in [Internals §2.7](docs-03-02-internals-and-data.md):
 
-- **Latest-per-entity extraction:** Group by entity key, select the row with maximum `event_timestamp`.
+- **Latest-per-entity extraction:** `materialize(group_name, df, event_timestamp_col, entity_key_col)` — group by `entity_key_col`, select the row with maximum `event_timestamp_col`. The caller (BB-02) passes `definition.event_timestamp.name` and `definition.entity_key.name` as these parameters.
 - **Write to online store:** Via provider's `write_online()` — full overwrite per group.
 
 **SDK `materialize()` method** — as defined in [API Contracts §2.5](docs-03-03-api-contracts.md):
 
 - If `feature_group_name` provided: materialize that group only. Validate it's `OFFLINE_AND_ONLINE` → `MaterializationError` if `OFFLINE` only (FR-MAT-002).
 - If `None`: materialize all `OFFLINE_AND_ONLINE` groups. A failure in one group does not prevent others (FR-MAT-001).
-- Read offline data via BB-06, extract latest-per-entity via BB-07, write online via BB-07.
+- Read offline data via BB-06 (passing `definition.event_timestamp.name` as `event_timestamp_col`), extract latest-per-entity via BB-07 (passing both `event_timestamp_col` and `entity_key_col`), write online via BB-07.
 - If offline store is empty for a group → skip with warning.
 - Update `last_materialized_at` in registry for each successfully materialized group.
 - Return result with groups processed and entity counts.
