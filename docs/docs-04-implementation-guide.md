@@ -842,8 +842,8 @@ Implement BB-06 as defined in [Internals §2.6](docs-03-02-internals-and-data.md
 - **Write orchestration:** Add partition columns, delegate to provider's `write_offline()` with source prefix.
 - **Read orchestration with where-filter:**
   - Translate the unified `where` format (see FR-OFF-007) into partition-level pruning (month-level) and row-level filtering.
-  - MVP restriction: only `event_timestamp` field with `gt`/`gte`/`lt`/`lte` operators.
-  - Delegate partition-pruned read to provider, then apply row-level `event_timestamp` filter.
+  - MVP restriction: only `event_timestamp` logical alias (resolved to `definition.event_timestamp.name`) with `gt`/`gte`/`lt`/`lte` operators.
+  - Delegate partition-pruned read to provider, then apply row-level filter on the actual event timestamp column.
 - **Read for materialization:** Read all data for a group (no filtering) — used by `materialize()` later.
 
 Write tests covering: partition columns derived correctly, filtered reads return correct subsets, partition pruning reduces I/O, full-group read returns everything.
@@ -928,7 +928,7 @@ Write tests covering: DataFrame ingestion, CSV ingestion, Parquet ingestion, ext
 
 Implement the non-join path of `get_historical_features()` as defined in [API Contracts §2.3](docs-03-03-api-contracts.md):
 
-- **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` only, `gt`/`gte`/`lt`/`lte` only). Invalid params → `RetrievalError`.
+- **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid params → `RetrievalError`.
 - **Read:** Delegate to BB-06 with partition pruning via `where`.
 - **Select application:** Keep entity key + event timestamp (always) + selected features. `"*"` returns all fields.
 - **Retrieval-gate validation:** Run BB-05 on selected features per the group's `offline_retrieval_validation` mode.
@@ -990,7 +990,7 @@ Implement BB-08 as defined in [Internals §2.8](docs-03-02-internals-and-data.md
 - **Column conflict resolution** (FR-OFF-010):
   - Conflicting joined columns are prefixed with `{joined_group_name}_`.
   - Base group columns are never renamed.
-  - Joined group's `event_timestamp` always conflicts → always prefixed.
+  - Joined group's event timestamp column is always prefixed with `{joined_group_name}_` — structural role-based rule, not name-based conflict detection (see API Contracts §6.6).
   - Join key column appears once (from base group — not duplicated).
 
 The engine is **stateless** — receives DataFrames + join metadata, returns a merged DataFrame. No I/O, no module dependencies.

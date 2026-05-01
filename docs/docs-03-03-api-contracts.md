@@ -439,7 +439,7 @@ where = {
 
 Operators: `eq`, `in`, `gt`, `gte`, `lt`, `lte`. Multiple operators on the same field combine with AND semantics.
 
-**MVP restriction:** Only `event_timestamp` is accepted as a field name, and only `gt`, `gte`, `lt`, `lte` operators are accepted. _(FR-OFF-007)_
+**MVP restriction:** Only `event_timestamp` is accepted as a field name (a logical alias resolved to the base group's `definition.event_timestamp.name` — see §6.6), and only `gt`, `gte`, `lt`, `lte` operators are accepted. _(FR-OFF-007)_
 
 Example:
 ```python
@@ -1589,3 +1589,17 @@ Multiple operators on the same field combine with AND semantics.
 | `get_online_features()` | Entity key field only | `eq` only |
 
 These restrictions are enforced by BB-04's `validate_query_params()`. The format itself supports arbitrary fields and operators — relaxing restrictions requires only changing validation rules, not the API signature. _(FR-OFF-007)_
+
+> **Note:** In the `get_historical_features()` row, `"event_timestamp"` is a logical alias — see §6.6 for resolution semantics.
+
+---
+
+### 6.6 Event Timestamp Column Name Resolution
+
+The `EventTimestamp.name` field in a feature group definition declares which column in the user's data serves as the event timestamp. The name is **user-chosen** — it can be any valid column name (e.g., `"sold_at"`, `"event_timestamp"`, `"computed_at"`). The reference use case uses `name="event_timestamp"` as a convention (the ingestion SQL aliases source columns to this name), but this is not a system requirement.
+
+**Runtime resolution rule:** All system behavior referencing "the event timestamp" resolves to the actual column name via `definition.event_timestamp.name`. No module hardcodes a specific column name string.
+
+**`where` clause logical alias:** In the `where` parameter of `get_historical_features()`, `"event_timestamp"` is a **logical alias** for the base group's event timestamp column. The system resolves it to `definition.event_timestamp.name` before applying filters. Users always write `where={"event_timestamp": {...}}` regardless of the actual column name in their data. This provides a consistent API without requiring users to remember each group's specific timestamp column name.
+
+**Join output column naming:** In join output, the joined group's event timestamp column is **always prefixed** with `{joined_group_name}_` — regardless of whether its actual column name conflicts with a base group column name. This is a structural role-based rule (both groups have an event timestamp column), not a name-based conflict detection. The output column name is `{joined_group_name}_{joined_group.event_timestamp.name}` (e.g., if `town_market_features` has `event_timestamp.name="computed_at"`, the output column is `town_market_features_computed_at`). This ensures predictable, consistent output naming.
