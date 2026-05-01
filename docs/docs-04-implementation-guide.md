@@ -840,9 +840,9 @@ Implement BB-06 as defined in [Internals §2.6](docs-03-02-internals-and-data.md
 
 - **Partition column derivation:** Extract `year` and `month` from the column identified by `event_timestamp_col` for Hive-style partitioning.
 - **Write orchestration:** `write(group_name, df, event_timestamp_col, source_prefix)` — add partition columns derived from `event_timestamp_col`, delegate to provider's `write_offline()` with source prefix.
-- **Read orchestration with where-filter:** `read(group_name, event_timestamp_col, where, upper_bound)`
-  - Translate the unified `where` format (see FR-OFF-007) into partition-level pruning (month-level) and row-level filtering.
-  - MVP restriction: only `event_timestamp` logical alias (resolved to `definition.event_timestamp.name` by BB-02 before calling BB-06) with `gt`/`gte`/`lt`/`lte` operators. BB-06 receives the resolved column name as `event_timestamp_col` — it does not perform alias resolution itself.
+- **Read orchestration with time-filter:** `read(group_name, event_timestamp_col, time_filter, upper_bound)`
+  - Apply `time_filter` operators (`gt`/`gte`/`lt`/`lte`) against `event_timestamp_col` for partition-level pruning (month-level) and row-level filtering.
+  - BB-02 extracts `time_filter = where.get("event_timestamp") if where else None` before calling BB-06. BB-06 receives only the flat operator→value dict — it does not understand the user-facing `where` format or perform alias resolution.
   - Delegate partition-pruned read to provider, then apply row-level filter on `event_timestamp_col`.
 - **Read for materialization:** Read all data for a group (no filtering) — used by `materialize()` later.
 
@@ -855,7 +855,7 @@ Write tests covering: partition columns derived correctly, filtered reads return
 **Demonstrable outcome:**
 
 - Data partitioned correctly by year/month on write.
-- Filtered reads with time-range `where` return expected subsets.
+- Filtered reads with time-range `time_filter` return expected subsets.
 
 **Traces:**
 
@@ -931,7 +931,7 @@ Write tests covering: DataFrame ingestion, CSV ingestion, Parquet ingestion, ext
 Implement the non-join path of `get_historical_features()` as defined in [API Contracts §2.3](docs-03-03-api-contracts.md):
 
 - **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid params → `RetrievalError`.
-- **Read:** Delegate to BB-06 with partition pruning via `where`. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `read()`. The `where` dict keys are passed as-is (already resolved from logical alias to actual column name by parameter validation).
+- **Read:** Delegate to BB-06 with partition pruning. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `read()`. Extract `time_filter = where.get("event_timestamp") if where else None` and pass it as `time_filter` to BB-06 — BB-06 receives the flat operator→value dict, not the full user-facing `where`.
 - **Select application:** Keep entity key + event timestamp (always) + selected features. `"*"` returns all fields.
 - **Retrieval-gate validation:** Run BB-05 on selected features per the group's `offline_retrieval_validation` mode.
 - **Return:** Pandas DataFrame.

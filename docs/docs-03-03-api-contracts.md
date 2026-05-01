@@ -1458,7 +1458,7 @@ class OfflineStoreManager:
         self,
         group_name: str,
         event_timestamp_col: str,
-        where: dict[str, dict[str, Any]] | None = None,
+        time_filter: dict[str, Any] | None = None,
         upper_bound: datetime | None = None,
     ) -> DataFrame: ...
 ```
@@ -1480,16 +1480,16 @@ class WriteResult:
 | Method | Description | Raises |
 | --- | --- | --- |
 | `write(group_name, df, event_timestamp_col, source_prefix)` | Derives partitions from the column identified by `event_timestamp_col`, generates file names (`{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet`), writes Parquet files via provider. Append-only. | `ProviderError` |
-| `read(group_name, event_timestamp_col, where, upper_bound)` | Lists partitions, applies partition pruning (from `where` time range or `upper_bound`), reads Parquet via provider, applies row-level where filter on `event_timestamp_col`. Returns empty DataFrame if no data exists. | `ProviderError` |
+| `read(group_name, event_timestamp_col, time_filter, upper_bound)` | Lists partitions, applies partition pruning (from `time_filter` or `upper_bound`), reads Parquet via provider, applies row-level time filter on `event_timestamp_col`. Returns empty DataFrame if no data exists. | `ProviderError` |
 
 **Partition derivation:** `event_timestamp_col → year=YYYY/month=MM/`. Records in a single ingestion may span multiple partitions.
 
-**Caller responsibility:** The caller (BB-02) passes `definition.event_timestamp.name` as `event_timestamp_col`. BB-06 does not depend on the definition module — it receives the column name as a parameter, following the same pattern as BB-08 (§5.4). See §6.6 for event timestamp column name resolution.
+**Caller responsibility:** The caller (BB-02) passes `definition.event_timestamp.name` as `event_timestamp_col`. BB-06 does not depend on the definition module — it receives the column name as a parameter, following the same pattern as BB-08 (§5.4). See §6.6 for event timestamp column name resolution. Additionally, BB-02 extracts `time_filter = where.get("event_timestamp") if where else None` before calling BB-06. BB-06 receives only the flat operator→value dict (e.g., `{"gte": datetime(...), "lte": datetime(...)}`) — not the full user-facing `where` dict. This matches BB-07's pattern where `entity_key_name`/`entity_key_value` are extracted from `where` by BB-02.
 
 **File naming:** `{source_prefix}_{YYYYMMDDTHHMMSS}_{short_id}.parquet`. The `source_prefix` is informational only — all `.parquet` files in a partition are read regardless of prefix. _(FR-ING-006, FR-ING-007)_
 
 **Partition pruning:**
-- For `where` time range: only partitions that could contain matching records are read
+- For `time_filter`: only partitions that could contain matching records are read
 - For `upper_bound`: only partitions up to the month containing the upper bound are read (used for joined groups during `get_historical_features`)
 
 _(FR-ING-004, FR-ING-006, FR-ING-007, FR-OFF-001)_

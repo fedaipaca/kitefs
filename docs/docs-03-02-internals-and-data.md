@@ -478,20 +478,20 @@ The Offline Store Manager does NOT validate data — that is BB-05's job, invoke
 | File Namer | Generates unique file names: `{source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet` | FR-ING-007. See KTD-11 for naming rationale. |
 | Write Orchestrator | Groups a DataFrame by partition, generates a file name per partition, delegates per-partition Parquet writes to BB-09 | Append-only — never modifies existing files (FR-ING-004) |
 | Read Orchestrator | Determines which partitions to read (pruning), delegates reads to BB-09, combines multi-partition results into a single DataFrame | PyArrow handles multi-file reads within a partition natively |
-| Partition Pruner | Given a time range (from `where` clause) or an upper-bound timestamp, determines which `year=YYYY/month=MM/` partitions to read vs. skip | Reduces I/O for time-bounded queries |
-| Where Filter | Applies row-level filter on the event timestamp column (identified by `definition.event_timestamp.name`) after partition-level pruning | Partition pruning is coarse (month granularity); row-level filter is precise |
+| Partition Pruner | Given a time range (from `time_filter`) or an upper-bound timestamp, determines which `year=YYYY/month=MM/` partitions to read vs. skip | Reduces I/O for time-bounded queries |
+| Time Filter | Applies row-level filter on `event_timestamp_col` using operator→value pairs from `time_filter` after partition-level pruning | Partition pruning is coarse (month granularity); row-level filter is precise |
 
 **Behavioral Rules:**
 
 - **Writes are append-only (FR-ING-004, KTD-11).** Each ingestion creates new Parquet file(s). Existing files are never modified, overwritten, or deleted by BB-06. This eliminates conflict resolution and supports idempotent re-ingestion (same data ingested twice creates additional files — no data loss, no corruption).
 - **Partition paths are deterministic from `event_timestamp`.** A record with `event_timestamp = 2024-03-15 11:00:00` is written to `{group_name}/year=2024/month=03/`. Records in the same ingestion batch may span multiple partitions.
 - **All `.parquet` files in a partition are read regardless of source prefix (FR-ING-007).** The `source` prefix in the file name (`ing_`, `mock_`, etc.) is informational only. BB-06 reads everything in a partition directory.
-- **Partition pruning for reads.** When a `where` clause specifies a time range, only partitions that could contain matching records are read. For joined group reads during `get_historical_features()`, the upper bound for pruning comes from the base group's maximum `event_timestamp` — joined data after the latest base record is irrelevant.
-- **Row-level where filter is applied after read.** Partition pruning operates at month granularity. The row-level filter on `event_timestamp` applies the precise time conditions (`gt`, `gte`, `lt`, `lte`) from the `where` clause.
+- **Partition pruning for reads.** When `time_filter` is provided, only partitions that could contain matching records are read. For joined group reads during `get_historical_features()`, the upper bound for pruning comes from the base group's maximum `event_timestamp` — joined data after the latest base record is irrelevant.
+- **Row-level time filter is applied after read.** Partition pruning operates at month granularity. The row-level filter on `event_timestamp_col` applies the precise time conditions (`gt`, `gte`, `lt`, `lte`) from `time_filter`.
 
 **Interface Contract:**
 
-- **Exposes to BB-02:** `write(group_name, df, event_timestamp_col, source_prefix)` for ingestion, `read(group_name, event_timestamp_col, where=None, upper_bound=None) → DataFrame` for retrieval and materialization. The caller passes `definition.event_timestamp.name` as `event_timestamp_col` — BB-06 does not depend on the definition module (same pattern as BB-08).
+- **Exposes to BB-02:** `write(group_name, df, event_timestamp_col, source_prefix)` for ingestion, `read(group_name, event_timestamp_col, time_filter=None, upper_bound=None) → DataFrame` for retrieval and materialization. The caller passes `definition.event_timestamp.name` as `event_timestamp_col` — BB-06 does not depend on the definition module (same pattern as BB-08). BB-02 extracts `time_filter = where.get("event_timestamp") if where else None` before calling BB-06 — BB-06 receives only the flat operator→value dict (e.g., `{"gte": datetime(...), "lte": datetime(...)}`), not the full user-facing `where` dict.
 - **Depends on:** BB-09 (Provider Layer) — all Parquet I/O is delegated.
 
 **Architectural Decisions:**
