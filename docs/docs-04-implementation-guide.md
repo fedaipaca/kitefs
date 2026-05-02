@@ -18,7 +18,11 @@
 > - **Incremental dependencies** — each task lists only the packages
 >   it introduces. No front-loading.
 > - **Solo developer, MVP focus** — tasks are scoped for one person.
->   No over-engineering.
+>   No over-engineering. MVP here means a working alpha version that
+>   demonstrates KiteFS end-to-end in a simple, minimalist, yet looks like
+>   realistic use-case project. (e.g., a simple demo built on the reference use case).
+>   The goal is to prove the library works, not to polish every edge. If a
+>   feature isn't needed to run the demo, it can wait.
 >
 > **Constraints:**
 >
@@ -62,7 +66,7 @@
 
 ---
 
-### Task 1 — Project Scaffold & Tooling
+### Task 1 — Project Scaffold & Tooling - (DONE)
 
 |                     |                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------ |
@@ -104,7 +108,7 @@
 
 ---
 
-### Task 2 — Exception Hierarchy
+### Task 2 — Exception Hierarchy - (DONE)
 
 |                     |                                                                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -154,7 +158,7 @@ Create `src/kitefs/exceptions.py` with these classes. Each exception carries an 
 
 ---
 
-### Task 3 — Definition Module (BB-03)
+### Task 3 — Definition Module (BB-03) - (DONE)
 
 |                     |                                                                                                                 |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -198,7 +202,7 @@ Write tests covering:
 
 ---
 
-### Task 4 — Configuration Manager (BB-10)
+### Task 4 — Configuration Manager (BB-10) - (DONE)
 
 |                     |                                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -241,7 +245,7 @@ Write tests covering: valid local config, valid AWS config, missing required fie
 
 ---
 
-### Task 5 — CLI Entry Point + `kitefs init`
+### Task 5 — CLI Entry Point + `kitefs init` - (DONE)
 
 |                     |                                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -292,7 +296,7 @@ Write tests covering: successful init (verify all files/dirs created), re-init e
 
 ---
 
-### Task 6 — Package Build & Publish
+### Task 6 — Package Build & Publish - (DONE)
 
 |                     |                                                                                                 |
 | ------------------- | ----------------------------------------------------------------------------------------------- |
@@ -344,7 +348,7 @@ Write tests covering: successful init (verify all files/dirs created), re-init e
 
 ---
 
-### Task 7 — Provider Interface + Local Provider (Registry I/O)
+### Task 7 — Provider Interface + Local Provider (Registry I/O) - (DONE)
 
 |                     |                                                                                      |
 | ------------------- | ------------------------------------------------------------------------------------ |
@@ -385,7 +389,7 @@ Write tests covering: `LocalProvider` read/write roundtrip (string in, string ou
 
 ---
 
-### Task 8a — Definition Discovery
+### Task 8a — Definition Discovery - (DONE)
 
 |                     |                                                                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -422,7 +426,7 @@ Write tests covering: single group discovered, multiple groups across multiple f
 
 ---
 
-### Task 8b — Definition Validation Rules
+### Task 8b — Definition Validation Rules - (DONE)
 
 |                     |                                                                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -468,7 +472,7 @@ Write tests covering: one test per validation rule, multiple errors from multipl
 
 ---
 
-### Task 8c — Registry Manager + `apply()` (BB-04)
+### Task 8c — Registry Manager + `apply()` (BB-04) - (DONE)
 
 |                     |                                                                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -527,7 +531,7 @@ Write tests covering: successful apply single/multiple groups, `applied_at` is v
 
 ---
 
-### Task 8d — SDK `FeatureStore` + CLI `apply` (BB-02 partial + BB-01 partial)
+### Task 8d — SDK `FeatureStore` + CLI `apply` (BB-02 partial + BB-01 partial) - (DONE)
 
 |                     |                                                                                                                                   |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -582,7 +586,7 @@ Write tests covering:
 
 ---
 
-### Task 9 — List & Describe Commands
+### Task 9 — List & Describe Commands - (DONE)
 
 |                     |                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -640,14 +644,14 @@ Write tests covering: list with groups, list empty, describe existing group, des
 - Provider ABC offline method signatures (Task 10a), atomic Parquet writes (Task 10b), Parquet reads + partition listing (Task 10c)
 - The validation engine — schema and data validation with three modes (Task 11)
 - The offline store manager — partitioning and filtered reads (Task 12)
-- End-to-end ingestion via SDK and CLI (Task 13)
+- SDK ingest method (Task 13a), CLI ingest command (Task 13b)
 - Historical retrieval for a single feature group (Task 14)
 
 **Building blocks touched:** BB-09 (Provider — offline methods), BB-05 (Validation Engine), BB-06 (Offline Store Manager), BB-02 (SDK — `ingest()`, `get_historical_features()` partial)
 
 ---
 
-### Task 10a — Provider ABC: Offline Store Method Signatures
+### Task 10a — Provider ABC: Offline Store Method Signatures - (DONE)
 
 |                     |                                                                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -688,7 +692,7 @@ Write tests covering: subclass missing any of the three new methods raises `Type
 
 ---
 
-### Task 10b — LocalProvider: `write_offline` (Atomic Parquet Writes)
+### Task 10b — LocalProvider: `write_offline` (Atomic Parquet Writes) - (DONE)
 
 |                     |                                                                                                                                   |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -730,7 +734,7 @@ Write tests covering: write creates correct directory structure (`{storage_root}
 
 ---
 
-### Task 10c — LocalProvider: `read_offline` + `list_partitions` (Parquet Reads)
+### Task 10c — LocalProvider: `read_offline` + `list_partitions` (Parquet Reads) - (DONE)
 
 |                     |                                                                                                                                                       |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -779,7 +783,7 @@ Write tests covering: read returns correct data from specified partition paths, 
 
 ---
 
-### Task 11 — Validation Engine (BB-05)
+### Task 11 — Validation Engine (BB-05) - (DONE)
 
 |                     |                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -826,7 +830,7 @@ Write tests covering: every expectation type, all three modes, schema as hard ga
 
 ---
 
-### Task 12 — Offline Store Manager (BB-06)
+### Task 12 — Offline Store Manager (BB-06) - (DONE)
 
 |                     |                                                                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -868,53 +872,99 @@ Write tests covering: partition columns derived correctly, filtered reads return
 
 ---
 
-### Task 13 — Ingest Operation (end-to-end)
+### Task 13a — SDK `FeatureStore.ingest()` (BB-02 partial)
 
-|                     |                                                                                        |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| **Branch**          | `feat/task-13/ingest`                                                                  |
-| **Goal**            | `kitefs ingest` works end-to-end — the first data path through the system is complete. |
-| **Building blocks** | BB-02 (SDK — `ingest()`), BB-01 (CLI — `ingest`)                                       |
+|                     |                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-13a/sdk-ingest`                                                                                                          |
+| **Goal**            | `FeatureStore.ingest()` accepts a DataFrame or file path, validates, and writes to the offline store — the first SDK data write path. |
+| **Building blocks** | BB-02 (SDK — `ingest()` only)                                                                                                       |
+| **Depends on**      | Task 11 (Validation Engine), Task 12 (Offline Store Manager)                                                                        |
 
 **What to implement:**
 
-**SDK `ingest()` method** — as defined in [API Contracts §2.2](docs-03-03-api-contracts.md):
+**`IngestResult`** — frozen dataclass (public return type, per [API Contracts §2.2](docs-03-03-api-contracts.md)):
 
-- Look up feature group definition via BB-04 (Registry Manager).
+- `rows_written: int` — number of rows written after validation filtering.
+- `partitions_affected: tuple[str, ...]` — partition paths that received data.
+- Add to `src/kitefs/__init__.py` re-exports.
+
+**`FeatureStore.ingest()` method** — as defined in [API Contracts §2.2](docs-03-03-api-contracts.md):
+
+- Wire `OfflineStoreManager` into `FeatureStore.__init__` as `self._offline_store_manager = OfflineStoreManager(provider)` — first time BB-06 is connected to the SDK (following the pattern from Task 8d where `RegistryManager` was wired).
+- Look up feature group definition via BB-04 (`self._registry_manager.get_group(feature_group_name)`). Not found → `FeatureGroupNotFoundError`.
 - Resolve input to DataFrame:
   - `DataFrame` → use directly.
-  - `str` ending in `.csv` → load via Pandas.
-  - `str` ending in `.parquet` → load via PyArrow/Pandas.
-  - Other → raise `IngestionError`.
-- Run schema validation via BB-05 (always runs) — this also drops extra columns not in the definition (FR-ING-002).
-- Run data validation via BB-05 (per ingestion validation mode).
-- Write validated data via BB-06 (Offline Store Manager) with `ing` source prefix. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `write()`.
-- Return result with rows written and partitions affected.
+  - `str` ending in `.csv` → load via `pd.read_csv`.
+  - `str` ending in `.parquet` → load via `pd.read_parquet`.
+  - Other → raise `IngestionError` listing supported input formats.
+- Run schema validation via BB-05 (`validate_schema`) — always runs regardless of mode. Drops extra columns not in the definition (FR-ING-002). Raises `SchemaValidationError` on missing columns or null structural columns.
+- Run data validation via BB-05 (`validate_data`) per `definition.ingestion_validation` mode.
+- If FILTER mode and all rows filtered out → return `IngestResult(rows_written=0, partitions_affected=())`.
+- Write validated data via BB-06 (`self._offline_store_manager.write()`) with `source_prefix="ing"`. Pass `definition.event_timestamp.name` as `event_timestamp_col`.
+- Map `WriteResult` (BB-06 internal) to `IngestResult` (public return type) and return.
+
+Write tests covering: DataFrame ingestion success, CSV file ingestion, Parquet file ingestion, unsupported input type raises `IngestionError`, unsupported file extension raises `IngestionError`, feature group not found raises `FeatureGroupNotFoundError`, missing columns raise `SchemaValidationError`, null entity key raises `SchemaValidationError`, null event timestamp raises `SchemaValidationError`, extra columns silently dropped, ERROR mode with invalid data raises `DataValidationError` (no data written), FILTER mode excludes failing rows, FILTER mode with all rows filtered returns `IngestResult(rows_written=0, ...)`, NONE mode skips data validation (schema still runs), append-only behavior (two ingests to same group both persist), reference use case `listing_features` ingestion produces correct partition paths.
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- `FeatureStore.ingest("listing_features", df)` writes validated Parquet files to the offline store.
+- All three validation modes behave correctly (ERROR rejects, FILTER excludes, NONE skips Phase 2).
+- `IngestResult` is importable from `kitefs`.
+
+**Traces:**
+
+| Document                                                         | Look for                              | What you'll find                                             |
+| ---------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------ |
+| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §2.2 `ingest()`                       | Detailed SDK flow chart                                      |
+| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.3 Data Ingestion — FR-ING-001–007  | Requirement-level acceptance criteria                        |
+| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §4.4 Ingest Data                      | Operational flow diagram                                     |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.2 SDK (BB-02)                      | Constructor wiring, `ingest()` orchestration                 |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.5 Validation Engine (BB-05)        | Two-phase validation, extra column dropping                  |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.6 Offline Store Manager (BB-06)    | Write orchestration contract                                 |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §2.2 `ingest()`                       | SDK method signature, parameters, `IngestResult` return type |
+
+---
+
+### Task 13b — CLI `kitefs ingest` (BB-01 partial)
+
+|                     |                                                                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-13b/cli-ingest`                                                                                                    |
+| **Goal**            | `kitefs ingest <feature_group_name> <file_path>` is a runnable command — the first data ingestion path from the command line. |
+| **Building blocks** | BB-01 (CLI — `ingest` command)                                                                                                |
+| **Depends on**      | Task 13a (SDK `ingest()`)                                                                                                     |
+
+**What to implement:**
 
 **CLI `ingest` command** — as defined in [API Contracts §3.3](docs-03-03-api-contracts.md):
 
-- `kitefs ingest <feature_group_name> <file_path>` → delegate to `store.ingest()`.
+- `kitefs ingest <feature_group_name> <file_path>` — two positional arguments.
+- Instantiate `FeatureStore()`, call `fs.ingest(feature_group_name, file_path)`.
+- On success (exit 0): print ingestion summary — rows written and partitions affected.
+- On error (exit 1): catch `KiteFSError`, render message to stderr, exit 1. No tracebacks.
+- Follows Thin CLI, Fat SDK pattern (KTD-4) — no business logic in the command.
+- Note: DataFrame ingestion is SDK-only, not available via CLI (FR-ING-001).
 
-Write tests covering: DataFrame ingestion, CSV ingestion, Parquet ingestion, extra column dropping, missing column rejection, null structural column rejection, all three validation modes, append-only behavior.
+Write tests covering: `kitefs ingest <name> <csv>` success (exit 0, summary printed), outside KiteFS project (exit 1, error to stderr), unknown feature group (exit 1, error message), nonexistent file path (exit 1, error message), schema validation failure (exit 1, errors to stderr), `kitefs ingest --help` shows arguments and usage.
 
 **Dependencies introduced:** None new.
 
 **Demonstrable outcome:**
 
 - `kitefs init` → write definition → `kitefs apply` → `kitefs ingest listing_features data.csv` → Parquet files in `feature_store/data/offline_store/listing_features/year=.../month=.../`.
-- SDK DataFrame ingestion works in tests.
-- Validation modes behave correctly (ERROR rejects, FILTER excludes, NONE skips).
+- Errors produce clear, actionable messages to stderr with exit code 1.
 
 **Traces:**
 
-| Document                                                         | Look for                              | What you'll find                              |
-| ---------------------------------------------------------------- | ------------------------------------- | --------------------------------------------- |
-| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §1.4 `kitefs ingest`, §2.2 `ingest()` | Detailed CLI + SDK flow charts                |
-| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.3 Data Ingestion — FR-ING-001–007  | Requirement-level acceptance criteria         |
-| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.10 CLI — FR-CLI-004                | CLI ingest command requirement                |
-| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §4.4 Ingest Data                      | Operational flow diagram                      |
-| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §2.2 `ingest()`                       | SDK method signature, parameters, return type |
-| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §3.3 `kitefs ingest`                  | CLI contract                                  |
+| Document                                                         | Look for                 | What you'll find                            |
+| ---------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
+| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §1.4 `kitefs ingest`     | Detailed CLI flow chart                     |
+| [Requirements (docs-02)](docs-02-project-requirements.md)        | §1.10 CLI — FR-CLI-004   | CLI ingest command requirement              |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.1 CLI (BB-01)         | Thin CLI behavioral rules, error scenarios  |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §3.3 `kitefs ingest`     | CLI contract: arguments, exit codes, output |
 
 ---
 
