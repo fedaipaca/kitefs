@@ -395,7 +395,7 @@ Tier 4 — Entry Point:
 Two distinct validation activities exist, owned by different building blocks:
 
 - **Definition validation** (BB-04, Registry Manager): validates that `FeatureGroup` Python objects are structurally correct during `apply()`. The constructor signature enforces exactly one `EntityKey` and one `EventTimestamp` (structural columns), so BB-04 validates the remaining concerns: `EventTimestamp` dtype must be `DATETIME`, feature types from the supported set, field names unique within group, join keys reference existing groups with matching types. Acts on *Python objects*.
-- **Data validation** (BB-05, Validation Engine): validates that DataFrame values conform to the declared schema during `ingest()` and `get_historical_features()`. Checks: column presence, type correctness, feature expectations (min/max/one_of/not_null). Supports ERROR/FILTER/NONE modes. Acts on *DataFrames*.
+- **Data validation** (BB-05, Validation Engine): validates DataFrame values against the declared schema. At the **ingestion gate**: runs Phase 1 (column presence, null structural column checks, extra column dropping — always-ERROR semantics) followed by Phase 2 (type correctness, feature expectations — respects the configured mode). At the **offline retrieval gate** (`get_historical_features()`): runs Phase 2 only, per the group's `offline_retrieval_validation` mode — the retrieval path trusts that ingested data is structurally valid (see Limitation 10 in [docs-03-02](docs-03-02-internals-and-data.md)). Supports ERROR/FILTER/NONE modes. Acts on *DataFrames*.
 
 These are separate responsibilities because they operate on different inputs (Python objects vs. DataFrames), serve different purposes (registration correctness vs. data quality), and trigger at different points in the system. See KTD-5 below.
 
@@ -648,7 +648,7 @@ sequenceDiagram
         BB04-->>BB02: Error (identifies invalid parameter)
         BB02-->>User: Abort with validation error
     else Params valid
-        BB04-->>BB02: Validated params + definitions
+        BB04-->>BB02: Validation passed
     end
 
     BB02->>BB06: Read base feature group
@@ -657,7 +657,7 @@ sequenceDiagram
     BB06->>BB06: Apply row-level where filter
     BB06-->>BB02: Base DataFrame
 
-    BB02->>BB02: Apply select on base (keep entity_key, event_timestamp, join keys + selected features)
+    BB02->>BB02: Apply select on base (no join: entity_key + event_timestamp + selected features; join path: also retain join keys)
 
     BB02->>BB05: Validate base data (retrieval gate, selected features only)
     BB05-->>BB02: Validated base (per mode)

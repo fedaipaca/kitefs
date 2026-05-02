@@ -3,7 +3,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import pandas as pd
 from pandas import DataFrame
@@ -20,7 +20,7 @@ from kitefs.exceptions import (
 from kitefs.offline_store import OfflineStoreManager
 from kitefs.providers.factory import create_provider
 from kitefs.registry import ApplyResult, RegistryManager
-from kitefs.validation import validate_data, validate_schema
+from kitefs.validation import validate_data, validate_data_selected, validate_schema
 
 _T = TypeVar("_T", list[dict], dict)
 
@@ -136,6 +136,73 @@ class FeatureStore:
             rows_written=write_result.rows_written,
             partitions_affected=write_result.partitions_affected,
         )
+
+    def get_historical_features(
+        self,
+        from_: str,
+        select: list[str] | str | dict[str, list[str] | str],
+        where: dict[str, dict[str, Any]] | None = None,
+        join: list[str] | None = None,
+    ) -> DataFrame:
+        """Retrieve historical feature data from the offline store.
+
+        Supports single feature group retrieval (no-join path). The join
+        path will be implemented in a future task.
+        """
+        # Validate all parameters upfront — raises on invalid input.
+        self._registry_manager.validate_query_params(
+            from_=from_, select=select, where=where, join=join, method="get_historical_features"
+        )
+
+        definition = self._registry_manager.get_group(from_)
+        et_col = definition.event_timestamp.name
+        ek_col = definition.entity_key.name
+
+        # Resolve selected feature names.
+        all_feature_names = [f.name for f in definition.features]
+        if select == "*":
+            selected_features = all_feature_names
+        elif isinstance(select, list):
+            selected_features = list(select)
+        else:  # pragma: no cover — validate_query_params rejects other types
+            selected_features = all_feature_names
+
+        # Build output column list: structural columns + selected features.
+        output_columns = [ek_col, et_col, *selected_features]
+
+        # Resolve where → time_filter for BB-06.
+        time_filter = where.get("event_timestamp") if where else None
+
+        # Read from offline store with partition pruning.
+        df = self._offline_store_manager.read(
+            group_name=from_,
+            event_timestamp_col=et_col,
+            time_filter=time_filter,
+        )
+
+        # Empty result — synthesize correct shape.
+        if df.empty:
+            return DataFrame(columns=output_columns)
+
+        # Apply select narrowing.
+        narrowed_df: DataFrame = df[output_columns].reset_index(drop=True)  # type: ignore[assignment]  # pandas stubs don't narrow list indexing to DataFrame
+
+        # Retrieval-gate validation on selected features only.
+        try:
+            _, validated_df = validate_data_selected(
+                definition, narrowed_df, definition.offline_retrieval_validation, selected_features
+            )
+        except DataValidationError as exc:
+            raise DataValidationError(
+                f"During retrieval of feature group '{from_}': {exc}",
+                report=exc.report,
+            ) from exc
+
+        # Post-validation empty check (FILTER mode may remove all rows).
+        if validated_df.empty:
+            return DataFrame(columns=output_columns)
+
+        return validated_df
 
     def list_feature_groups(
         self,

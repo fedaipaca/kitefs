@@ -3,7 +3,6 @@ description: "Create an implementation plan for a KiteFS task. Use before starti
 agent: Plan
 argument-hint: "Paste the task description or requirement to plan for..."
 tools: ["search", "read", "web/fetch"]
-model: Claude Opus 4.6 (copilot)
 ---
 
 Create a detailed **implementation plan** for the task described below.

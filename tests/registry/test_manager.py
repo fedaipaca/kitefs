@@ -322,11 +322,11 @@ class TestRegistryManagerStubs:
         with pytest.raises(NotImplementedError, match=r"Task 18"):
             manager.update_materialized_at("any_group", datetime.now(UTC))
 
-    def test_validate_query_params_not_implemented(self, tmp_path: Path) -> None:
-        """validate_query_params raises NotImplementedError."""
+    def test_validate_query_params_online_not_implemented(self, tmp_path: Path) -> None:
+        """validate_query_params for get_online_features raises NotImplementedError."""
         manager = setup_manager(tmp_path)
-        with pytest.raises(NotImplementedError, match=r"Task"):
-            manager.validate_query_params("g", "*", None, None, "get_historical_features")
+        with pytest.raises(NotImplementedError, match=r"Task 19"):
+            manager.validate_query_params("g", "*", None, None, "get_online_features")
 
 
 def _make_provider_error_with_cause(message: str, cause: Exception) -> ProviderError:

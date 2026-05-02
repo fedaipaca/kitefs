@@ -565,7 +565,7 @@ flowchart TD
     BASE_EMPTY -- Yes --> RETURN_EMPTY["Return empty DataFrame"]
     RETURN_EMPTY --> END_OK(["Done"])
 
-    BASE_EMPTY -- No --> SELECT_BASE["Apply select on base<br><i>Keep entity_key, event_timestamp,<br>join keys + selected base features</i>"]
+    BASE_EMPTY -- No --> SELECT_BASE["Apply select on base<br><i>No join: entity_key + event_timestamp<br>+ selected features.<br>Join path: also retain join keys</i>"]
 
     SELECT_BASE --> VALIDATE_BASE["Validate base feature group<br><i>Offline retrieval validation gate<br>(selected features only)</i>"]
 
@@ -591,7 +591,7 @@ flowchart TD
 
     JOIN_CHECK -- Yes --> READ_JOINED["Read each joined feature group<br>from local offline store via PyArrow<br><i>Partition pruning using<br>base timestamp upper bound</i>"]
 
-    READ_JOINED --> SELECT_JOINED["Apply select on joined<br><i>Keep join key, event_timestamp<br>+ selected joined features</i>"]
+    READ_JOINED --> SELECT_JOINED["Apply select on joined<br><i>Keep event_timestamp<br>+ selected joined features.<br>Entity key excluded (it is the join key from base)</i>"]
 
     SELECT_JOINED --> VALIDATE_JOINED["Validate each joined feature group<br><i>Offline retrieval validation gate per group<br>(selected features only)</i>"]
 

@@ -484,7 +484,7 @@ For the `from_` group, `"*"` returns: entity key, event timestamp, and all featu
 - `FeatureGroupNotFoundError` — if `from_` or any group in `join` is not in the registry
 - `JoinError` — if no valid join path exists between `from_` and a joined group, or if `join` contains more than one group (MVP)
 - `RetrievalError` — if `select` references features that don't exist, or `where` uses an unsupported field/operator for this method
-- `SchemaValidationError` — if offline data has schema issues (should not happen if ingestion validation was used)
+- `SchemaValidationError` — not raised in the MVP; schema validation (Phase 1) runs only at ingestion. Listed for forward-compatibility if a defensive retrieval-time schema check is added later (see Limitation 10 in [docs-03-02](docs-03-02-internals-and-data.md))
 - `DataValidationError` — if any group's offline retrieval validation mode is `ERROR` and data fails expectations
 - `ProviderError` — if Parquet reads fail
 
@@ -1045,7 +1045,7 @@ Raised when a DataFrame's columns do not match the expected schema.
 
 | When raised | By | Conditions |
 | --- | --- | --- |
-| `ingest()`, `get_historical_features()` | BB-05 | Missing required columns; entity key column contains null values; event timestamp column contains null values. Mode-independent — always-ERROR semantics for schema issues. |
+| `ingest()` | BB-05 | Missing required columns; entity key column contains null values; event timestamp column contains null values. Mode-independent — always-ERROR semantics for schema issues. Schema validation (Phase 1) runs exclusively at the ingestion gate — the retrieval path does not re-run it (see Limitation 10 in [docs-03-02](docs-03-02-internals-and-data.md)). |
 
 The error message lists all missing columns and null-column issues.
 

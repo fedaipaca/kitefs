@@ -968,6 +968,89 @@ Write tests covering: `kitefs ingest <name> <csv>` success (exit 0, summary prin
 
 ---
 
+### Task pre-14 — Retrieval Alignment (doc fixes + validation seam) - (DONE)
+
+|                     |                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**          | `feat/task-pre-14/retrieval-alignment`                                                                                                       |
+| **Goal**            | Align docs, code, and design decisions so Task 14 can be implemented without ambiguity or contract conflicts.                                |
+| **Building blocks** | BB-05 (Validation Engine — minor), BB-04 (Registry Manager — doc-only), BB-02 (SDK — doc-only)                                               |
+| **Depends on**      | Task 13b                                                                                                                                     |
+
+**What to implement:**
+
+This task resolves 10 identified discrepancies between the design docs, existing code, and the Task 14 spec. It produces doc fixes, one targeted code change, and explicit design decisions that Task 14 will rely on. Organized into three categories:
+
+**Category A — Doc fixes (update existing documents):**
+
+1. **Fix Task 14 exception wording (this document, Task 14 §Parameter validation).** The current bullet lumps "group exists in registry" into "Invalid params → `RetrievalError`". The API contract ([API Contracts §2.3 Raises](docs-03-03-api-contracts.md)) says unknown `from_` raises `FeatureGroupNotFoundError`, not `RetrievalError`. The existing `RegistryManager.get_group()` already follows this contract. Fix: rewrite the parameter validation bullet to separate the two error surfaces — `FeatureGroupNotFoundError` for unknown groups, `RetrievalError` for invalid `select`/`where`.
+
+2. **Fix SDK error scenarios table ([Internals §2.2 Error Scenarios](docs-03-02-internals-and-data.md)).** The row "Feature group not found for any operation" says `RegistryError propagated`. It should say `FeatureGroupNotFoundError propagated` to match the API contract and the existing `get_group()` implementation.
+
+3. **Fix architecture sequence diagram return value ([Architecture §4.5 Get Historical Features](docs-03-01-architecture-overview.md)).** The line `BB04-->>BB02: Validated params + definitions` implies `validate_query_params()` returns definitions. The formal contract signature is `-> None` (validation-only, raises on failure). Fix: change to `BB04-->>BB02: Validation passed`. BB-02 calls `get_group()` separately to obtain definitions.
+
+4. **Fix architecture select-narrowing note ([Architecture §4.5 Get Historical Features](docs-03-01-architecture-overview.md)).** The sequence diagram note says "keep entity_key, event_timestamp, join keys + selected features". The join-key retention applies only to the join path (Task 16). For the no-join path, the output is: entity key + event timestamp + selected features — join keys are not force-included unless explicitly selected or covered by `"*"`. Fix: make the diagram note conditional by path, or split it into two notes. The prose in the same section already handles this correctly.
+
+**Category B — Code change (validation engine):**
+
+5. **Add `validate_data_selected()` to `src/kitefs/validation.py`.** The current `validate_data()` iterates all features from the full `FeatureGroup` definition and directly indexes each column in the DataFrame. When the caller passes a select-narrowed DataFrame (as Task 14 requires), any unselected feature column causes a `KeyError`. The contract says validation runs on selected features only ([API Contracts §2.3 Behavioral notes](docs-03-03-api-contracts.md), [Flow Charts §2.3](docs-00-02-flow-charts.md), [Architecture §4.5](docs-03-01-architecture-overview.md)).
+
+   Implement a new public function:
+   ```python
+   def validate_data_selected(
+       definition: FeatureGroup,
+       df: DataFrame,
+       mode: ValidationMode,
+       selected_features: list[str],
+   ) -> tuple[ValidationReport, DataFrame]:
+   ```
+   This function constructs a derived `FeatureGroup` with only the features whose names are in `selected_features`, then delegates to the existing `validate_data()`. The ingestion-path code remains untouched. This is an internal function — it is not re-exported from `kitefs.__init__.py`. Task 14's `FeatureStore.get_historical_features()` imports it directly from `kitefs.validation`.
+
+**Category C — Design decisions (codified in Task 14 amendments):**
+
+These decisions do not require code changes in this task. They are recorded here and applied as amendments to Task 14's description in this document, so Task 14 can implement them without ambiguity.
+
+6. **Empty-result DataFrame shape.** When BB-06 returns an empty DataFrame (zero columns, zero rows), BB-02 must synthesize an empty DataFrame with the correct output columns (entity key + event timestamp + selected features) before returning. This satisfies the structural-columns rule ([API Contracts §6.1](docs-03-03-api-contracts.md)). The empty result is not an error ([API Contracts §2.3 Behavioral notes](docs-03-03-api-contracts.md)). No change to BB-06 — the output-shape concern lives in BB-02.
+
+7. **event_timestamp logical alias test requirement.** Task 14's test list must include: (a) a positive test using a group whose physical timestamp column is `ts` (not `event_timestamp`) with `where={"event_timestamp": {"gte": ...}}` to prove alias resolution works; (b) a negative test proving `where={"ts": ...}` is rejected with `RetrievalError`. The helpers already provide `EventTimestamp(name="ts", ...)` fixtures.
+
+8. **Non-empty `join` rejection in Task 14.** Task 14 must explicitly reject any non-empty `join` parameter with `JoinError`: "Join support will be available in a future release. Remove the `join` parameter for single-group retrieval." This is the correct transitional behavior per [API Contracts §2.3 Raises](docs-03-03-api-contracts.md) which maps join issues to `JoinError`. Add a test for this.
+
+9. **`where` value-type strictness.** `validate_query_params()` (implemented in Task 14) must require `where` values for `event_timestamp` to be `datetime` instances (or `pd.Timestamp`). Strings, ints, and other types are rejected with `RetrievalError`. The internals doc says "value types must match the field's declared type" ([Internals §2.4](docs-03-02-internals-and-data.md)). `event_timestamp` is `DATETIME`, so only datetime-like values are accepted. BB-06's existing `pd.Timestamp(dt)` coercion serves as a safety net, not an invitation for arbitrary types.
+
+10. **No-join select does not force-include join keys.** For the no-join path, a list `select` includes only entity key + event timestamp + the explicitly named features. Join key fields are not auto-included unless they appear in the `select` list or `select="*"`. This follows [Requirements FR-OFF-002](docs-02-project-requirements.md) and the architecture prose ([Architecture §4.5](docs-03-01-architecture-overview.md)).
+
+Write tests covering:
+
+- `validate_data_selected()` with a subset of features: an invalid unselected feature does not block retrieval of valid selected features.
+- `validate_data_selected()` with all features selected behaves identically to `validate_data()`.
+- `validate_data_selected()` in all three modes (ERROR, FILTER, NONE).
+- `validate_data_selected()` with empty `selected_features` list (only structural columns in DataFrame).
+
+**Dependencies introduced:** None new.
+
+**Demonstrable outcome:**
+
+- Doc inconsistencies across [Architecture](docs-03-01-architecture-overview.md), [Internals](docs-03-02-internals-and-data.md), and [Implementation Guide](docs-04-implementation-guide.md) are resolved.
+- Task 14's description is amended with explicit design decisions (empty-result shape, alias test requirement, join rejection, value-type strictness, join-key exclusion).
+- `just clean-build` passes.
+
+**Traces:**
+
+| Document                                                         | Look for                                            | What you'll find                                           |
+| ---------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §2.3 `get_historical_features()` — Raises           | Exception mapping: which error for which failure           |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §2.3 Behavioral notes                               | "only selected features are validated", empty-result rule  |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §5.6 Registry Manager — `validate_query_params()`   | Validation-only signature (`-> None`)                      |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §6.1 Structural Columns Rule                        | Entity key + event timestamp always in results             |
+| [API Contracts (docs-03-03)](docs-03-03-api-contracts.md)        | §6.6 Event Timestamp Column Name Resolution         | Logical alias rule for `where`                             |
+| [Architecture (docs-03-01)](docs-03-01-architecture-overview.md) | §4.5 Get Historical Features                        | Sequence diagram to fix (return value, select note)        |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.2 SDK — Error Scenarios                          | `RegistryError` → `FeatureGroupNotFoundError` fix          |
+| [Internals (docs-03-02)](docs-03-02-internals-and-data.md)       | §2.4 Registry Manager — Interface Contract          | "value types must match the field's declared type"         |
+| [Flow Charts (docs-00-02)](docs-00-02-flow-charts.md)            | §2.3 `get_historical_features()`                    | "selected features only" validation                        |
+
+---
+
 ### Task 14 — Historical Retrieval (single group, no join)
 
 |                     |                                                                                                                            |
@@ -980,7 +1063,9 @@ Write tests covering: `kitefs ingest <name> <csv>` success (exit 0, summary prin
 
 Implement the non-join path of `get_historical_features()` as defined in [API Contracts §2.3](docs-03-03-api-contracts.md):
 
-- **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid params → `RetrievalError`.
+- **Parameter validation:**
+  - Look up feature group via BB-04 `get_group(from_)`. Unknown group → `FeatureGroupNotFoundError` (raised by BB-04, propagated by BB-02).
+  - Validate `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid `select`/`where` → `RetrievalError`.
 - **Read:** Delegate to BB-06 with partition pruning. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `read()`. Extract `time_filter = where.get("event_timestamp") if where else None` and pass it as `time_filter` to BB-06 — BB-06 receives the flat operator→value dict, not the full user-facing `where`.
 - **Select application:** Keep entity key + event timestamp (always) + selected features. `"*"` returns all fields.
 - **Retrieval-gate validation:** Run BB-05 on selected features per the group's `offline_retrieval_validation` mode.
@@ -988,7 +1073,15 @@ Implement the non-join path of `get_historical_features()` as defined in [API Co
 
 No join logic in this task — that's Task 16.
 
-Write tests covering: select as list, select as `"*"`, where filtering, retrieval validation modes, invalid select rejected, invalid where rejected, empty result (not an error).
+**Design decisions from Task pre-14 (implement in this task):**
+
+- **Join rejection:** If the `join` parameter is non-empty, reject immediately with `JoinError`: "Join support will be available in a future release. Remove the `join` parameter for single-group retrieval."
+- **Empty-result DataFrame shape:** When BB-06 returns an empty DataFrame (zero columns, zero rows), BB-02 must synthesize an empty DataFrame with the correct output columns (entity key + event timestamp + selected features) before returning. An empty result is not an error.
+- **`where` value-type strictness:** `validate_query_params()` must require `where` values for `event_timestamp` to be `datetime` or `pd.Timestamp` instances. Strings, ints, and other types are rejected with `RetrievalError`.
+- **No-join select does not force-include join keys:** For the no-join path, a list `select` includes only entity key + event timestamp + the explicitly named features. Join key fields are not auto-included unless they appear in `select` or `select="*"`.
+- **Use `validate_data_selected()` for retrieval-gate validation** (added in Task pre-14) to validate only the selected features, not the full definition.
+
+Write tests covering: select as list, select as `"*"`, where filtering, retrieval validation modes, invalid select rejected, invalid where rejected, empty result (returns DataFrame with correct columns, not an error), non-empty `join` rejected with `JoinError`, alias resolution (`where={"event_timestamp": {...}}` works when physical column is `ts`), alias rejection (`where={"ts": ...}` rejected with `RetrievalError`), `where` value-type rejection (string/int values rejected with `RetrievalError`).
 
 **Dependencies introduced:** None new.
 
@@ -1455,8 +1548,8 @@ Phase 2 — Define & Register
              (validation)
 
 Phase 3 — Ingest & Query
-  Task 10a → Task 10b → Task 10c → Task 11 → Task 12 → Task 13 → Task 14
-  (ABC)     (write)    (read)     (valid.)  (offline)  (ingest)  (retrieval)
+  Task 10a → Task 10b → Task 10c → Task 11 → Task 12 → Task 13 → Task pre-14 → Task 14
+  (ABC)     (write)    (read)     (valid.)  (offline)  (ingest)  (alignment)   (retrieval)
 
 Phase 4 — Point-in-Time Joins
   Task 15 → Task 16
@@ -1486,7 +1579,9 @@ Phase 6 — AWS & Extras
 | 6–9   | —                                | —                           |
 | 10a   | `pyarrow`, `pandas`              | —                           |
 | 10b–10c | —                              | —                           |
-| 11–19 | —                                | —                           |
+| 11–13 | —                                | —                           |
+| pre-14 | —                               | —                           |
+| 14–19 | —                                | —                           |
 | 20    | `boto3` (optional `[aws]` extra) | —                           |
 | 21–23 | —                                | —                           |
 
