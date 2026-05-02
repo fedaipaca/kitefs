@@ -418,7 +418,7 @@ The Registry Manager does NOT validate DataFrame data — that is BB-05's (Valid
 
 **Responsibility:**
 
-Stateless data validator that enforces schema and value constraints on DataFrames. Operates at two gates: **ingestion** (before data enters the offline store) and **offline retrieval** (before training data is returned from `get_historical_features()`). Supports three modes: `ERROR`, `FILTER`, `NONE`.
+Stateless data validator that enforces schema and value constraints on DataFrames. Operates at two gates: **ingestion** (Phase 1 schema validation + Phase 2 data validation) and **offline retrieval** (Phase 2 data validation only, per the group's `offline_retrieval_validation` mode). Schema validation (Phase 1) runs exclusively at the ingestion gate — the retrieval path trusts that ingested data is structurally valid (see §4, Limitation 10). Supports three modes for data validation: `ERROR`, `FILTER`, `NONE`.
 
 The Validation Engine does NOT validate `FeatureGroup` Python objects — that is BB-04's (Registry Manager) responsibility (KTD-5 in [docs-03-01](docs-03-01-architecture-overview.md)). It does NOT decide when to run — the caller (BB-02) invokes it at the appropriate gate with the appropriate mode.
 
@@ -1248,7 +1248,7 @@ If the table does not exist (first materialization), it is created with the appr
 | **No partial writes on materialization failure** | SQLite uses a transaction (rollback on failure). DynamoDB uses `TransactWriteItems` (all-or-nothing). The provider interface contract requires `write_online` to be atomic. | NFR-REL-002, KTD-12 |
 | **Materialization idempotency** | Full-read-then-full-overwrite means running materialization twice with the same offline data produces the same online store state. | FR-MAT-003 |
 | **Materialization tracking** | After each successful materialization, BB-02 writes a `last_materialized_at` ISO 8601 timestamp to the feature group's registry entry. This provides traceability (when was data last synced to the online store?) and supports future incremental materialization. The field is preserved across `apply()` runs. | FR-MAT-001 |
-| **Schema enforcement at every gate** | BB-05 (Validation Engine) runs at ingestion gate and offline retrieval gate. Schema validation is always-on (missing columns → error, extra columns → silently dropped); data validation follows the configured mode. | AP-5, FR-VAL-001 through FR-VAL-009 |
+| **Schema enforcement at ingestion; data validation at both gates** | BB-05 (Validation Engine) enforces schema integrity at the **ingestion gate** (Phase 1: always-on, mode-independent — missing columns → error, null structural columns → error, extra columns → silently dropped). At the **offline retrieval gate**, only Phase 2 (data validation) runs per the group's `offline_retrieval_validation` mode — the retrieval path trusts that data passing through ingestion is structurally valid (see Limitation 10). | AP-5, FR-VAL-001 through FR-VAL-009 |
 
 ---
 
@@ -1324,9 +1324,11 @@ The AWS provider uses DynamoDB `TransactWriteItems` for atomic materialization w
 
 ---
 
-**Limitation 10: Null Structural Column Checks Are Ingestion-Only**
+**Limitation 10: Schema Validation (Phase 1) Is Ingestion-Only**
 
-Null checks for `entity_key` and `event_timestamp` run at ingestion (Phase 1, BB-05) and are mode-independent — they always abort if null values are found. However, these checks do not run again at retrieval (`get_historical_features`). The retrieval path trusts that the offline store is structurally valid, because `ingest()` is the only supported write path and its Phase 1 check is always-on. Data written to the offline store by bypassing `ingest()` — such as manually placed Parquet files or future direct-write tooling — would not be subject to this check and could introduce null structural column values that surface as runtime errors during partition derivation or point-in-time joins. A future version could add a defensive null check at the start of the retrieval path, but this is not implemented in the MVP.
+The entire Phase 1 of BB-05 — column presence checks, null structural column checks for `entity_key` and `event_timestamp`, and extra column dropping — runs only at the ingestion gate and is mode-independent (always-ERROR semantics). Phase 1 does not run again at the offline retrieval gate (`get_historical_features`). The retrieval path trusts that the offline store is structurally valid, because `ingest()` is the only supported write path and its Phase 1 check is always-on. At the retrieval gate, only Phase 2 (data validation — type checks and feature expectations) runs, governed by the group's `offline_retrieval_validation` mode.
+
+Data written to the offline store by bypassing `ingest()` — such as manually placed Parquet files or future direct-write tooling — would not be subject to Phase 1 checks and could introduce missing columns or null structural column values that surface as runtime errors during partition derivation or point-in-time joins. A future version could add a defensive schema check at the start of the retrieval path, but this is not implemented in the MVP.
 
 ---
 
