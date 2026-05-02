@@ -783,3 +783,26 @@ class TestLocalProviderOfflineRoundtrip:
         assert len(result) == 2
         assert list(result["listing_id"]) == [1001, 1002]
         assert list(result["sold_price"]) == [2250000.0, 4800000.0]
+
+
+class TestLocalProviderReadOfflineNoSyntheticColumns:
+    """Verify read_offline does not add synthetic partition columns from directory names."""
+
+    def test_read_offline_no_synthetic_partition_columns(self, tmp_path: Path) -> None:
+        """Reading from a Hive-style partition directory does not inject year/month columns."""
+        config = make_local_config(tmp_path)
+        provider = LocalProvider(config)
+        df = DataFrame(
+            {
+                "id": [1, 2],
+                "event_timestamp": ["2024-03-15", "2024-03-20"],
+                "value": [10.0, 20.0],
+            }
+        )
+        provider.write_offline("test_group", "year=2024/month=03", "data.parquet", df)
+
+        result = provider.read_offline("test_group", ["year=2024/month=03"])
+
+        assert "year" not in result.columns
+        assert "month" not in result.columns
+        assert set(result.columns) == {"id", "event_timestamp", "value"}

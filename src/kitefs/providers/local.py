@@ -93,7 +93,9 @@ class LocalProvider(StorageProvider):
                 if not partition_dir.is_dir():
                     continue
                 for parquet_file in sorted(partition_dir.glob("*.parquet")):
-                    tables.append(pq.read_table(parquet_file))
+                    # Use ParquetFile to avoid Hive-partition column inference
+                    # that pq.read_table adds from parent directory names.
+                    tables.append(pq.ParquetFile(parquet_file).read())
 
             if not tables:
                 return DataFrame()
