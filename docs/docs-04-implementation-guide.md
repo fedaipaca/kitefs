@@ -1051,7 +1051,7 @@ Write tests covering:
 
 ---
 
-### Task 14 — Historical Retrieval (single group, no join)
+### Task 14 — Historical Retrieval (single group, no join) - (DONE)
 
 |                     |                                                                                                                            |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
