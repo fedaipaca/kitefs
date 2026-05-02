@@ -12,7 +12,7 @@ from kitefs.definitions import (
     StorageTarget,
     ValidationMode,
 )
-from kitefs.feature_store import FeatureStore
+from kitefs.feature_store import FeatureStore, IngestResult
 from kitefs.registry import ApplyResult
 from kitefs.validation import FailureDetail, ValidationReport
 
@@ -26,6 +26,7 @@ __all__ = [
     "FeatureGroup",
     "FeatureStore",
     "FeatureType",
+    "IngestResult",
     "JoinKey",
     "Metadata",
     "StorageTarget",

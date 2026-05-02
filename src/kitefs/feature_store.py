@@ -1,15 +1,68 @@
 """SDK entry point — orchestrates all KiteFS operations through a single class."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+import pandas as pd
+from pandas import DataFrame
+
 from kitefs.config import load_config
-from kitefs.exceptions import ConfigurationError, FeatureGroupNotFoundError
+from kitefs.exceptions import (
+    ConfigurationError,
+    DataValidationError,
+    FeatureGroupNotFoundError,
+    IngestionError,
+    ProviderError,
+    SchemaValidationError,
+)
+from kitefs.offline_store import OfflineStoreManager
 from kitefs.providers.factory import create_provider
 from kitefs.registry import ApplyResult, RegistryManager
+from kitefs.validation import validate_data, validate_schema
 
 _T = TypeVar("_T", list[dict], dict)
+
+
+def _resolve_input(data: object) -> DataFrame:
+    """Resolve *data* to a DataFrame, or raise IngestionError for unsupported types."""
+    if isinstance(data, DataFrame):
+        return data
+    if isinstance(data, str):
+        path = Path(data)
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            try:
+                # parse_dates=True uses pandas heuristics for date detection; datetime
+                # columns may not always be inferred correctly. Acceptable for MVP scope.
+                return pd.read_csv(path, parse_dates=True)  # type: ignore[return-value]  # pandas stubs don't narrow to DataFrame
+            except Exception as e:  # catch-all: pandas can raise ParserError, OSError, etc. for malformed files
+                raise IngestionError(
+                    f"Cannot read CSV file '{data}': {e}. "
+                    f"Check that the file exists, is readable, and contains valid CSV data."
+                ) from e
+        if suffix == ".parquet":
+            try:
+                return pd.read_parquet(path)  # type: ignore[return-value]  # pandas stubs don't narrow to DataFrame
+            except Exception as e:  # catch-all: pyarrow can raise ArrowInvalid, OSError, etc. for malformed files
+                raise IngestionError(
+                    f"Cannot read Parquet file '{data}': {e}. "
+                    f"Check that the file exists, is readable, and contains valid Parquet data."
+                ) from e
+        raise IngestionError(f"Unsupported file extension '{suffix}' for '{data}'. Supported formats: .csv, .parquet.")
+    raise IngestionError(
+        f"Unsupported data type '{type(data).__name__}'. "
+        f"Expected a Pandas DataFrame, or a path to a .csv or .parquet file."
+    )
+
+
+@dataclass(frozen=True)
+class IngestResult:
+    """Result of a feature group ingestion operation."""
+
+    rows_written: int
+    partitions_affected: tuple[str, ...]
 
 
 class FeatureStore:
@@ -30,10 +83,59 @@ class FeatureStore:
         config = load_config(resolved_root)
         provider = create_provider(config)
         self._registry_manager = RegistryManager(provider, config.definitions_path)
+        self._offline_store_manager = OfflineStoreManager(provider)
 
     def apply(self) -> ApplyResult:
         """Register all feature group definitions into the registry."""
         return self._registry_manager.apply()
+
+    def ingest(
+        self,
+        feature_group_name: str,
+        data: DataFrame | str,
+    ) -> IngestResult:
+        """Write feature data to the offline store for a registered feature group.
+
+        Validates schema and data according to the group's ingestion validation
+        mode before writing. Extra columns are silently dropped.
+        """
+        definition = self._registry_manager.get_group(feature_group_name)
+        df = _resolve_input(data)
+
+        try:
+            # Phase 1 — schema validation (always runs, drops extra columns).
+            _, cleaned_df = validate_schema(definition, df)
+
+            # Phase 2 — data validation per ingestion_validation mode.
+            _, validated_df = validate_data(definition, cleaned_df, definition.ingestion_validation)
+        except SchemaValidationError as exc:
+            raise SchemaValidationError(
+                f"During ingest of feature group '{feature_group_name}': {exc}",
+                report=exc.report,
+            ) from exc
+        except DataValidationError as exc:
+            raise DataValidationError(
+                f"During ingest of feature group '{feature_group_name}': {exc}",
+                report=exc.report,
+            ) from exc
+
+        if validated_df.empty:
+            return IngestResult(rows_written=0, partitions_affected=())
+
+        try:
+            write_result = self._offline_store_manager.write(
+                group_name=feature_group_name,
+                df=validated_df,
+                event_timestamp_col=definition.event_timestamp.name,
+                source_prefix="ing",
+            )
+        except ProviderError as exc:
+            raise ProviderError(f"During ingest of feature group '{feature_group_name}': {exc}") from exc
+
+        return IngestResult(
+            rows_written=write_result.rows_written,
+            partitions_affected=write_result.partitions_affected,
+        )
 
     def list_feature_groups(
         self,
