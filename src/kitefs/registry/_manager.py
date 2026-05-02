@@ -6,8 +6,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from kitefs.definitions import FeatureGroup
-from kitefs.exceptions import DefinitionError, FeatureGroupNotFoundError, ProviderError, RegistryError
+from kitefs.exceptions import (
+    DefinitionError,
+    FeatureGroupNotFoundError,
+    JoinError,
+    ProviderError,
+    RegistryError,
+    RetrievalError,
+)
 from kitefs.providers.base import StorageProvider
 from kitefs.registry._discovery import _discover_definitions
 from kitefs.registry._serialization import _deserialize_group, _serialize_group
@@ -192,7 +201,149 @@ class RegistryManager:
         Checks group existence, feature existence, where field/operator validity for
         the given method, join path validity, and the single-join MVP limit.
         method must be 'get_historical_features' or 'get_online_features'.
-
-        Not yet implemented — will be completed in Tasks 14, 16, and 19.
         """
-        raise NotImplementedError("validate_query_params will be implemented in Tasks 14, 16, and 19.")
+        if method == "get_online_features":
+            raise NotImplementedError("validate_query_params for get_online_features will be implemented in Task 19.")
+
+        if method != "get_historical_features":
+            raise RetrievalError(
+                f"Unknown validation method '{method}'. Expected 'get_historical_features' or 'get_online_features'."
+            )
+
+        # Look up group — raises FeatureGroupNotFoundError if absent.
+        definition = self.get_group(from_)
+
+        self._validate_historical_params(definition, select, where, join)
+
+    # ------------------------------------------------------------------
+    # Private validation helpers
+    # ------------------------------------------------------------------
+
+    def _validate_historical_params(
+        self,
+        definition: FeatureGroup,
+        select: list[str] | str | dict[str, list[str] | str],
+        where: dict[str, dict[str, Any]] | None,
+        join: list[str] | None,
+    ) -> None:
+        """Validate parameters specific to get_historical_features (no-join path)."""
+        # Join rejection — Task 14 implements no-join only.
+        if join:
+            raise JoinError(
+                "Join support will be available in a future release. "
+                "Remove the `join` parameter for single-group retrieval."
+            )
+
+        self._validate_historical_select(definition, select)
+
+        if where is not None:
+            self._validate_historical_where(where)
+
+    @staticmethod
+    def _validate_historical_select(
+        definition: FeatureGroup,
+        select: list[str] | str | dict[str, list[str] | str],
+    ) -> None:
+        """Validate select parameter for the no-join historical retrieval path."""
+        if isinstance(select, dict):
+            raise RetrievalError(
+                "Dict-style 'select' requires a 'join' parameter. "
+                "Use a list of feature names or '*' for single-group retrieval."
+            )
+
+        if isinstance(select, str):
+            if select != "*":
+                raise RetrievalError(
+                    f"Invalid select value '{select}'. Use '*' to select all features, or pass a list of feature names."
+                )
+            return
+
+        if isinstance(select, list):
+            non_strings = [repr(s) for s in select if not isinstance(s, str)]
+            if non_strings:
+                raise RetrievalError(
+                    f"All select list elements must be strings, got non-string value(s): "
+                    f"{', '.join(non_strings)}. Pass a list of feature name strings."
+                )
+
+            feature_names = {f.name for f in definition.features}
+            unknown = sorted(set(select) - feature_names)
+            if unknown:
+                available = sorted(feature_names)
+                raise RetrievalError(
+                    f"Unknown feature(s) in select: {', '.join(unknown)}. "
+                    f"Available features for '{definition.name}': {', '.join(available)}."
+                )
+            return
+
+        raise RetrievalError(
+            f"Invalid select type '{type(select).__name__}'. "
+            f"Expected a list of feature names, '*', or a dict (with join)."
+        )
+
+    @staticmethod
+    def _validate_historical_where(where: dict[str, dict[str, Any]]) -> None:
+        """Validate where parameter for get_historical_features.
+
+        MVP restriction: only the logical alias 'event_timestamp' is accepted
+        as a field name, with gt/gte/lt/lte operators and datetime values.
+        All datetime values must be timezone-naive (interpreted as UTC).
+        """
+        if not isinstance(where, dict):
+            raise RetrievalError(
+                f"Invalid where type '{type(where).__name__}'. "
+                f"Expected a dict of {{field_name: {{operator: value}}}}, or None."
+            )
+
+        allowed_ops = {"gt", "gte", "lt", "lte"}
+
+        for field_name, ops in where.items():
+            if field_name != "event_timestamp":
+                raise RetrievalError(
+                    f"Unsupported where field '{field_name}'. "
+                    f"Only 'event_timestamp' is supported as a where field for get_historical_features. "
+                    f'Use where={{"event_timestamp": {{...}}}}.'
+                )
+
+            if not isinstance(ops, dict):
+                raise RetrievalError(
+                    f"Invalid where value for 'event_timestamp': expected a dict of operator→value pairs, "
+                    f"got {type(ops).__name__}."
+                )
+
+            for op, value in ops.items():
+                if op not in allowed_ops:
+                    raise RetrievalError(
+                        f"Unsupported where operator '{op}' for event_timestamp. "
+                        f"Supported operators: {', '.join(sorted(allowed_ops))}."
+                    )
+
+                if not isinstance(value, (datetime, pd.Timestamp)):
+                    raise RetrievalError(
+                        f"Invalid where value type '{type(value).__name__}' for "
+                        f"event_timestamp.{op}. Expected a datetime or pd.Timestamp instance."
+                    )
+
+                # NaT passes isinstance(datetime) but is not a usable value.
+                if value is pd.NaT:
+                    raise RetrievalError(
+                        f"Where value for event_timestamp.{op} is NaT. Provide a valid timezone-naive datetime."
+                    )
+
+                # Enforce the timezone-naive UTC convention at the validation
+                # gate so behavior is consistent regardless of store state.
+                if isinstance(value, pd.Timestamp):
+                    if value.tzinfo is not None:
+                        raise RetrievalError(
+                            f"KiteFS only accepts timezone-naive datetimes (interpreted as UTC). "
+                            f"Received a timezone-aware value for event_timestamp.{op}: {value!r}. "
+                            f"Strip the timezone info before passing filter values "
+                            f"(e.g. ts.tz_localize(None))."
+                        )
+                elif isinstance(value, datetime) and value.tzinfo is not None:
+                    raise RetrievalError(
+                        f"KiteFS only accepts timezone-naive datetimes (interpreted as UTC). "
+                        f"Received a timezone-aware value for event_timestamp.{op}: {value!r}. "
+                        f"Strip the timezone info before passing filter values "
+                        f"(e.g. dt.replace(tzinfo=None))."
+                    )
