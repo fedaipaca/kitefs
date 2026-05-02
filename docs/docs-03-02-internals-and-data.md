@@ -151,7 +151,7 @@ The SDK does not define its own exception types. It is the error propagation sea
 | Scenario | Source | SDK Behavior |
 | --- | --- | --- |
 | Configuration invalid at construction | BB-10 | `ConfigurationError` propagated — `FeatureStore` cannot be instantiated |
-| Feature group not found for any operation | BB-04 | `RegistryError` propagated with group name context |
+| Feature group not found for any operation | BB-04 | `FeatureGroupNotFoundError` propagated with group name context |
 | Validation failure during ingest or retrieval | BB-05 | `ValidationError` propagated with operation context |
 | Storage I/O failure | BB-09 | `ProviderError` propagated with operation context |
 

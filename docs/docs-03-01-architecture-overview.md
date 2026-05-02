@@ -648,7 +648,7 @@ sequenceDiagram
         BB04-->>BB02: Error (identifies invalid parameter)
         BB02-->>User: Abort with validation error
     else Params valid
-        BB04-->>BB02: Validated params + definitions
+        BB04-->>BB02: Validation passed
     end
 
     BB02->>BB06: Read base feature group
@@ -657,7 +657,7 @@ sequenceDiagram
     BB06->>BB06: Apply row-level where filter
     BB06-->>BB02: Base DataFrame
 
-    BB02->>BB02: Apply select on base (keep entity_key, event_timestamp, join keys + selected features)
+    BB02->>BB02: Apply select on base (no join: entity_key + event_timestamp + selected features; join path: also retain join keys)
 
     BB02->>BB05: Validate base data (retrieval gate, selected features only)
     BB05-->>BB02: Validated base (per mode)

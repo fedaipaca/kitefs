@@ -968,7 +968,7 @@ Write tests covering: `kitefs ingest <name> <csv>` success (exit 0, summary prin
 
 ---
 
-### Task pre-14 — Retrieval Alignment (doc fixes + validation seam)
+### Task pre-14 — Retrieval Alignment (doc fixes + validation seam) - (DONE)
 
 |                     |                                                                                                                                              |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -979,7 +979,7 @@ Write tests covering: `kitefs ingest <name> <csv>` success (exit 0, summary prin
 
 **What to implement:**
 
-This task resolves 8 identified discrepancies between the design docs, existing code, and the Task 14 spec. It produces doc fixes, one targeted code change, and explicit design decisions that Task 14 will rely on. Organized into three categories:
+This task resolves 10 identified discrepancies between the design docs, existing code, and the Task 14 spec. It produces doc fixes, one targeted code change, and explicit design decisions that Task 14 will rely on. Organized into three categories:
 
 **Category A — Doc fixes (update existing documents):**
 
@@ -1004,7 +1004,7 @@ This task resolves 8 identified discrepancies between the design docs, existing 
        selected_features: list[str],
    ) -> tuple[ValidationReport, DataFrame]:
    ```
-   This function constructs a derived `FeatureGroup` with only the features whose names are in `selected_features`, then delegates to the existing `validate_data()`. The ingestion-path code remains untouched. Add `validate_data_selected` to the module's public surface and to `src/kitefs/__init__.py` re-exports.
+   This function constructs a derived `FeatureGroup` with only the features whose names are in `selected_features`, then delegates to the existing `validate_data()`. The ingestion-path code remains untouched. This is an internal function — it is not re-exported from `kitefs.__init__.py`. Task 14's `FeatureStore.get_historical_features()` imports it directly from `kitefs.validation`.
 
 **Category C — Design decisions (codified in Task 14 amendments):**
 
@@ -1032,7 +1032,6 @@ Write tests covering:
 **Demonstrable outcome:**
 
 - Doc inconsistencies across [Architecture](docs-03-01-architecture-overview.md), [Internals](docs-03-02-internals-and-data.md), and [Implementation Guide](docs-04-implementation-guide.md) are resolved.
-- `validate_data_selected()` is importable from `kitefs` and passes all tests.
 - Task 14's description is amended with explicit design decisions (empty-result shape, alias test requirement, join rejection, value-type strictness, join-key exclusion).
 - `just clean-build` passes.
 
@@ -1064,7 +1063,9 @@ Write tests covering:
 
 Implement the non-join path of `get_historical_features()` as defined in [API Contracts §2.3](docs-03-03-api-contracts.md):
 
-- **Parameter validation:** Group exists in registry, `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid params → `RetrievalError`.
+- **Parameter validation:**
+  - Look up feature group via BB-04 `get_group(from_)`. Unknown group → `FeatureGroupNotFoundError` (raised by BB-04, propagated by BB-02).
+  - Validate `select` references valid features (or `"*"`), `where` uses valid field/operator (MVP: `event_timestamp` logical alias only — resolved to `definition.event_timestamp.name` — with `gt`/`gte`/`lt`/`lte` operators). Invalid `select`/`where` → `RetrievalError`.
 - **Read:** Delegate to BB-06 with partition pruning. Pass `definition.event_timestamp.name` as `event_timestamp_col` to BB-06's `read()`. Extract `time_filter = where.get("event_timestamp") if where else None` and pass it as `time_filter` to BB-06 — BB-06 receives the flat operator→value dict, not the full user-facing `where`.
 - **Select application:** Keep entity key + event timestamp (always) + selected features. `"*"` returns all fields.
 - **Retrieval-gate validation:** Run BB-05 on selected features per the group's `offline_retrieval_validation` mode.
@@ -1072,7 +1073,15 @@ Implement the non-join path of `get_historical_features()` as defined in [API Co
 
 No join logic in this task — that's Task 16.
 
-Write tests covering: select as list, select as `"*"`, where filtering, retrieval validation modes, invalid select rejected, invalid where rejected, empty result (not an error).
+**Design decisions from Task pre-14 (implement in this task):**
+
+- **Join rejection:** If the `join` parameter is non-empty, reject immediately with `JoinError`: "Join support will be available in a future release. Remove the `join` parameter for single-group retrieval."
+- **Empty-result DataFrame shape:** When BB-06 returns an empty DataFrame (zero columns, zero rows), BB-02 must synthesize an empty DataFrame with the correct output columns (entity key + event timestamp + selected features) before returning. An empty result is not an error.
+- **`where` value-type strictness:** `validate_query_params()` must require `where` values for `event_timestamp` to be `datetime` or `pd.Timestamp` instances. Strings, ints, and other types are rejected with `RetrievalError`.
+- **No-join select does not force-include join keys:** For the no-join path, a list `select` includes only entity key + event timestamp + the explicitly named features. Join key fields are not auto-included unless they appear in `select` or `select="*"`.
+- **Use `validate_data_selected()` for retrieval-gate validation** (added in Task pre-14) to validate only the selected features, not the full definition.
+
+Write tests covering: select as list, select as `"*"`, where filtering, retrieval validation modes, invalid select rejected, invalid where rejected, empty result (returns DataFrame with correct columns, not an error), non-empty `join` rejected with `JoinError`, alias resolution (`where={"event_timestamp": {...}}` works when physical column is `ts`), alias rejection (`where={"ts": ...}` rejected with `RetrievalError`), `where` value-type rejection (string/int values rejected with `RetrievalError`).
 
 **Dependencies introduced:** None new.
 

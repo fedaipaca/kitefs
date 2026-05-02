@@ -318,6 +318,69 @@ def validate_data(
     return report, df
 
 
+def validate_data_selected(
+    definition: FeatureGroup,
+    df: DataFrame,
+    mode: ValidationMode,
+    selected_features: list[str],
+) -> tuple[ValidationReport, DataFrame]:
+    """Validate only *selected_features* against their type declarations and expectations.
+
+    Constructs a derived FeatureGroup containing only the features whose names
+    appear in *selected_features*, then delegates to ``validate_data()``.
+    This allows retrieval-path validation to run on a select-narrowed DataFrame
+    without triggering KeyError on unselected columns.
+
+    The ingestion path should continue using ``validate_data()`` directly.
+
+    The caller must ensure *df* contains every column named in *selected_features*
+    plus the structural columns (entity key, event timestamp). If a selected
+    feature column is missing from the DataFrame, ``SchemaValidationError`` is
+    raised with an actionable message.
+    """
+    selected_set = set(selected_features)
+
+    # Defensive check: every selected feature must exist as a DataFrame column.
+    df_columns = set(df.columns)
+    missing = selected_set - df_columns
+    if missing:
+        sorted_missing = sorted(missing)
+        raise SchemaValidationError(
+            f"Selected feature column(s) missing from DataFrame: {', '.join(sorted_missing)}. "
+            f"Ensure the DataFrame contains all columns listed in 'selected_features'.",
+            report=ValidationReport(
+                total_count=len(df),
+                passed_count=0,
+                failed_count=len(df),
+                failures=tuple(
+                    FailureDetail(
+                        entity_key_value=None,
+                        field="_schema",
+                        expected="column present",
+                        actual=f"missing column '{c}'",
+                    )
+                    for c in sorted_missing
+                ),
+            ),
+        )
+
+    narrowed_features = [f for f in definition.features if f.name in selected_set]
+
+    derived = FeatureGroup(
+        name=definition.name,
+        storage_target=definition.storage_target,
+        entity_key=definition.entity_key,
+        event_timestamp=definition.event_timestamp,
+        features=narrowed_features,
+        join_keys=list(definition.join_keys),
+        ingestion_validation=definition.ingestion_validation,
+        offline_retrieval_validation=definition.offline_retrieval_validation,
+        metadata=definition.metadata,
+    )
+
+    return validate_data(derived, df, mode)
+
+
 # Private helpers
 
 
