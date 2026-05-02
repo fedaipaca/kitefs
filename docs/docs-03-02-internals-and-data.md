@@ -1240,7 +1240,7 @@ If the table does not exist (first materialization), it is created with the appr
 
 | Guarantee | How Enforced | Reference |
 | --- | --- | --- |
-| **No partial writes on ingestion failure** | Parquet files are written atomically (write-to-temp-then-rename on local; `put_object` on S3). If a write fails, no partial file is left behind. | NFR-REL-001, FR-ING-004 |
+| **No partial writes on ingestion failure** | Parquet files are written atomically (write-to-temp-then-rename on local; `put_object` on S3). If a write fails, no partial file is left behind. Note: per-file atomicity only — batch-level rollback across multiple partitions is not guaranteed (see §4, Limitation 8). | NFR-REL-001, FR-ING-004 |
 | **Append-only offline store** | BB-06 never calls delete or overwrite on existing Parquet files. New ingestions always create new files. | FR-ING-004, KTD-11 |
 | **Point-in-time correctness** | BB-08 (Join Engine) uses `pd.merge_asof` with `direction='backward'` — enforcing `joined.event_timestamp ≤ base.event_timestamp`. No configuration can disable this. | FR-OFF-003, AP-6, KTD-13 |
 | **Registry determinism** | Full rebuild on every `apply()` with `json.dumps(sort_keys=True, indent=2)`. Same definitions → same bytes. | FR-REG-001, KTD-3 |
@@ -1291,6 +1291,18 @@ Changing a feature group's schema (adding/removing features, changing types) aft
 **Limitation 6: No Offline Store Compaction**
 
 The append-only offline store grows indefinitely. Over time, partitions accumulate many small Parquet files (one per ingestion per partition). This affects read performance — though PyArrow handles multi-file reads efficiently, the overhead of opening many files is non-zero. A compaction operation (merge small files into larger ones within a partition, preserving all records) would improve read performance. The append-only invariant makes compaction safe — the compacted file contains the same data as the originals.
+
+---
+
+**Limitation 8: No Batch-Level Rollback Across Partitions**
+
+Ingestion is written partition-by-partition in a loop. If an ingestion spans multiple partitions (e.g., data for January and February) and a provider failure occurs after the first partition is written but before the second, the January partition file remains on disk and the February partition is missing. The offline store is left in a partially-ingested state.
+
+Each individual Parquet file is written atomically (write-to-temp-then-rename / `put_object`), so no partial file is ever left behind. But there is no transaction that covers all partitions in a single ingest operation.
+
+**Recovery:** Re-run the ingest operation. The missing partitions will be written. The already-written partitions will gain an additional file with the same records — this is safe and consistent with append-only semantics (KTD-11). Duplicate records can be deduplicated at query time if needed.
+
+**No silent data loss:** The partial-write state is always recoverable by re-running ingest. No data is permanently lost.
 
 ---
 

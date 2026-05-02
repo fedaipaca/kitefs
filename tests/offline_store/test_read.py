@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -78,7 +78,7 @@ class TestReadWithTimeFilter:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"gte": datetime(2024, 3, 1, tzinfo=UTC)},
+            time_filter={"gte": datetime(2024, 3, 1)},
         )
 
         # Should include 2024-03-05, 2024-03-20, 2024-04-10
@@ -93,7 +93,7 @@ class TestReadWithTimeFilter:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"lte": datetime(2024, 2, 15, tzinfo=UTC)},
+            time_filter={"lte": datetime(2024, 2, 15)},
         )
 
         # Should include 2024-01-10, 2024-01-25, 2024-02-15
@@ -108,7 +108,7 @@ class TestReadWithTimeFilter:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"gt": datetime(2024, 3, 5, tzinfo=UTC)},
+            time_filter={"gt": datetime(2024, 3, 5)},
         )
 
         # Excludes 2024-03-05 exactly; includes 2024-03-20 and 2024-04-10
@@ -123,7 +123,7 @@ class TestReadWithTimeFilter:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"lt": datetime(2024, 2, 15, tzinfo=UTC)},
+            time_filter={"lt": datetime(2024, 2, 15)},
         )
 
         # Excludes 2024-02-15 exactly; includes 2024-01-10, 2024-01-25
@@ -139,8 +139,8 @@ class TestReadWithTimeFilter:
             "test_group",
             "event_timestamp",
             time_filter={
-                "gte": datetime(2024, 2, 1, tzinfo=UTC),
-                "lte": datetime(2024, 3, 10, tzinfo=UTC),
+                "gte": datetime(2024, 2, 1),
+                "lte": datetime(2024, 3, 10),
             },
         )
 
@@ -155,7 +155,7 @@ class TestReadWithTimeFilter:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"gte": datetime(2025, 1, 1, tzinfo=UTC)},
+            time_filter={"gte": datetime(2025, 1, 1)},
         )
 
         assert result.empty
@@ -172,7 +172,7 @@ class TestReadWithUpperBound:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            upper_bound=datetime(2024, 2, 28, tzinfo=UTC),
+            upper_bound=datetime(2024, 2, 28),
         )
 
         # Partitions year=2024/month=01 and year=2024/month=02 are included.
@@ -189,7 +189,7 @@ class TestReadWithUpperBound:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            upper_bound=datetime(2024, 3, 10, tzinfo=UTC),
+            upper_bound=datetime(2024, 3, 10),
         )
 
         # Partitions 01, 02, 03 included. But no row-level filter — all rows in those partitions.
@@ -207,8 +207,8 @@ class TestReadCombinedFilters:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"gte": datetime(2024, 2, 1, tzinfo=UTC)},
-            upper_bound=datetime(2024, 3, 10, tzinfo=UTC),
+            time_filter={"gte": datetime(2024, 2, 1)},
+            upper_bound=datetime(2024, 3, 10),
         )
 
         # upper_bound prunes month=04. time_filter gte 2024-02-01 prunes month=01.
@@ -229,7 +229,7 @@ class TestReadPartitionPruning:
             manager.read(
                 "test_group",
                 "event_timestamp",
-                time_filter={"gte": datetime(2024, 3, 1, tzinfo=UTC)},
+                time_filter={"gte": datetime(2024, 3, 1)},
             )
 
             mock_read.assert_called_once()
@@ -258,7 +258,7 @@ class TestReadEmptyCases:
             result = manager.read(
                 "test_group",
                 "event_timestamp",
-                time_filter={"gte": datetime(2025, 6, 1, tzinfo=UTC)},
+                time_filter={"gte": datetime(2025, 6, 1)},
             )
 
             assert result.empty
@@ -277,8 +277,8 @@ class TestReadRowFilterPrecision:
             "test_group",
             "event_timestamp",
             time_filter={
-                "gte": datetime(2024, 1, 20, tzinfo=UTC),
-                "lte": datetime(2024, 1, 30, tzinfo=UTC),
+                "gte": datetime(2024, 1, 20),
+                "lte": datetime(2024, 1, 30),
             },
         )
 
@@ -288,38 +288,45 @@ class TestReadRowFilterPrecision:
 
 
 class TestReadTimezoneHandling:
-    """Timezone alignment between stored data and filter values."""
+    """Timezone handling: naive filter values work; tz-aware values are rejected."""
 
-    def test_tz_naive_filter_against_tz_naive_data(self, tmp_path: Path) -> None:
-        """Tz-naive filter works against tz-naive stored data."""
+    def test_naive_filter_against_naive_data(self, tmp_path: Path) -> None:
+        """Timezone-naive filter values work correctly against timezone-naive stored data."""
         manager, _, _ = _make_manager(tmp_path)
         _seed_data(manager)
 
         result = manager.read(
             "test_group",
             "event_timestamp",
-            time_filter={"gte": datetime(2024, 3, 1, tzinfo=UTC)},
+            time_filter={"gte": datetime(2024, 3, 1)},
         )
 
+        # Should include 2024-03-05, 2024-03-20, 2024-04-10
         assert len(result) == 3
 
-    def test_non_utc_timezone_filter(self, tmp_path: Path) -> None:
-        """A filter value in a non-UTC timezone is correctly converted to UTC."""
+    def test_tz_aware_filter_raises_retrieval_error(self, tmp_path: Path) -> None:
+        """A timezone-aware filter value raises RetrievalError."""
         manager, _, _ = _make_manager(tmp_path)
         _seed_data(manager)
 
-        # UTC+5: 2024-03-01T00:00 UTC+5 == 2024-02-29T19:00 UTC
-        # So gte with this value should include everything from 2024-02-29 19:00 UTC onward.
-        utc_plus_5 = timezone(timedelta(hours=5))
-        result = manager.read(
-            "test_group",
-            "event_timestamp",
-            time_filter={"gte": datetime(2024, 3, 1, tzinfo=utc_plus_5)},
-        )
+        with pytest.raises(RetrievalError, match="timezone-naive"):
+            manager.read(
+                "test_group",
+                "event_timestamp",
+                time_filter={"gte": datetime(2024, 3, 1, tzinfo=UTC)},
+            )
 
-        # 2024-02-29T19:00 UTC is before 2024-03-05, 2024-03-20, 2024-04-10
-        # and after 2024-02-15, 2024-01-10, 2024-01-25
-        assert len(result) == 3
+    def test_tz_aware_upper_bound_raises_retrieval_error(self, tmp_path: Path) -> None:
+        """A timezone-aware upper_bound raises RetrievalError."""
+        manager, _, _ = _make_manager(tmp_path)
+        _seed_data(manager)
+
+        with pytest.raises(RetrievalError, match="timezone-naive"):
+            manager.read(
+                "test_group",
+                "event_timestamp",
+                upper_bound=datetime(2024, 2, 28, tzinfo=UTC),
+            )
 
 
 class TestReadInvalidOperator:
@@ -334,7 +341,7 @@ class TestReadInvalidOperator:
             manager.read(
                 "test_group",
                 "event_timestamp",
-                time_filter={"eq": datetime(2024, 3, 5, tzinfo=UTC)},
+                time_filter={"eq": datetime(2024, 3, 5)},
             )
 
     def test_invalid_operator_typo_raises_retrieval_error(self, tmp_path: Path) -> None:
@@ -346,7 +353,7 @@ class TestReadInvalidOperator:
             manager.read(
                 "test_group",
                 "event_timestamp",
-                time_filter={"get": datetime(2024, 3, 5, tzinfo=UTC)},
+                time_filter={"get": datetime(2024, 3, 5)},
             )
 
 
@@ -368,33 +375,20 @@ class TestReadUnrecognizedPartitionFormat:
         assert len(result) == 6
 
 
-class TestReadNonUtcFilterPrecision:
-    """Non-UTC timezone filter values are correctly converted to UTC for row filtering."""
+class TestReadTimezoneAwareRejection:
+    """Timezone-aware filter and upper_bound values are rejected with RetrievalError."""
 
-    def test_non_utc_filter_precise_boundary(self, tmp_path: Path) -> None:
-        """A non-UTC filter value is converted to UTC before row-level comparison."""
+    def test_utc_aware_filter_raises_retrieval_error(self, tmp_path: Path) -> None:
+        """A UTC-aware filter value raises RetrievalError with an actionable message."""
         manager, _, _ = _make_manager(tmp_path)
-        # Seed data with a record at 2024-02-29T20:00 (tz-naive, treated as UTC).
-        df = pd.DataFrame(
-            {
-                "id": [1, 2],
-                "event_timestamp": pd.to_datetime(["2024-02-29 20:00:00", "2024-03-05 10:00:00"]),
-                "value": [10.0, 20.0],
-            }
-        )
-        manager.write("test_group", df, "event_timestamp")
+        _seed_data(manager)
 
-        # UTC+5: 2024-03-01T00:00+05:00 == 2024-02-29T19:00 UTC.
-        # Record at 20:00 UTC is AFTER 19:00 UTC, so it should be included.
-        utc_plus_5 = timezone(timedelta(hours=5))
-        result = manager.read(
-            "test_group",
-            "event_timestamp",
-            time_filter={"gte": datetime(2024, 3, 1, tzinfo=utc_plus_5)},
-        )
-
-        assert len(result) == 2
-        assert sorted(result["id"].tolist()) == [1, 2]
+        with pytest.raises(RetrievalError, match="timezone-naive"):
+            manager.read(
+                "test_group",
+                "event_timestamp",
+                time_filter={"gte": datetime(2024, 3, 1, tzinfo=UTC)},
+            )
 
 
 class TestReadNaTFilterValue:
@@ -405,7 +399,7 @@ class TestReadNaTFilterValue:
         manager, _, _ = _make_manager(tmp_path)
         _seed_data(manager)
 
-        with pytest.raises(RetrievalError, match="Cannot convert"):
+        with pytest.raises(RetrievalError, match="NaT"):
             manager.read(
                 "test_group",
                 "event_timestamp",

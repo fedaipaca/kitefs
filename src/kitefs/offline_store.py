@@ -12,8 +12,10 @@ import re
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
+# All event timestamp values and filter values must be timezone-naive and interpreted
+# as UTC. KiteFS does not perform timezone conversion — see API Contracts §6.2.
 import pandas as pd
 from pandas import DataFrame
 
@@ -94,6 +96,11 @@ class OfflineStoreManager:
         file_name = _generate_file_name(source_prefix)
         affected: list[str] = []
 
+        # Writes are not transactional across partitions. If this loop fails partway
+        # through, earlier partitions are already on disk. Re-running the ingest will
+        # write the missing partitions; the successfully written partitions will gain
+        # an additional file (duplicate records — consistent with KTD-11 append-only
+        # semantics). Batch-level rollback is not supported; see docs-03-02 §4.
         for partition_path in sorted(partition_groups):
             row_indices = partition_groups[partition_path]
             sub_df = df.iloc[row_indices].reset_index(drop=True)
@@ -182,15 +189,15 @@ def _parse_partition(partition_path: str) -> tuple[int, int]:
 
 
 def _partition_month_start(year: int, month: int) -> datetime:
-    """Return the first instant of a month (UTC)."""
-    return datetime(year, month, 1, tzinfo=UTC)
+    """Return the first instant of a month as a timezone-naive datetime."""
+    return datetime(year, month, 1)
 
 
 def _partition_month_end(year: int, month: int) -> datetime:
-    """Return the first instant of the *next* month (UTC) — the exclusive upper bound."""
+    """Return the first instant of the next month (exclusive upper bound), timezone-naive."""
     if month == 12:
-        return datetime(year + 1, 1, 1, tzinfo=UTC)
-    return datetime(year, month + 1, 1, tzinfo=UTC)
+        return datetime(year + 1, 1, 1)
+    return datetime(year, month + 1, 1)
 
 
 def _prune_partitions(
@@ -242,7 +249,7 @@ def _partition_matches_filter(
             raise RetrievalError(
                 f"Unsupported time filter operator '{op}'. Supported operators: {', '.join(sorted(_VALID_TIME_OPS))}."
             )
-        ts = _ensure_utc(value)
+        ts = _to_naive_datetime(value)
         if op == "gt":
             # Records must be > ts. Partition has records in [p_start, p_end).
             # Partition is useful if p_end > ts (some records could be > ts).
@@ -267,33 +274,40 @@ def _partition_matches_upper_bound(p_start: datetime, upper_bound: datetime | No
     """Check if a partition starts at or before the upper bound's month."""
     if upper_bound is None:
         return True
-    ub = _ensure_utc(upper_bound)
+    ub = _to_naive_datetime(upper_bound)
     # Include partitions whose start is <= upper_bound.
     return p_start <= ub
 
 
-def _ensure_utc(dt: Any) -> datetime:
-    """Coerce a datetime-like value to a timezone-aware UTC datetime."""
+def _to_naive_datetime(dt: Any) -> datetime:
+    """Return *dt* as a timezone-naive datetime, or raise RetrievalError.
+
+    KiteFS requires all timestamps to be timezone-naive (interpreted as UTC).
+    Passing a timezone-aware value is an error — KiteFS does not do conversion.
+    """
     if dt is pd.NaT:
-        msg = f"Cannot convert {dt!r} to a valid datetime for time filtering."
-        raise RetrievalError(msg)
+        raise RetrievalError("Time filter value is NaT. Provide a valid timezone-naive datetime.")
     if isinstance(dt, datetime):
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=UTC)
-        # Convert non-UTC timezones to UTC rather than returning as-is.
-        return dt.astimezone(UTC)
+        if dt.tzinfo is not None:
+            raise RetrievalError(
+                f"KiteFS only accepts timezone-naive datetimes (interpreted as UTC). "
+                f"Received a timezone-aware value: {dt!r}. "
+                f"Strip the timezone info before passing filter values "
+                f"(e.g. dt.replace(tzinfo=None))."
+            )
+        return dt
     # Pandas Timestamp or similar.
     ts = pd.Timestamp(dt)
-    if ts.tzinfo is None:
-        ts = ts.tz_localize(UTC)
-    result = ts.to_pydatetime()
-    if not isinstance(result, datetime):
-        # NaT case — should not happen with valid filter values.
-        msg = f"Cannot convert {dt!r} to a valid datetime for time filtering."
-        raise RetrievalError(msg)
-    if result.tzinfo is not None:
-        return result.astimezone(UTC)
-    return result.replace(tzinfo=UTC)
+    if ts is pd.NaT:
+        raise RetrievalError("Time filter value is NaT. Provide a valid timezone-naive datetime.")
+    if ts.tzinfo is not None:
+        raise RetrievalError(
+            f"KiteFS only accepts timezone-naive datetimes (interpreted as UTC). "
+            f"Received a timezone-aware value: {dt!r}. "
+            f"Strip the timezone info before passing filter values "
+            f"(e.g. dt.replace(tzinfo=None))."
+        )
+    return cast(datetime, ts.to_pydatetime())
 
 
 def _apply_row_filter(
@@ -301,7 +315,11 @@ def _apply_row_filter(
     event_timestamp_col: str,
     time_filter: dict[str, Any],
 ) -> DataFrame:
-    """Apply precise row-level time filtering on event_timestamp_col."""
+    """Apply precise row-level time filtering on event_timestamp_col.
+
+    All values in *time_filter* must be timezone-naive; _to_naive_datetime
+    is called on each one to enforce this and raise RetrievalError otherwise.
+    """
     mask = pd.Series(True, index=df.index)
     col = df[event_timestamp_col]
 
@@ -310,12 +328,7 @@ def _apply_row_filter(
             raise RetrievalError(
                 f"Unsupported time filter operator '{op}'. Supported operators: {', '.join(sorted(_VALID_TIME_OPS))}."
             )
-        ts = pd.Timestamp(value)
-        # Align timezone: convert to UTC first, then strip tz if column is naive.
-        if ts.tzinfo is not None and col.dt.tz is None:
-            ts = ts.tz_convert("UTC").tz_localize(None)
-        elif ts.tzinfo is None and col.dt.tz is not None:
-            ts = ts.tz_localize(col.dt.tz)
+        ts = pd.Timestamp(_to_naive_datetime(value))
 
         if op == "gt":
             mask = mask & (col > ts)

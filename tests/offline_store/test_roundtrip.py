@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -72,8 +72,8 @@ class TestWriteReadRoundtrip:
             "test_group",
             "event_timestamp",
             time_filter={
-                "gte": datetime(2024, 3, 1, tzinfo=UTC),
-                "lt": datetime(2024, 5, 1, tzinfo=UTC),
+                "gte": datetime(2024, 3, 1),
+                "lt": datetime(2024, 5, 1),
             },
         )
 
@@ -173,20 +173,20 @@ class TestWriteReadRoundtrip:
         result = manager.read(
             "test_group",
             "event_timestamp",
-            upper_bound=datetime(2024, 6, 15, tzinfo=UTC),
+            upper_bound=datetime(2024, 6, 15),
         )
 
         # Partitions month=01 and month=06 included, month=12 pruned.
         assert len(result) == 2
         assert sorted(result["id"].tolist()) == [1, 2]
 
-    def test_roundtrip_timezone_aware_timestamps(self, tmp_path: Path) -> None:
-        """Write tz-aware UTC timestamps and read them back correctly."""
+    def test_roundtrip_with_naive_timestamps(self, tmp_path: Path) -> None:
+        """Write timezone-naive timestamps and read them back correctly."""
         manager = _make_manager(tmp_path)
         df = pd.DataFrame(
             {
                 "id": [1, 2, 3],
-                "event_timestamp": pd.to_datetime(["2024-03-15", "2024-03-20", "2024-04-02"]).tz_localize(UTC),
+                "event_timestamp": pd.to_datetime(["2024-03-15", "2024-03-20", "2024-04-02"]),
                 "value": [10.0, 20.0, 30.0],
             }
         )
@@ -197,13 +197,13 @@ class TestWriteReadRoundtrip:
         assert len(result) == 3
         assert sorted(result["id"].tolist()) == [1, 2, 3]
 
-    def test_roundtrip_tz_aware_with_filter(self, tmp_path: Path) -> None:
-        """Write tz-aware data and filter with tz-aware boundaries."""
+    def test_roundtrip_with_naive_filter(self, tmp_path: Path) -> None:
+        """Write timezone-naive data and filter with timezone-naive boundaries."""
         manager = _make_manager(tmp_path)
         df = pd.DataFrame(
             {
                 "id": [1, 2, 3],
-                "event_timestamp": pd.to_datetime(["2024-01-15", "2024-03-10", "2024-06-01"]).tz_localize(UTC),
+                "event_timestamp": pd.to_datetime(["2024-01-15", "2024-03-10", "2024-06-01"]),
                 "value": [10.0, 20.0, 30.0],
             }
         )
@@ -213,8 +213,8 @@ class TestWriteReadRoundtrip:
             "test_group",
             "event_timestamp",
             time_filter={
-                "gte": datetime(2024, 2, 1, tzinfo=UTC),
-                "lte": datetime(2024, 4, 1, tzinfo=UTC),
+                "gte": datetime(2024, 2, 1),
+                "lte": datetime(2024, 4, 1),
             },
         )
 
