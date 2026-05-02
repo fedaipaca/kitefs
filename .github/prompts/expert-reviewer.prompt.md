@@ -3,7 +3,6 @@ description: "Review local git changes as a Principal Software Engineer. Use aft
 agent: Ask
 argument-hint: "Any focus areas or concerns to prioritize..."
 tools: ["search", "search/changes", "read", "web/fetch"]
-model: Claude Opus 4.6 (copilot)
 ---
 
 Review the current local changes in this workspace as a **Principal Software Engineer**.
