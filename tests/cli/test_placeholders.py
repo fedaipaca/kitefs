@@ -12,23 +12,6 @@ def _runner() -> CliRunner:
     return CliRunner()
 
 
-class TestIngestPlaceholder:
-    """``kitefs ingest`` shows a not-implemented message."""
-
-    def test_ingest_shows_not_implemented_message(self) -> None:
-        """ingest echoes the placeholder message and exits 0."""
-        result = _runner().invoke(cli, ["ingest", "my_group", "data.csv"])
-
-        assert result.exit_code == 0
-        assert _MSG in result.output
-
-    def test_ingest_help_exits_zero(self) -> None:
-        """ingest --help exits with code 0."""
-        result = _runner().invoke(cli, ["ingest", "--help"])
-
-        assert result.exit_code == 0
-
-
 class TestMaterializePlaceholder:
     """``kitefs materialize`` shows a not-implemented message."""
 

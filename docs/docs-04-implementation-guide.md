@@ -872,7 +872,7 @@ Write tests covering: partition columns derived correctly, filtered reads return
 
 ---
 
-### Task 13a — SDK `FeatureStore.ingest()` (BB-02 partial)
+### Task 13a — SDK `FeatureStore.ingest()` (BB-02 partial) - (DONE)
 
 |                     |                                                                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -928,7 +928,7 @@ Write tests covering: DataFrame ingestion success, CSV file ingestion, Parquet f
 
 ---
 
-### Task 13b — CLI `kitefs ingest` (BB-01 partial)
+### Task 13b — CLI `kitefs ingest` (BB-01 partial) - (DONE)
 
 |                     |                                                                                                                               |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |

@@ -261,7 +261,19 @@ _NOT_IMPLEMENTED_MSG = "Not implemented yet, in development."
 @click.argument("file_path", type=click.Path(exists=False))
 def ingest(feature_group_name: str, file_path: str) -> None:
     """Ingest data from a CSV or Parquet file into the offline store."""
-    click.echo(_NOT_IMPLEMENTED_MSG)
+    from kitefs.exceptions import KiteFSError
+    from kitefs.feature_store import FeatureStore
+
+    try:
+        fs = FeatureStore()
+        result = fs.ingest(feature_group_name, file_path)
+    except KiteFSError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+    partitions = ", ".join(result.partitions_affected) if result.partitions_affected else "none"
+    click.echo(f"Ingested {result.rows_written} row(s) into {feature_group_name}.")
+    click.echo(f"Partitions affected: {partitions}")
 
 
 @cli.command()
