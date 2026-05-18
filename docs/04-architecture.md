@@ -34,16 +34,16 @@ KiteFS does not compute features, run pipelines, host models, or run as a servic
 
 Every architectural decision in KiteFS should trace back to one or more of these principles. They are the load-bearing constraints — changes here ripple through the rest of the system.
 
-| ID | Principle | Statement | Architectural Consequence |
-| --- | --- | --- | --- |
-| AP-1 | Library-First Distribution | KiteFS is a pip-installable Python library, not a deployed service. | No server, daemon, container runtime, or network service layer. All interaction happens through an in-process SDK and a local CLI ([CON-002](02-product-requirements.md#con-002--pip-installable-library), [CON-005](02-product-requirements.md#con-005--no-server-or-daemon)). |
-| AP-2 | Literal Architecture (Store, Don't Compute) | KiteFS stores and serves feature values. It does not compute them. | Feature computation, orchestration, SQL execution, DAG scheduling, and transformation logic stay outside the system boundary. Users compute features with their own tools and write the results to KiteFS ([NG-1](00-project-context.md#non-goals)). |
-| AP-3 | Provider-Abstracted Storage | Core logic is decoupled from concrete storage backends through a single provider boundary. | Core modules depend on storage interfaces, never on filesystem, S3, SQLite, DynamoDB, or vendor SDKs directly. Adding a backend requires implementing the boundary, not editing core ([FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary)). |
-| AP-4 | Definitions as Code, Registry as Derived Artifact | Feature groups are authored as Python objects; the registry is compiled from them. | Source definitions are the reviewed source of truth. The registry is a deterministic artifact produced from definitions plus runtime-managed metadata, gitignored locally, and never edited by hand. Remote promotion happens through publish ([FR-REG-001](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact)). |
-| AP-5 | Validate at Every Gate | Validation is built into the architecture at configured quality gates. | The validation engine is a first-class building block, not an external add-on. Operation-specific gate behavior is owned by [03-system-behavior.md](03-system-behavior.md) and [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation). |
-| AP-6 | Point-in-Time Correctness by Default | Historical joins must not leak future feature values. | The join engine is a dedicated building block, and historical retrieval uses the event timestamp as the temporal anchor ([FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins)). |
-| AP-7 | Explicit Failure with Actionable Errors | Every user-facing failure identifies what went wrong and what to do next. | A single error taxonomy is shared across SDK and CLI. The CLI is the outermost error boundary; raw tracebacks are not shown for normal user errors ([03-system-behavior.md § CLI Error Boundary](03-system-behavior.md#cli-error-boundary)). |
-| AP-8 | Single-Developer Sustainability | The system must stay buildable, testable, and maintainable by one engineer. | Favor explicit user-triggered operations, simple local state, minimal dependencies, stateless core utilities where possible, and small module boundaries with single responsibilities. |
+| ID   | Principle                                         | Statement                                                                                  | Architectural Consequence                                                                                                                                                                                                                                                                                                          |
+| ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AP-1 | Library-First Distribution                        | KiteFS is a pip-installable Python library, not a deployed service.                        | No server, daemon, container runtime, or network service layer. All interaction happens through an in-process SDK and a local CLI ([CON-002](02-product-requirements.md#con-002--pip-installable-library), [CON-005](02-product-requirements.md#con-005--no-server-or-daemon)).                                                    |
+| AP-2 | Literal Architecture (Store, Don't Compute)       | KiteFS stores and serves feature values. It does not compute them.                         | Feature computation, orchestration, SQL execution, DAG scheduling, and transformation logic stay outside the system boundary. Users compute features with their own tools and write the results to KiteFS ([NG-1](00-project-context.md#non-goals)).                                                                               |
+| AP-3 | Provider-Abstracted Storage                       | Core logic is decoupled from concrete storage backends through a single provider boundary. | Core modules depend on storage interfaces, never on filesystem, S3, SQLite, DynamoDB, or vendor SDKs directly. Adding a backend requires implementing the boundary, not editing core ([FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary)).                                                                   |
+| AP-4 | Definitions as Code, Registry as Derived Artifact | Feature groups are authored as Python objects; the registry is compiled from them.         | Source definitions are the reviewed source of truth. The registry is a deterministic artifact produced from definitions plus runtime-managed metadata, gitignored locally, and never edited by hand. Remote promotion happens through publish ([FR-REG-001](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact)). |
+| AP-5 | Validate at Every Gate                            | Validation is built into the architecture at configured quality gates.                     | The validation engine is a first-class building block, not an external add-on. Operation-specific gate behavior is owned by [03-system-behavior.md](03-system-behavior.md) and [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation).                                                                               |
+| AP-6 | Point-in-Time Correctness by Default              | Historical joins must not leak future feature values.                                      | The join engine is a dedicated building block, and historical retrieval uses the event timestamp as the temporal anchor ([FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins)).                                                                                                                        |
+| AP-7 | Explicit Failure with Actionable Errors           | Every user-facing failure identifies what went wrong and what to do next.                  | A single error taxonomy is shared across SDK and CLI. The CLI is the outermost error boundary; raw tracebacks are not shown for normal user errors ([03-system-behavior.md § CLI Error Boundary](03-system-behavior.md#cli-error-boundary)).                                                                                       |
+| AP-8 | Single-Developer Sustainability                   | The system must stay buildable, testable, and maintainable by one engineer.                | Favor explicit user-triggered operations, simple local state, minimal dependencies, stateless core utilities where possible, and small module boundaries with single responsibilities.                                                                                                                                             |
 
 ---
 
@@ -111,24 +111,24 @@ Source databases stay outside the KiteFS boundary: users extract, compute, and p
 
 ## Actors
 
-| Actor | Primary Interface | Relationship to KiteFS |
-| --- | --- | --- |
-| Data Scientist / ML Engineer | Python SDK | Defines feature groups, ingests precomputed feature data, and retrieves training datasets. |
-| Backend / Software Engineer | Python SDK | Retrieves materialized feature values from inference-time application code. |
-| ML / Data Platform Engineer | CLI and configuration | Initializes projects, configures providers, manages registry workflows, and coordinates operational use. |
+| Actor                        | Primary Interface     | Relationship to KiteFS                                                                                   |
+| ---------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------- |
+| Data Scientist / ML Engineer | Python SDK            | Defines feature groups, ingests precomputed feature data, and retrieves training datasets.               |
+| Backend / Software Engineer  | Python SDK            | Retrieves materialized feature values from inference-time application code.                              |
+| ML / Data Platform Engineer  | CLI and configuration | Initializes projects, configures providers, manages registry workflows, and coordinates operational use. |
 
 Project-level persona definitions live in [00-project-context.md](00-project-context.md#personas).
 
 ## External Systems
 
-| System | Role | Boundary |
-| --- | --- | --- |
-| Local filesystem | Local offline store and local registry storage. | Accessed through the local provider. Physical layout in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md). |
-| SQLite | Local online store. | Accessed through the local provider. Table schema in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md). |
-| AWS S3 | Remote offline store and remote registry storage. | Accessed through the AWS provider. Bucket design in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md). |
-| AWS DynamoDB | Remote online store. | Accessed through the AWS provider. Per-group table design in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md). |
-| Source databases | User-owned inputs for feature computation. | Not accessed by KiteFS directly. |
-| Model serving infrastructure | User-owned consumers of online features. | Not hosted or managed by KiteFS. |
+| System                       | Role                                              | Boundary                                                                                                                           |
+| ---------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Local filesystem             | Local offline store and local registry storage.   | Accessed through the local provider. Physical layout in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md).      |
+| SQLite                       | Local online store.                               | Accessed through the local provider. Table schema in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md).         |
+| AWS S3                       | Remote offline store and remote registry storage. | Accessed through the AWS provider. Bucket design in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md).          |
+| AWS DynamoDB                 | Remote online store.                              | Accessed through the AWS provider. Per-group table design in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md). |
+| Source databases             | User-owned inputs for feature computation.        | Not accessed by KiteFS directly.                                                                                                   |
+| Model serving infrastructure | User-owned consumers of online features.          | Not hosted or managed by KiteFS.                                                                                                   |
 
 ## System Boundary
 
@@ -238,35 +238,35 @@ Arrows point from a module to the module it depends on. Storage-specific details
 
 ## Building Block Responsibilities
 
-| ID | Building Block | Responsibility |
-| --- | --- | --- |
-| BB-01 | CLI | Parses command-line input, checks project context, delegates SDK-backed work to BB-02, renders user-facing output, and acts as the outermost error boundary. |
-| BB-02 | SDK (`FeatureStore`) | User-facing Python orchestrator. Wires configuration, provider, registry, validation, store managers, and joins into the public workflow surface. Contains no provider-specific code. |
-| BB-03 | Definition Module | Provides `FeatureGroup`, `EntityKey`, `EventTimestamp`, `Feature`, `Expect`, `JoinKey`, `Metadata`, and related enums for source definitions and schema metadata. |
-| BB-04 | Registry Manager | Discovers feature definitions, validates their structure as a set, maintains the registry artifact, and answers registry lookups for the active runtime target. |
-| BB-05 | Validation Engine | Performs stateless structural checks and feature-value checks against registered feature definitions. Returns validation reports; never reads or writes storage. |
-| BB-06 | Offline Store Manager | Coordinates offline feature data reads, writes, and event-timestamp filtering. Delegates physical I/O to BB-09's `OfflineStore` interface. |
-| BB-07 | Online Store Manager | Coordinates latest-per-entity online materialization writes and key-based reads. Delegates physical I/O and provider-specific failure handling to BB-09's `OnlineStore` interface. |
-| BB-08 | Join Engine | Performs point-in-time correct joins between in-memory datasets. Stateless and storage-agnostic. |
-| BB-09 | Provider Layer | Defines three storage interfaces (`RegistryStore`, `OfflineStore`, `OnlineStore`) plus a `Provider` factory that supplies a coherent set. Ships `LocalProvider` and `AWSProvider`. |
-| BB-10 | Configuration Manager | Loads, validates, and exposes project and provider configuration from `kitefs.yaml`, including environment variable interpolation and runtime-target override. |
-| BB-11 | Error Model | Defines the shared exception hierarchy and error message conventions. Imported by every other block. |
+| ID    | Building Block        | Responsibility                                                                                                                                                                        |
+| ----- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BB-01 | CLI                   | Parses command-line input, checks project context, delegates SDK-backed work to BB-02, renders user-facing output, and acts as the outermost error boundary.                          |
+| BB-02 | SDK (`FeatureStore`)  | User-facing Python orchestrator. Wires configuration, provider, registry, validation, store managers, and joins into the public workflow surface. Contains no provider-specific code. |
+| BB-03 | Definition Module     | Provides `FeatureGroup`, `EntityKey`, `EventTimestamp`, `Feature`, `Expect`, `JoinKey`, `Metadata`, and related enums for source definitions and schema metadata.                     |
+| BB-04 | Registry Manager      | Discovers feature definitions, validates their structure as a set, maintains the registry artifact, and answers registry lookups for the active runtime target.                       |
+| BB-05 | Validation Engine     | Performs stateless structural checks and feature-value checks against registered feature definitions. Returns validation reports; never reads or writes storage.                      |
+| BB-06 | Offline Store Manager | Coordinates offline feature data reads, writes, and event-timestamp filtering. Delegates physical I/O to BB-09's `OfflineStore` interface.                                            |
+| BB-07 | Online Store Manager  | Coordinates latest-per-entity online materialization writes and key-based reads. Delegates physical I/O and provider-specific failure handling to BB-09's `OnlineStore` interface.    |
+| BB-08 | Join Engine           | Performs point-in-time correct joins between in-memory datasets. Stateless and storage-agnostic.                                                                                      |
+| BB-09 | Provider Layer        | Defines three storage interfaces (`RegistryStore`, `OfflineStore`, `OnlineStore`) plus a `Provider` factory that supplies a coherent set. Ships `LocalProvider` and `AWSProvider`.    |
+| BB-10 | Configuration Manager | Loads, validates, and exposes project and provider configuration from `kitefs.yaml`, including environment variable interpolation and runtime-target override.                        |
+| BB-11 | Error Model           | Defines the shared exception hierarchy and error message conventions. Imported by every other block.                                                                                  |
 
 ## Building Block — Operation Matrix
 
 This matrix shows which blocks participate in each operation defined in [03-system-behavior.md](03-system-behavior.md). It serves as a sanity check on the decomposition: if an operation touches blocks that should not be coupled, the design is wrong.
 
-| Operation | BB-01 | BB-02 | BB-03 | BB-04 | BB-05 | BB-06 | BB-07 | BB-08 | BB-09 | BB-10 |
-| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| `init` | O | | | | | | | | | |
-| `init-config` | O | | | | | | | | | |
-| `apply` (and `--publish`) | I | O | O | O | | | | | O | O |
-| `pull` *(post-MVP)* | | O | | O | | | | | O | O |
-| `list` / `describe` | I | O | | O | | | | | O | O |
-| `ingest` | I | O | | O | O | O | | | O | O |
-| `get_historical_features` | | O | | O | O | O | | O | O | O |
-| `materialize` | I | O | | O | | O | O | | O | O |
-| `get_online_features` | | O | | O | | | O | | O | O |
+| Operation                 | BB-01 | BB-02 | BB-03 | BB-04 | BB-05 | BB-06 | BB-07 | BB-08 | BB-09 | BB-10 |
+| ------------------------- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `init`                    |   O   |       |       |       |       |       |       |       |       |       |
+| `init-config`             |   O   |       |       |       |       |       |       |       |       |       |
+| `apply` (and `--publish`) |   I   |   O   |   O   |   O   |       |       |       |       |   O   |   O   |
+| `pull` _(post-MVP)_       |       |   O   |       |   O   |       |       |       |       |   O   |   O   |
+| `list` / `describe`       |   I   |   O   |       |   O   |       |       |       |       |   O   |   O   |
+| `ingest`                  |   I   |   O   |       |   O   |   O   |   O   |       |       |   O   |   O   |
+| `get_historical_features` |       |   O   |       |   O   |   O   |   O   |       |   O   |   O   |   O   |
+| `materialize`             |   I   |   O   |       |   O   |       |   O   |   O   |       |   O   |   O   |
+| `get_online_features`     |       |   O   |       |   O   |       |       |   O   |       |   O   |   O   |
 
 Legend: O = used in the operation. I = used only when the operation is invoked through the CLI. Blank = not used. BB-11 (error model) applies to every operation and is omitted from the table for readability.
 
@@ -281,12 +281,12 @@ Two observations follow from the matrix and should remain true as the system evo
 
 Dependencies flow through four layers. Each layer may depend only on layers below it.
 
-| Layer | Building Blocks | Dependency Rule |
-| --- | --- | --- |
-| Entry Points | BB-01 CLI, BB-02 SDK | May call core modules. Do not own domain logic or provider-specific code. |
-| Core Logic | BB-04 Registry Manager, BB-05 Validation Engine, BB-06 Offline Store Manager, BB-07 Online Store Manager, BB-08 Join Engine | Express KiteFS behavior. Depend on foundation types and, when storage is needed, on the provider boundary. |
-| Infrastructure | BB-09 Provider Layer | Owns concrete storage integration and provider-specific dependencies. |
-| Foundation | BB-03 Definition Module, BB-10 Configuration Manager, BB-11 Error Model | Low-level shared building blocks. Do not depend on higher layers. |
+| Layer          | Building Blocks                                                                                                             | Dependency Rule                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Entry Points   | BB-01 CLI, BB-02 SDK                                                                                                        | May call core modules. Do not own domain logic or provider-specific code.                                  |
+| Core Logic     | BB-04 Registry Manager, BB-05 Validation Engine, BB-06 Offline Store Manager, BB-07 Online Store Manager, BB-08 Join Engine | Express KiteFS behavior. Depend on foundation types and, when storage is needed, on the provider boundary. |
+| Infrastructure | BB-09 Provider Layer                                                                                                        | Owns concrete storage integration and provider-specific dependencies.                                      |
+| Foundation     | BB-03 Definition Module, BB-10 Configuration Manager, BB-11 Error Model                                                     | Low-level shared building blocks. Do not depend on higher layers.                                          |
 
 Direct dependencies:
 
@@ -316,11 +316,11 @@ BB-09 is the only formal pluggability boundary in the MVP architecture. Core mod
 
 The provider boundary is decomposed into three sibling interfaces because the three storage areas have genuinely different access patterns. Bundling them as one fat interface would obscure those differences and make provider implementations harder to reason about.
 
-| Interface | Storage Area | Access Pattern | Local Implementation | AWS Implementation |
-| --- | --- | --- | --- | --- |
-| `RegistryStore` | Registry artifact | Whole-document read and overwrite. | Local JSON file at `./feature_store/registry.json`. | JSON object in S3 at a configured key. |
-| `OfflineStore` | Offline feature data | Append-only Parquet writes; partition-scoped reads with timestamp filtering. | Local Parquet files under a managed directory. | Parquet objects in S3. |
-| `OnlineStore` | Online feature data | Provider-specific latest-row materialization writes; keyed point lookups. | SQLite table per group. | Per-group DynamoDB tables. |
+| Interface       | Storage Area         | Access Pattern                                                               | Local Implementation                                | AWS Implementation                     |
+| --------------- | -------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------- |
+| `RegistryStore` | Registry artifact    | Whole-document read and overwrite.                                           | Local JSON file at `./feature_store/registry.json`. | JSON object in S3 at a configured key. |
+| `OfflineStore`  | Offline feature data | Append-only Parquet writes; partition-scoped reads with timestamp filtering. | Local Parquet files under a managed directory.      | Parquet objects in S3.                 |
+| `OnlineStore`   | Online feature data  | Provider-specific latest-row materialization writes; keyed point lookups.    | SQLite table per group.                             | Per-group DynamoDB tables.             |
 
 A `Provider` is the factory that returns a coherent triple of these interfaces for the active runtime target. Core modules request the specific interface they need — they never receive provider-specific clients or branch on the active runtime target. The local and AWS providers are configured and constructed by BB-10 and BB-09 together; the SDK only sees the interfaces.
 
@@ -352,19 +352,78 @@ All user-facing errors meet the "actionable error" standard from [02-product-req
 
 KiteFS is distributed as one Python package.
 
-| Topic | Model |
-| --- | --- |
-| Package name | `kitefs` |
-| Core install | `pip install kitefs` |
-| AWS install | `pip install kitefs[aws]` |
-| CLI entry point | `kitefs`, registered through the package console script configuration. |
-| Python version | Python 3.12 or higher, per [CON-001](02-product-requirements.md#con-001--python-312). |
+| Topic              | Model                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| Package name       | `kitefs`                                                                                      |
+| Core install       | `pip install kitefs`                                                                          |
+| AWS install        | `pip install kitefs[aws]`                                                                     |
+| CLI entry point    | `kitefs`, registered through the package console script configuration.                        |
+| Python version     | Python 3.12 or higher, per [CON-001](02-product-requirements.md#con-001--python-312).         |
 | Distribution style | One pip-installable library package. No companion service is required for the local provider. |
 
-The source package uses a `src/kitefs/` layout. Exact file names may evolve during implementation, but the package should keep the architectural areas visible:
+The source package uses a `src/kitefs/` layout. Each architectural building block maps to one sub-package so that the package structure mirrors the decomposition:
 
 ```text
-
+src/kitefs/
+├── __init__.py            # Public re-exports
+├── py.typed
+├── enums.py               # FeatureType, StorageTarget, ValidationMode
+│
+├── sdk/                   # BB-02 — FeatureStore orchestrator + return-type dataclasses
+│   ├── __init__.py
+│   ├── feature_store.py
+│   └── results.py
+│
+├── cli/                   # BB-01 — Click command surface + error boundary
+│   └── __init__.py
+│
+├── definitions/           # BB-03 — FeatureGroup, EntityKey, EventTimestamp,
+│   └── __init__.py        #          Feature, JoinKey, Metadata, Expect
+│
+├── registry/              # BB-04 — Discovery, cross-validation, artifact builder
+│   └── __init__.py
+│
+├── validation/            # BB-05 — Stateless structural + expectation checks
+│   └── __init__.py
+│
+├── offline_store/         # BB-06 — Offline Store Manager (no direct I/O)
+│   └── __init__.py
+│
+├── online_store/          # BB-07 — Online Store Manager (no direct I/O)
+│   └── __init__.py
+│
+├── join_engine/           # BB-08 — Stateless point-in-time joins
+│   └── __init__.py
+│
+├── providers/             # BB-09 — Provider boundary + implementations
+│   ├── __init__.py
+│   ├── base.py            # Provider, RegistryStore, OfflineStore, OnlineStore ABCs
+│   ├── local/             # LocalProvider (filesystem + SQLite)
+│   │   └── __init__.py
+│   └── aws/               # AWSProvider (S3 + DynamoDB; only place boto3 is imported)
+│       └── __init__.py
+│
+├── config/                # BB-10 — kitefs.yaml loader, env interpolation, target override
+│   └── __init__.py
+│
+└── errors/                # BB-11 — KiteFSError exception hierarchy
+    └── __init__.py
 ```
 
-Core dependencies are shared by the base package. Provider-specific dependencies (notably `boto3`) are installed through the `[aws]` extra and imported only inside the AWS provider implementation. Importing the base package on a machine without the AWS extras must not fail.
+### Building Block to Source Path Mapping
+
+| BB    | Building Block        | Source Path                                           |
+| ----- | --------------------- | ----------------------------------------------------- |
+| BB-01 | CLI                   | `src/kitefs/cli/`                                     |
+| BB-02 | SDK (FeatureStore)    | `src/kitefs/sdk/`                                     |
+| BB-03 | Definition Module     | `src/kitefs/definitions/` + `src/kitefs/enums.py`     |
+| BB-04 | Registry Manager      | `src/kitefs/registry/`                                |
+| BB-05 | Validation Engine     | `src/kitefs/validation/`                              |
+| BB-06 | Offline Store Manager | `src/kitefs/offline_store/`                           |
+| BB-07 | Online Store Manager  | `src/kitefs/online_store/`                            |
+| BB-08 | Join Engine           | `src/kitefs/join_engine/`                             |
+| BB-09 | Provider Layer        | `src/kitefs/providers/` (`base.py`, `local/`, `aws/`) |
+| BB-10 | Configuration Manager | `src/kitefs/config/`                                  |
+| BB-11 | Error Model           | `src/kitefs/errors/`                                  |
+
+Core dependencies are shared by the base package. Provider-specific dependencies (notably `boto3`) are installed through the `[aws]` extra and imported only inside `providers/aws/`. Importing the base package on a machine without the AWS extras must not fail.
