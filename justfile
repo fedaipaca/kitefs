@@ -6,6 +6,18 @@ default:
 test:
     uv run pytest
 
+# Run unit tests only
+test-unit:
+    uv run pytest tests/unit
+
+# Run integration tests only
+test-integration:
+    uv run pytest tests/integration
+
+# Run BDD tests only
+test-bdd:
+    uv run pytest tests/bdd
+
 # Run tests for a specific file, with optional extra args
 test-file file +args='':
     uv run pytest {{file}} {{args}}

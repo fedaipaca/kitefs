@@ -23,6 +23,7 @@ build-backend = "uv_build"
 dev = [
     "pyright>=1.1.409",
     "pytest>=9.0.3",
+    "pytest-bdd>=8.1.0",
     "ruff>=0.15.13",
 ]
 
@@ -51,3 +52,4 @@ venv = ".venv"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+bdd_features_base_dir = "tests/bdd/features"
