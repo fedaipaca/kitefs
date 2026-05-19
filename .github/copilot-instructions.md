@@ -17,6 +17,39 @@ Use these instructions as project guardrails. For detailed behavior, contracts, 
 
 ---
 
+## Project Directory Structure
+
+### Top-level
+
+- `docs/` - Authoritative project documentation, contracts, and implementation guidance.
+- `src/kitefs/` - Main Python package for the library code.
+- `tests/` - Unit, integration, BDD, fixtures, and test helper coverage.
+- `helpers/` - Shared test support utilities used across the test suite.
+
+### Source package
+
+- `src/kitefs/cli/` - CLI entry points and presentation-layer command handling.
+- `src/kitefs/config/` - Project configuration loading and runtime target selection.
+- `src/kitefs/definitions/` - Feature definition types and related schema objects.
+- `src/kitefs/errors/` - Shared KiteFS exception hierarchy.
+- `src/kitefs/join_engine/` - Stateless point-in-time join logic.
+- `src/kitefs/offline_store/` - Offline store coordination logic behind provider interfaces.
+- `src/kitefs/online_store/` - Online store coordination logic behind provider interfaces.
+- `src/kitefs/providers/` - Provider boundary plus local and AWS implementations.
+- `src/kitefs/registry/` - Definition discovery, registry generation, and registry lookups.
+- `src/kitefs/sdk/` - User-facing SDK orchestration.
+- `src/kitefs/validation/` - Stateless structural and feature-value validation.
+
+### Tests
+
+- `tests/unit/` - Fast, isolated tests for individual modules and behaviors.
+- `tests/integration/` - Cross-module tests for end-to-end library flows.
+- `tests/bdd/` - Behavior-driven scenarios, features, and step definitions.
+- `tests/fixtures/` - Reusable test data, definitions, and registry fixtures.
+- `tests/helpers/` - Shared utilities and builders for test setup.
+
+---
+
 ## Product Boundary
 
 KiteFS is library-first and store-first.
