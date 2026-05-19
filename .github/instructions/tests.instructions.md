@@ -1,3 +1,9 @@
+---
+name: "Test Guidelines"
+description: "Instructions for unit and integration tests under the tests directory"
+applyTo: "tests/**"
+---
+
 ### Unit and Integration Test Style Guidelines
 
 - Use idiomatic pytest for unit and integration tests.
@@ -6,7 +12,7 @@
 - Use concise `test_<behavior>` function names. Keep names readable, but avoid full-sentence test names.
 - Add a one-line test function docstring that explains the expected behavior in plain language.
 - Prefer docstrings over comments for class and test intent.
-- Do not apply this style section to BDD tests.
+- Do not apply this style guide to BDD tests which are in `tests/bdd` directory.
 
 Example:
 

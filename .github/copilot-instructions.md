@@ -140,7 +140,6 @@ See `docs/06-api-and-cli-contracts.md`.
 - Keep tests proportional to the change. Add enough coverage to verify the documented behavior with confidence, but do not add speculative or ceremonial tests.
 - Use `tests/unit/` for fast, isolated checks of one module, class, or function.
 - Use `tests/integration/` for cross-module library flows that exercise collaboration between configuration, providers, stores, registry, SDK, and CLI layers.
-- Always use `tests/README.md` Unit and Integration Test Style Guidelines, when working on unit tests and integration tests.
 - Use `tests/bdd/` for documented, user-visible SDK and CLI behavior. Scenarios must describe public behavior and observable outcomes, not implementation detail.
 - Prefer the narrowest test layer that proves the behavior. Add integration tests only when a unit test cannot verify the contract. Add BDD tests only for user-visible behavior or when the task is explicitly BDD-scoped.
 - Reuse fixtures and helpers from `tests/fixtures/` and `helpers/` before introducing new test utilities.
