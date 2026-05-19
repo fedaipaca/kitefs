@@ -1,59 +1,76 @@
-# Tests
+### Unit and Integration Test Style Guidelines
 
-## Layout
+- Use idiomatic pytest for unit and integration tests.
+- Use `class Test<Subject>` to group related tests when a file has multiple behaviors for the same subject.
+- Add a short one-line class docstring that explains the group being tested.
+- Use concise `test_<behavior>` function names. Keep names readable, but avoid full-sentence test names.
+- Add a one-line test function docstring that explains the expected behavior in plain language.
+- Prefer docstrings over comments for class and test intent.
+- Do not apply this style section to BDD tests.
 
-```
-tests/
-├── conftest.py          # Root shared fixtures (available to all tiers)
-├── fixtures/            # Static test artifacts (data files, not pytest fixtures)
-│   ├── data/            # Small sample Parquet/CSV/JSON payloads
-│   ├── definitions/     # Example feature group .py files used as test inputs
-│   └── registries/      # Canned registry snapshots
-├── helpers/             # Shared Python helpers (factories, builders, asserters)
-│   ├── builders.py      # FeatureGroup / Feature / EntityKey builders
-│   ├── dataframes.py    # pandas / PyArrow DataFrame factories
-│   └── tmp_store.py     # Spin up a local provider rooted at tmp_path
-│
-├── unit/                # Fast, isolated, no I/O outside tmp_path
-│   └── <pkg>/           # Mirrors src/kitefs/<pkg>/
-│       └── test_<mod>.py
-│
-├── integration/         # Multi-module flows through internal layers (local provider)
-│   └── test_<flow>.py   # Named by user operation, not by module
-│
-└── bdd/                 # pytest-bdd acceptance tests
-    ├── features/        # .feature files (one per user-facing capability)
-    └── steps/           # Step implementations (one module per capability)
+Example:
+
+```python
+class TestFeatureValueValidation:
+    """Tests validation rules for feature values."""
+
+    def test_rejects_missing_entity_key(self) -> None:
+        """Rejects records that do not include the required entity key."""
+        ...
+
+    def test_accepts_valid_feature_value(self) -> None:
+        """Accepts records with the required entity key, timestamp, and value."""
+        ...
 ```
 
-## Where to Put a New Test
+Good test names:
 
-| You are testing…                          | Put it in…                                        |
-| ----------------------------------------- | ------------------------------------------------- |
-| A single class or function in isolation   | `tests/unit/<pkg>/test_<module>.py`               |
-| A flow crossing multiple internal modules | `tests/integration/test_<flow>.py`                |
-| User-visible behavior (SDK/CLI contracts) | `tests/bdd/features/<capability>.feature` + steps |
+- `test_rejects_missing_entity_key`
+- `test_accepts_utc_datetime`
+- `test_returns_latest_value`
+- `test_writes_partitioned_parquet`
 
-## Naming Conventions
+Avoid vague names:
 
-- Unit test files mirror source paths: `src/kitefs/validation/engine.py` → `tests/unit/validation/test_engine.py`.
-- Integration test files are named by flow: `test_apply_flow.py`, `test_ingest_to_offline.py`.
-- BDD feature files are named by capability: `apply.feature`, `ingest.feature`, `retrieval_offline.feature`.
+- `test_validation`
+- `test_error`
+- `test_success`
+- `test_case_1`
 
-## Running Tests
+Avoid overly long sentence-style names:
 
-```bash
-just test              # all tests
-just test-unit         # unit only
-just test-integration  # integration only
-just test-bdd          # BDD only
-just test-file <path>  # specific file
+- `test_it_should_reject_a_record_when_the_entity_key_is_missing_from_the_input_dataframe`
+
+For parametrized tests, keep the function name concise and use readable case IDs:
+
+```python
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param("house_id", True, id="valid_string_key"),
+        pytest.param("", False, id="empty_key"),
+    ],
+)
+def test_validates_entity_key_name(value: str, expected: bool) -> None:
+    """Validates accepted and rejected entity key names."""
+    ...
 ```
 
-## Guidelines
+Use Arrange / Act / Assert spacing:
 
-- All datetimes in test fixtures must be UTC.
-- Prefer `tmp_path` for any file I/O — never write to the source tree.
-- Keep unit tests fast: mock or fake external boundaries, parametrize over axes.
-- Integration tests use the real local provider rooted at `tmp_path`.
-- BDD scenarios must reference a `Doc reference: REQ-ID` tracing back to `docs/02-product-requirements.md`.
+```python
+def test_returns_latest_value(self) -> None:
+    """Returns the latest feature value at or before the event timestamp."""
+    feature_values = make_feature_values()
+    event_timestamp = datetime(2026, 1, 15, tzinfo=UTC)
+
+    result = lookup_latest_value(feature_values, event_timestamp)
+
+    assert result.value == 42
+```
+
+- Prefer direct assertions unless a repeated domain-specific assertion helper makes the test clearer.
+- Keep unit tests focused on one behavior.
+- Keep integration tests focused on one user flow or cross-module collaboration.
+- Use `pytest.mark.parametrize` for related cases, and always provide readable `ids` or `pytest.param(..., id="...")` values.
+- Use fixtures for reusable setup, but keep fixtures simple and local unless they are shared across many tests.

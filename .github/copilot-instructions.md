@@ -136,13 +136,28 @@ See `docs/06-api-and-cli-contracts.md`.
 
 ## Testing
 
-TBD
+- Use `pytest` for all tests. Use `pytest-bdd` for BDD coverage.
+- Keep tests proportional to the change. Add enough coverage to verify the documented behavior with confidence, but do not add speculative or ceremonial tests.
+- Use `tests/unit/` for fast, isolated checks of one module, class, or function.
+- Use `tests/integration/` for cross-module library flows that exercise collaboration between configuration, providers, stores, registry, SDK, and CLI layers.
+- Always use `tests/README.md` Unit and Integration Test Style Guidelines, when working on unit tests and integration tests.
+- Use `tests/bdd/` for documented, user-visible SDK and CLI behavior. Scenarios must describe public behavior and observable outcomes, not implementation detail.
+- Prefer the narrowest test layer that proves the behavior. Add integration tests only when a unit test cannot verify the contract. Add BDD tests only for user-visible behavior or when the task is explicitly BDD-scoped.
+- Reuse fixtures and helpers from `tests/fixtures/` and `helpers/` before introducing new test utilities.
+- During development, run the narrowest relevant command first: `just test-unit`, `just test-integration`, `just test-bdd`, or `just test-file <path>`.
 
 ---
 
 ## Implementation Workflow
 
-TBD
+- Work one refined task at a time. Keep scope single-purpose and aligned with `docs/02-product-requirements.md` through `docs/07-implementation-plan.md`.
+- Before coding, read only the authoritative docs needed for the task: requirements, behavior, architecture, storage contracts, API/CLI contracts, and task scope.
+- Implement the smallest vertical slice that satisfies the task. Do not broaden APIs, add speculative abstractions, or bundle unrelated cleanup.
+- For implementation tasks, write or update the matching tests in the same change, following the Testing section and the task's documented surface.
+- For BDD-only tasks, their implementation will taken care with help of a separete and special prompt. Intentionally skipping instructions for that in this line.
+- During implementation workflow, if a BDD scenario fails against the current codebase, treat that as a separate implementation gap. Do not weaken the scenario to fit the code.
+- Validate with the narrowest relevant checks first, then finish with `just clean-build` before considering the task complete.
+- If the docs are missing, ambiguous, or conflicting, stop and surface the gap instead of inventing behavior.
 
 ---
 
@@ -150,10 +165,13 @@ TBD
 
 - Prefer `just` recipes first. Check `justfile` or run `just` to list available recipes.
 - If a command is not available via `just`, use `uv`.
-- Before considering a change complete, `just clean-build` should pass.
 - Use project commands instead of manual formatting or lint-only edits:
   - `just format`
   - `just lint-fix`
+
+### Verification of Completion
+
+- Before considering a change complete, `just clean-build` should pass.
 
 ---
 
