@@ -132,7 +132,7 @@ Creates a consumer-only configuration for projects that read a remote registry a
 1. Check for `./kitefs.yaml` in the current directory.
 2. If absent, create `kitefs.yaml` only, with:
    - `runtime.target: remote` as default.
-   - A consumer `remote` section template with placeholders for `registry.bucket`, `online_store.table_prefix`, and other required fields; no offline store. The user must edit these placeholders before the first `list`, `describe`, or `get_online_features` call.
+   - A consumer `remote` section template with placeholders for `registry.bucket`, `online_store.dynamodb_table_prefix`, and other required fields; no offline store. The user must edit these placeholders before the first `list`, `describe`, or `get_online_features` call.
 3. Do not create definitions, data directories, examples, or `.gitignore` entries.
 4. Print a confirmation summary.
 

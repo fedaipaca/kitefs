@@ -25,10 +25,10 @@ This file defines what KiteFS data looks like at rest. It owns storage formats, 
 ## Conventions
 
 - Paths use `{placeholder}` for values resolved from configuration or the registry.
-- `{storage_root}` is the configured local storage root. In the local project scaffold, this root is `./feature_store`.
-- `{s3_prefix}` is the configured S3 object-key prefix. It comes from the remote S3 configuration and defaults to `kitefs_`.
+- `{storage_root}` is the fixed local-storage root convention. In the local project scaffold this is `./feature_store`. Local paths are not configurable per [FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration).
+- `{s3_prefix}` is the S3 object-key prefix from the remote configuration; it defaults to `kitefs`. It is joined as a path segment before the remaining object key (e.g., `s3://{bucket}/{s3_prefix}/registry.json`). This field and its prefixing convention are defined by this document; earlier docs commit to a configurable bucket name only.
 - All datetime values stored as text use the [ISO 8601 datetime format](#datetime-serialization-format) defined in this document.
-- All datetime values in storage are UTC, per [CON-006](02-product-requirements.md#con-006--utc-only-datetimes).
+- All text-format datetime values in storage are UTC (per [CON-006](02-product-requirements.md#con-006--utc-only-datetimes)); microsecond precision and the trailing-`Z` text format are defined by this document below.
 
 ---
 
@@ -94,14 +94,12 @@ These rules together guarantee that the same logical registry content produces b
 {
   "feature_groups": {
     "<group_name>": {}
-  },
-  "version": "1.0"
+  }
 }
 ```
 
 | Field            | Type   | Description                                                                         |
 | ---------------- | ------ | ----------------------------------------------------------------------------------- |
-| `version`        | string | Registry schema version. The MVP emits `"1.0"`.                                     |
 | `feature_groups` | object | Map from feature group name to its entry. Empty `{}` when no groups are registered. |
 
 ### Feature Group Entry Schema
@@ -200,7 +198,7 @@ Per-group offline directories (`{storage_root}/data/offline_store/{group_name}/`
 
 ### Partition Strategy
 
-Partitions are derived from each record's event timestamp value, not from the write time. This is what makes historical retrieval able to prune partitions by event-timestamp filters without scanning every file.
+Partitions are derived from each record's event timestamp value, not from the write time, using Hive-style partitioning. This is what makes historical retrieval able to prune partitions by event-timestamp filters without scanning every file.
 
 | Partition Level | Format      | Source                                                                            |
 | --------------- | ----------- | --------------------------------------------------------------------------------- |
@@ -219,7 +217,7 @@ Readers SHOULD use `pyarrow.dataset.dataset(..., partitioning='hive')` and pass 
 
 | Segment           | Meaning                                                                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`          | Write-origin prefix. MVP prefixes are `ing` for ingested data, `mock` for mock data, `sample` for sample data. |
+| `source`          | Write-origin prefix. The MVP prefix is `ing` for ingested data. `mock` and `sample` are reserved for post-MVP use (see [FR-MOCK-001](02-product-requirements.md#fr-mock-001--mock-data-generation), [FR-SAM-001](02-product-requirements.md#fr-sam-001--smart-sampling)). |
 | `YYYYMMDDTHHMMSS` | UTC wall-clock time of the write, with second precision and no separators.                                                                                                          |
 | `short_id`        | 6-character lowercase alphanumeric string derived from `uuid.uuid4().hex[:6]`. Makes file names collision-resistant within the same second; collision probability is acceptable for MVP scale.                                                      |
 
@@ -372,7 +370,7 @@ Online reads use a single `GetItem` call against the group's table, keyed by the
 
 If the group's table does not exist (the group has never been materialized), the provider returns an empty result. Access errors or schema mismatches fail with an actionable error.
 
-User-facing request validation still rejects unknown groups, offline-only groups, and unknown feature fields before the DynamoDB lookup. See [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online--retrieval) and [get_online_features](03-system-behavior.md#get_online_features).
+User-facing request validation still rejects unknown groups, offline-only groups, and unknown feature fields before the DynamoDB lookup. See [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online-retrieval) and [get_online_features](03-system-behavior.md#get_online_features).
 
 ### Write Protocol
 
@@ -422,7 +420,7 @@ These invariants hold at all times for any valid KiteFS storage state and are te
 | Invariant                          | Contract                                                                                                                                       |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Registry determinism               | The same logical registry content produces byte-for-byte identical JSON output, including the trailing newline.                                |
-| Registry validity                  | The registry is always a valid JSON document with `version` and `feature_groups` top-level fields.                                             |
+| Registry validity                  | The registry is always a valid JSON document with a `feature_groups` top-level field.                                                          |
 | Registry atomicity                 | A registry write either fully replaces the prior document or leaves it untouched. Partial documents are never visible to readers.              |
 | Offline partition determinism      | A record's event timestamp determines exactly one `year=YYYY/month=MM/` partition.                                                             |
 | Offline file immutability          | Existing Parquet files are immutable. New data is always represented by additional files.                                                      |

@@ -964,10 +964,10 @@ remote:
     bucket: "${KITEFS_REMOTE_REGISTRY_S3_BUCKET:-}"
     # S3 object-key prefix for the registry.
     # The registry is stored at s3://{bucket}/{s3_prefix}/registry.json.
-    # s3_prefix defaults to "kitefs_".
+    # s3_prefix defaults to "kitefs".
     # Example:
-    #   export KITEFS_REMOTE_REGISTRY_S3_PREFIX=kitefs_
-    s3_prefix: "${KITEFS_REMOTE_REGISTRY_S3_PREFIX:-kitefs_}"
+    #   export KITEFS_REMOTE_REGISTRY_S3_PREFIX=kitefs
+    s3_prefix: "${KITEFS_REMOTE_REGISTRY_S3_PREFIX:-kitefs}"
 
   offline_store:
     type: aws_s3
@@ -977,10 +977,10 @@ remote:
     bucket: "${KITEFS_REMOTE_OFFLINE_S3_BUCKET:-}"
     # S3 object-key prefix for offline store data.
     # Offline data is stored under s3://{bucket}/{s3_prefix}/data/offline_store/.
-    # s3_prefix defaults to "kitefs_".
+    # s3_prefix defaults to "kitefs".
     # Example:
-    #   export KITEFS_REMOTE_OFFLINE_S3_PREFIX=kitefs_
-    s3_prefix: "${KITEFS_REMOTE_OFFLINE_S3_PREFIX:-kitefs_}"
+    #   export KITEFS_REMOTE_OFFLINE_S3_PREFIX=kitefs
+    s3_prefix: "${KITEFS_REMOTE_OFFLINE_S3_PREFIX:-kitefs}"
 
   online_store:
     type: aws_dynamodb
@@ -1046,10 +1046,10 @@ remote:
     bucket: "${KITEFS_REMOTE_REGISTRY_S3_BUCKET:-}"
     # S3 object-key prefix for the registry.
     # The registry is stored at s3://{bucket}/{s3_prefix}/registry.json.
-    # s3_prefix defaults to "kitefs_".
+    # s3_prefix defaults to "kitefs".
     # Example:
-    #   export KITEFS_REMOTE_REGISTRY_S3_PREFIX=kitefs_
-    s3_prefix: "${KITEFS_REMOTE_REGISTRY_S3_PREFIX:-kitefs_}"
+    #   export KITEFS_REMOTE_REGISTRY_S3_PREFIX=kitefs
+    s3_prefix: "${KITEFS_REMOTE_REGISTRY_S3_PREFIX:-kitefs}"
 
   online_store:
     type: aws_dynamodb
@@ -1069,7 +1069,7 @@ Documented configurable values support `${VAR}` and `${VAR:-default}` interpolat
 remote:
   registry:
     bucket: "${KITEFS_REMOTE_REGISTRY_S3_BUCKET:-}"
-    s3_prefix: "${KITEFS_REMOTE_REGISTRY_S3_PREFIX:-kitefs_}"
+    s3_prefix: "${KITEFS_REMOTE_REGISTRY_S3_PREFIX:-kitefs}"
 ```
 
 When a variable is unset and no default is provided, expansion produces an empty string. When a default is provided after `:-`, that value is used if the variable is unset or empty.
