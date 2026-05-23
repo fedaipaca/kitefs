@@ -268,13 +268,13 @@ Users explicitly trigger materialization for one named online-eligible group or 
 
 **Acceptance Criteria:**
 
-*Request validation:*
+_Request validation:_
 
 - Materialization of a named offline-only group is rejected with an actionable error.
 - A named group that does not exist in the registry is rejected with an actionable error.
 - An all-groups run silently excludes offline-only groups from the target set.
 
-*Operational outcomes (returned in the result):*
+_Operational outcomes (returned in the result):_
 
 - Both named-group and all-groups runs report per-group outcomes (succeeded, skipped, failed) through the same result shape.
 - A group with no offline data is reported as skipped; its existing online state is preserved.
@@ -283,7 +283,7 @@ Users explicitly trigger materialization for one named online-eligible group or 
 - Re-running materialization for a failed group is the supported repair action.
 - A successful run updates `last_materialized_at` for each materialized group.
 
-*General:*
+_General:_
 
 - After successful materialization, the online store holds at most one row per entity key — the row with the latest event timestamp from the offline data.
 - Re-running materialization against unchanged offline data produces the same online state (idempotent).
@@ -303,7 +303,7 @@ Online data is stored in SQLite for the local runtime target and AWS DynamoDB fo
 - Identical SDK calls produce equivalent results against either runtime target for the same successfully materialized logical data.
 - Materialization failure handling follows [NFR-REL-002](#nfr-rel-002--online-materialization-failure-handling).
 
-#### FR-ONL-002 — Single-Entity Online  Retrieval
+#### FR-ONL-002 — Single-Entity Online Retrieval
 
 - **Priority:** Must Have
 - **Traces To:** G-1, PP-3
@@ -466,15 +466,15 @@ Installing the package exposes a CLI command. The CLI runs without requiring use
 
 The MVP CLI surface is the set of subcommands listed below. SDK operations not listed here are SDK-only in the MVP unless a later requirement adds CLI coverage. When a listed subcommand maps to an SDK operation, it produces the same observable outcome and does not define separate behavior.
 
-| CLI Subcommand | Maps To                                                                                 |
-| -------------- | --------------------------------------------------------------------------------------- |
-| `init`         | Producer project initialization (see [FR-CLI-003](#fr-cli-003--project-initialization)) |
-| `init-config`  | Consumer project initialization (see [FR-CLI-003](#fr-cli-003--project-initialization)) |
+| CLI Subcommand | Maps To                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| `init`         | Producer project initialization (see [FR-CLI-003](#fr-cli-003--project-initialization))          |
+| `init-config`  | Consumer project initialization (see [FR-CLI-003](#fr-cli-003--project-initialization))          |
 | `apply`        | [FR-REG-003](#fr-reg-003--registry-generation) (local generation; publish mode with `--publish`) |
-| `list`         | [FR-REG-004](#fr-reg-004--registry-discovery-list-and-describe) (list)                  |
-| `describe`     | [FR-REG-004](#fr-reg-004--registry-discovery-list-and-describe) (describe)              |
-| `ingest`       | [FR-ING-001](#fr-ing-001--offline-ingestion) (CSV/Parquet only)                         |
-| `materialize`  | [FR-MAT-001](#fr-mat-001--materialize-online-eligible-groups)                           |
+| `list`         | [FR-REG-004](#fr-reg-004--registry-discovery-list-and-describe) (list)                           |
+| `describe`     | [FR-REG-004](#fr-reg-004--registry-discovery-list-and-describe) (describe)                       |
+| `ingest`       | [FR-ING-001](#fr-ing-001--offline-ingestion) (CSV/Parquet only)                                  |
+| `materialize`  | [FR-MAT-001](#fr-mat-001--materialize-online-eligible-groups)                                    |
 
 **Acceptance Criteria:**
 

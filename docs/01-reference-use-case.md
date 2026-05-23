@@ -33,10 +33,10 @@ The database contains about 3 million listings for homes listed between 2024-01-
 
 The dataset covers 6 towns. PostgreSQL stores city and town names.
 
-| City | Towns |
-| --- | --- |
+| City     | Towns                    |
+| -------- | ------------------------ |
 | İstanbul | Kadıköy, Beşiktaş, Tuzla |
-| Ankara | Çankaya, Keçiören, Mamak |
+| Ankara   | Çankaya, Keçiören, Mamak |
 
 Assume the starting date for the first training workflow is `2025-01-01 00:00:00`.
 
@@ -48,67 +48,67 @@ The application database has three source tables. They remain the system of reco
 
 ### `cities`
 
-| Column | Type | Description |
-| --- | --- | --- |
-| `id` | integer | Primary key. |
-| `name` | string | City name. |
+| Column | Type    | Description  |
+| ------ | ------- | ------------ |
+| `id`   | integer | Primary key. |
+| `name` | string  | City name.   |
 
 Sample data:
 
-| id | name |
-| --- | --- |
-| 1 | İstanbul |
-| 2 | Ankara |
+| id  | name     |
+| --- | -------- |
+| 1   | İstanbul |
+| 2   | Ankara   |
 
 ### `towns`
 
-| Column | Type | Description |
-| --- | --- | --- |
-| `id` | integer | Primary key. |
+| Column    | Type    | Description                 |
+| --------- | ------- | --------------------------- |
+| `id`      | integer | Primary key.                |
 | `city_id` | integer | Foreign key to `cities.id`. |
-| `name` | string | Town name. |
+| `name`    | string  | Town name.                  |
 
 Sample data:
 
-| id | city_id | name |
-| --- | --- | --- |
-| 1 | 1 | Kadıköy |
-| 2 | 1 | Beşiktaş |
-| 3 | 1 | Tuzla |
-| 4 | 2 | Çankaya |
-| 5 | 2 | Keçiören |
-| 6 | 2 | Mamak |
+| id  | city_id | name     |
+| --- | ------- | -------- |
+| 1   | 1       | Kadıköy  |
+| 2   | 1       | Beşiktaş |
+| 3   | 1       | Tuzla    |
+| 4   | 2       | Çankaya  |
+| 5   | 2       | Keçiören |
+| 6   | 2       | Mamak    |
 
 ### `listings`
 
-| Column | Type | Description |
-| --- | --- | --- |
-| `id` | integer | Primary key. Unique listing identifier. |
-| `town_id` | integer | Foreign key to `towns.id`. |
-| `net_area` | integer | Usable area of the house in square meters. |
-| `number_of_rooms` | integer | Number of rooms. |
-| `build_year` | integer | Year the building was constructed. |
-| `asking_price` | float | Price set by the seller in TL. Becomes the sold price when `sold_at` is set. |
-| `created_at` | datetime | When the listing was first created. |
-| `updated_at` | datetime | When the listing was last modified. |
-| `sold_at` | datetime | When the listing was marked as sold. `NULL` if the listing is still active. |
+| Column            | Type     | Description                                                                  |
+| ----------------- | -------- | ---------------------------------------------------------------------------- |
+| `id`              | integer  | Primary key. Unique listing identifier.                                      |
+| `town_id`         | integer  | Foreign key to `towns.id`.                                                   |
+| `net_area`        | integer  | Usable area of the house in square meters.                                   |
+| `number_of_rooms` | integer  | Number of rooms.                                                             |
+| `build_year`      | integer  | Year the building was constructed.                                           |
+| `asking_price`    | float    | Price set by the seller in TL. Becomes the sold price when `sold_at` is set. |
+| `created_at`      | datetime | When the listing was first created.                                          |
+| `updated_at`      | datetime | When the listing was last modified.                                          |
+| `sold_at`         | datetime | When the listing was marked as sold. `NULL` if the listing is still active.  |
 
 A listing is sold when `sold_at IS NOT NULL`. The sold price is the `asking_price` at the time `sold_at` is set.
 
 Sample data:
 
-| id | town_id | net_area | number_of_rooms | build_year | asking_price | created_at | updated_at | sold_at |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1001 | 2 | 75 | 2 | 2020 | 2250000.00 | 2024-01-10 10:00:00 | 2024-03-15 11:00:00 | 2024-03-15 11:00:00 |
-| 1002 | 1 | 130 | 3 | 2015 | 3400000.00 | 2024-02-20 09:30:00 | 2024-04-05 14:00:00 | 2024-04-05 14:00:00 |
-| 1003 | 6 | 85 | 2 | 2002 | 1050000.00 | 2024-01-25 14:00:00 | 2024-03-18 14:30:00 | 2024-03-18 14:30:00 |
-| 1004 | 4 | 110 | 3 | 2010 | 2100000.00 | 2024-03-01 11:00:00 | 2024-05-22 16:00:00 | 2024-05-22 16:00:00 |
-| 1005 | 3 | 140 | 4 | 2008 | 2050000.00 | 2024-04-10 08:30:00 | 2024-06-11 10:15:00 | 2024-06-11 10:15:00 |
-| 1006 | 5 | 95 | 2 | 2017 | 1400000.00 | 2024-05-15 12:00:00 | 2024-07-03 13:45:00 | 2024-07-03 13:45:00 |
-| 1007 | 2 | 60 | 1 | 2019 | 1850000.00 | 2024-06-20 09:00:00 | 2024-08-20 09:30:00 | 2024-08-20 09:30:00 |
-| 1008 | 1 | 105 | 3 | 2000 | 2800000.00 | 2024-07-05 16:00:00 | 2024-09-14 15:00:00 | 2024-09-14 15:00:00 |
-| 1009 | 4 | 120 | 3 | 2012 | 2400000.00 | 2024-10-01 10:00:00 | 2024-11-15 11:00:00 | NULL |
-| 1010 | 3 | 90 | 2 | 2016 | 1250000.00 | 2024-01-05 09:00:00 | 2024-01-20 17:00:00 | 2024-01-20 17:00:00 |
+| id   | town_id | net_area | number_of_rooms | build_year | asking_price | created_at          | updated_at          | sold_at             |
+| ---- | ------- | -------- | --------------- | ---------- | ------------ | ------------------- | ------------------- | ------------------- |
+| 1001 | 2       | 75       | 2               | 2020       | 2250000.00   | 2024-01-10 10:00:00 | 2024-03-15 11:00:00 | 2024-03-15 11:00:00 |
+| 1002 | 1       | 130      | 3               | 2015       | 3400000.00   | 2024-02-20 09:30:00 | 2024-04-05 14:00:00 | 2024-04-05 14:00:00 |
+| 1003 | 6       | 85       | 2               | 2002       | 1050000.00   | 2024-01-25 14:00:00 | 2024-03-18 14:30:00 | 2024-03-18 14:30:00 |
+| 1004 | 4       | 110      | 3               | 2010       | 2100000.00   | 2024-03-01 11:00:00 | 2024-05-22 16:00:00 | 2024-05-22 16:00:00 |
+| 1005 | 3       | 140      | 4               | 2008       | 2050000.00   | 2024-04-10 08:30:00 | 2024-06-11 10:15:00 | 2024-06-11 10:15:00 |
+| 1006 | 5       | 95       | 2               | 2017       | 1400000.00   | 2024-05-15 12:00:00 | 2024-07-03 13:45:00 | 2024-07-03 13:45:00 |
+| 1007 | 2       | 60       | 1               | 2019       | 1850000.00   | 2024-06-20 09:00:00 | 2024-08-20 09:30:00 | 2024-08-20 09:30:00 |
+| 1008 | 1       | 105      | 3               | 2000       | 2800000.00   | 2024-07-05 16:00:00 | 2024-09-14 15:00:00 | 2024-09-14 15:00:00 |
+| 1009 | 4       | 120      | 3               | 2012       | 2400000.00   | 2024-10-01 10:00:00 | 2024-11-15 11:00:00 | NULL                |
+| 1010 | 3       | 90       | 2               | 2016       | 1250000.00   | 2024-01-05 09:00:00 | 2024-01-20 17:00:00 | 2024-01-20 17:00:00 |
 
 Listing 1009 is still active. Listing 1010 was sold in January 2024, which makes it the boundary case for the point-in-time join example.
 
@@ -129,12 +129,12 @@ The recommendation appears when a seller creates a new listing or updates an exi
 
 The model receives 4 numeric features and predicts a price.
 
-| Feature | Data Type | Source at Training Time | Source at Prediction Time | Description |
-| --- | --- | --- | --- | --- |
-| `net_area` | integer | Offline store, `listing_features.net_area` | Seller form input | Usable area of the house in square meters. |
-| `number_of_rooms` | integer | Offline store, `listing_features.number_of_rooms` | Seller form input | Number of rooms. |
-| `build_year` | integer | Offline store, `listing_features.build_year` | Seller form input | Year the building was constructed. |
-| `avg_price_per_sqm` | float | Offline store, joined from `town_market_features` | Online store lookup by `town_id` | Average sold price per square meter in the town, computed only from sold listings whose `sold_at` falls in the previous calendar month. |
+| Feature             | Data Type | Source at Training Time                           | Source at Prediction Time        | Description                                                                                                                             |
+| ------------------- | --------- | ------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `net_area`          | integer   | Offline store, `listing_features.net_area`        | Seller form input                | Usable area of the house in square meters.                                                                                              |
+| `number_of_rooms`   | integer   | Offline store, `listing_features.number_of_rooms` | Seller form input                | Number of rooms.                                                                                                                        |
+| `build_year`        | integer   | Offline store, `listing_features.build_year`      | Seller form input                | Year the building was constructed.                                                                                                      |
+| `avg_price_per_sqm` | float     | Offline store, joined from `town_market_features` | Online store lookup by `town_id` | Average sold price per square meter in the town, computed only from sold listings whose `sold_at` falls in the previous calendar month. |
 
 The training label is `sold_price`, which comes from `listings.asking_price` for rows where `sold_at IS NOT NULL`. It is available only during training.
 
@@ -144,10 +144,10 @@ The model does not receive `town_id` as a categorical feature in this example. `
 
 The reference use case has two feature groups:
 
-| Feature Group | Storage | Entity Key | Event Timestamp | Purpose |
-| --- | --- | --- | --- | --- |
-| `listing_features` | Offline only | `listing_id` | `sold_at` from `listings.sold_at` | Historical sold listing records for training. |
-| `town_market_features` | Offline and online | `town_id` | First moment of the next month at `00:00:00` | Monthly town-level market aggregate for training and serving. |
+| Feature Group          | Storage            | Entity Key   | Event Timestamp                              | Purpose                                                       |
+| ---------------------- | ------------------ | ------------ | -------------------------------------------- | ------------------------------------------------------------- |
+| `listing_features`     | Offline only       | `listing_id` | `sold_at` from `listings.sold_at`            | Historical sold listing records for training.                 |
+| `town_market_features` | Offline and online | `town_id`    | First moment of the next month at `00:00:00` | Monthly town-level market aggregate for training and serving. |
 
 The SQL in this section represents user-owned data preparation outside KiteFS. KiteFS stores the prepared rows it receives.
 
@@ -156,7 +156,7 @@ The SQL in this section represents user-owned data preparation outside KiteFS. K
 `listing_features` stores sold listing attributes and the training label. It is offline only because prediction-time house attributes come from the seller form or application database.
 
 ```python
-# definitions/listing_features.py
+# feature_store/definitions/listing_features.py
 
 from kitefs import FeatureGroup, Feature, EntityKey, EventTimestamp
 from kitefs import FeatureType, StorageTarget, Expect
@@ -208,16 +208,15 @@ listing_features = FeatureGroup(
 
 Fields stored:
 
-| Field | Type | Source | Role | Description |
-| --- | --- | --- | --- | --- |
-| `listing_id` | integer | `listings.id` | Entity key, Structural | Unique listing identifier. |
-| `town_id` | integer | `listings.town_id` | Join key, Structural | Links to `town_market_features`. Not a model feature. |
-| `net_area` | integer | `listings.net_area` | Model feature | Usable area in square meters. |
-| `number_of_rooms` | integer | `listings.number_of_rooms` | Model feature | Number of rooms. |
-| `build_year` | integer | `listings.build_year` | Model feature | Year the building was constructed. |
-| `sold_price` | float | `listings.asking_price` for sold rows | Label | Training target. |
-| `sold_at` | datetime | `listings.sold_at` | Event timestamp, Structural | Sale time used for time filtering and point-in-time joins. |
-
+| Field             | Type     | Source                                | Role                        | Description                                                |
+| ----------------- | -------- | ------------------------------------- | --------------------------- | ---------------------------------------------------------- |
+| `listing_id`      | integer  | `listings.id`                         | Entity key, Structural      | Unique listing identifier.                                 |
+| `town_id`         | integer  | `listings.town_id`                    | Join key, Structural        | Links to `town_market_features`. Not a model feature.      |
+| `net_area`        | integer  | `listings.net_area`                   | Model feature               | Usable area in square meters.                              |
+| `number_of_rooms` | integer  | `listings.number_of_rooms`            | Model feature               | Number of rooms.                                           |
+| `build_year`      | integer  | `listings.build_year`                 | Model feature               | Year the building was constructed.                         |
+| `sold_price`      | float    | `listings.asking_price` for sold rows | Label                       | Training target.                                           |
+| `sold_at`         | datetime | `listings.sold_at`                    | Event timestamp, Structural | Sale time used for time filtering and point-in-time joins. |
 
 Preparation query:
 
@@ -238,17 +237,17 @@ The prepared data is ingested monthly. The first run loads about 2 million sold 
 
 Sample `listing_features` rows from the source listing sample:
 
-| listing_id | town_id | net_area | number_of_rooms | build_year | sold_price | sold_at |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1010 | 3 | 90 | 2 | 2016 | 1250000.00 | 2024-01-20 17:00:00 |
-| 1001 | 2 | 75 | 2 | 2020 | 2250000.00 | 2024-03-15 11:00:00 |
-| 1003 | 6 | 85 | 2 | 2002 | 1050000.00 | 2024-03-18 14:30:00 |
-| 1002 | 1 | 130 | 3 | 2015 | 3400000.00 | 2024-04-05 14:00:00 |
-| 1004 | 4 | 110 | 3 | 2010 | 2100000.00 | 2024-05-22 16:00:00 |
-| 1005 | 3 | 140 | 4 | 2008 | 2050000.00 | 2024-06-11 10:15:00 |
-| 1006 | 5 | 95 | 2 | 2017 | 1400000.00 | 2024-07-03 13:45:00 |
-| 1007 | 2 | 60 | 1 | 2019 | 1850000.00 | 2024-08-20 09:30:00 |
-| 1008 | 1 | 105 | 3 | 2000 | 2800000.00 | 2024-09-14 15:00:00 |
+| listing_id | town_id | net_area | number_of_rooms | build_year | sold_price | sold_at             |
+| ---------- | ------- | -------- | --------------- | ---------- | ---------- | ------------------- |
+| 1010       | 3       | 90       | 2               | 2016       | 1250000.00 | 2024-01-20 17:00:00 |
+| 1001       | 2       | 75       | 2               | 2020       | 2250000.00 | 2024-03-15 11:00:00 |
+| 1003       | 6       | 85       | 2               | 2002       | 1050000.00 | 2024-03-18 14:30:00 |
+| 1002       | 1       | 130      | 3               | 2015       | 3400000.00 | 2024-04-05 14:00:00 |
+| 1004       | 4       | 110      | 3               | 2010       | 2100000.00 | 2024-05-22 16:00:00 |
+| 1005       | 3       | 140      | 4               | 2008       | 2050000.00 | 2024-06-11 10:15:00 |
+| 1006       | 5       | 95       | 2               | 2017       | 1400000.00 | 2024-07-03 13:45:00 |
+| 1007       | 2       | 60       | 1               | 2019       | 1850000.00 | 2024-08-20 09:30:00 |
+| 1008       | 1       | 105      | 3               | 2000       | 2800000.00 | 2024-09-14 15:00:00 |
 
 Listing 1009 is not present because it has no `sold_at` value.
 
@@ -257,7 +256,7 @@ Listing 1009 is not present because it has no `sold_at` value.
 `town_market_features` stores the average sold price per square meter for each town and month. It is stored offline for historical joins and online for low-latency serving.
 
 ```python
-# definitions/town_market_features.py
+# feature_store/definitions/town_market_features.py
 
 from kitefs import FeatureGroup, Feature, EntityKey, EventTimestamp
 from kitefs import FeatureType, StorageTarget, Expect
@@ -292,11 +291,11 @@ town_market_features = FeatureGroup(
 
 Fields stored:
 
-| Field | Type | Source | Role | Description |
-| --- | --- | --- | --- | --- |
-| `town_id` | integer | `towns.id` | Entity key | Unique town identifier. |
-| `avg_price_per_sqm` | float | `AVG(listings.asking_price / listings.net_area)` for sold listings in one town and one calendar month | Model feature | Average sold price per square meter, computed only from sold listings. |
-| `event_timestamp` | datetime | First moment of the next month at `00:00:00` | Structural | When the aggregate became available in UTC. |
+| Field               | Type     | Source                                                                                                | Role          | Description                                                            |
+| ------------------- | -------- | ----------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| `town_id`           | integer  | `towns.id`                                                                                            | Entity key    | Unique town identifier.                                                |
+| `avg_price_per_sqm` | float    | `AVG(listings.asking_price / listings.net_area)` for sold listings in one town and one calendar month | Model feature | Average sold price per square meter, computed only from sold listings. |
+| `event_timestamp`   | datetime | First moment of the next month at `00:00:00`                                                          | Structural    | When the aggregate became available in UTC.                            |
 
 Preparation query for January 2024 sales:
 
@@ -322,38 +321,38 @@ The `event_timestamp` is the first moment after the computation month. A value c
 
 Sample offline rows:
 
-| town_id | avg_price_per_sqm | event_timestamp |
-| --- | --- | --- |
-| 1 | 24500.00 | 2024-02-01 00:00:00 |
-| 2 | 28200.00 | 2024-02-01 00:00:00 |
-| 3 | 14100.00 | 2024-02-01 00:00:00 |
-| 4 | 18500.00 | 2024-02-01 00:00:00 |
-| 5 | 14200.00 | 2024-02-01 00:00:00 |
-| 6 | 11800.00 | 2024-02-01 00:00:00 |
-| 1 | 25100.00 | 2024-03-01 00:00:00 |
-| 2 | 28800.00 | 2024-03-01 00:00:00 |
-| 3 | 14300.00 | 2024-03-01 00:00:00 |
-| 4 | 18700.00 | 2024-03-01 00:00:00 |
-| 5 | 14300.00 | 2024-03-01 00:00:00 |
-| 6 | 11900.00 | 2024-03-01 00:00:00 |
-| 1 | 25400.00 | 2024-04-01 00:00:00 |
-| 2 | 29100.00 | 2024-04-01 00:00:00 |
-| 3 | 14500.00 | 2024-04-01 00:00:00 |
-| 4 | 18800.00 | 2024-04-01 00:00:00 |
-| 5 | 14400.00 | 2024-04-01 00:00:00 |
-| 6 | 12000.00 | 2024-04-01 00:00:00 |
-| ... | ... | ... |
+| town_id | avg_price_per_sqm | event_timestamp     |
+| ------- | ----------------- | ------------------- |
+| 1       | 24500.00          | 2024-02-01 00:00:00 |
+| 2       | 28200.00          | 2024-02-01 00:00:00 |
+| 3       | 14100.00          | 2024-02-01 00:00:00 |
+| 4       | 18500.00          | 2024-02-01 00:00:00 |
+| 5       | 14200.00          | 2024-02-01 00:00:00 |
+| 6       | 11800.00          | 2024-02-01 00:00:00 |
+| 1       | 25100.00          | 2024-03-01 00:00:00 |
+| 2       | 28800.00          | 2024-03-01 00:00:00 |
+| 3       | 14300.00          | 2024-03-01 00:00:00 |
+| 4       | 18700.00          | 2024-03-01 00:00:00 |
+| 5       | 14300.00          | 2024-03-01 00:00:00 |
+| 6       | 11900.00          | 2024-03-01 00:00:00 |
+| 1       | 25400.00          | 2024-04-01 00:00:00 |
+| 2       | 29100.00          | 2024-04-01 00:00:00 |
+| 3       | 14500.00          | 2024-04-01 00:00:00 |
+| 4       | 18800.00          | 2024-04-01 00:00:00 |
+| 5       | 14400.00          | 2024-04-01 00:00:00 |
+| 6       | 12000.00          | 2024-04-01 00:00:00 |
+| ...     | ...               | ...                 |
 
 Sample online rows after materializing values computed from December 2024 sales:
 
-| town_id | avg_price_per_sqm | event_timestamp |
-| --- | --- | --- |
-| 1 | 27200.00 | 2025-01-01 00:00:00 |
-| 2 | 31500.00 | 2025-01-01 00:00:00 |
-| 3 | 15800.00 | 2025-01-01 00:00:00 |
-| 4 | 19200.00 | 2025-01-01 00:00:00 |
-| 5 | 14800.00 | 2025-01-01 00:00:00 |
-| 6 | 12100.00 | 2025-01-01 00:00:00 |
+| town_id | avg_price_per_sqm | event_timestamp     |
+| ------- | ----------------- | ------------------- |
+| 1       | 27200.00          | 2025-01-01 00:00:00 |
+| 2       | 31500.00          | 2025-01-01 00:00:00 |
+| 3       | 15800.00          | 2025-01-01 00:00:00 |
+| 4       | 19200.00          | 2025-01-01 00:00:00 |
+| 5       | 14800.00          | 2025-01-01 00:00:00 |
+| 6       | 12100.00          | 2025-01-01 00:00:00 |
 
 ## Point-in-Time Join Example
 
@@ -372,19 +371,19 @@ KiteFS selects the latest matching market row.
 
 Listing 1002 has:
 
-| Field | Value |
-| --- | --- |
-| `town_id` | 1 |
+| Field     | Value               |
+| --------- | ------------------- |
+| `town_id` | 1                   |
 | `sold_at` | 2024-04-05 14:00:00 |
 
 Matching `town_market_features` rows for `town_id = 1`:
 
-| town_id | event_timestamp | avg_price_per_sqm | Outcome |
-| --- | --- | --- | --- |
-| 1 | 2024-02-01 00:00:00 | 24500.00 | Match; available before sale. |
-| 1 | 2024-03-01 00:00:00 | 25100.00 | Match; available before sale. |
-| 1 | 2024-04-01 00:00:00 | 25400.00 | Latest match; selected. |
-| 1 | 2024-05-01 00:00:00 | Not shown | Excluded; not available on April 5. |
+| town_id | event_timestamp     | avg_price_per_sqm | Outcome                             |
+| ------- | ------------------- | ----------------- | ----------------------------------- |
+| 1       | 2024-02-01 00:00:00 | 24500.00          | Match; available before sale.       |
+| 1       | 2024-03-01 00:00:00 | 25100.00          | Match; available before sale.       |
+| 1       | 2024-04-01 00:00:00 | 25400.00          | Latest match; selected.             |
+| 1       | 2024-05-01 00:00:00 | Not shown         | Excluded; not available on April 5. |
 
 Result: listing 1002 gets `town_market_features_avg_price_per_sqm = 25400.00` in the joined training result, computed from March 2024 sales for town 1 in the interval `[2024-03-01 00:00:00, 2024-04-01 00:00:00)`.
 
@@ -396,12 +395,12 @@ Because `2024-02-01 00:00:00` is after `2024-01-20 17:00:00`, listing 1010 has n
 
 ## What KiteFS Does Not Store
 
-| Item | Where It Lives | Why It Is Not in KiteFS |
-| --- | --- | --- |
-| Raw `cities`, `towns`, and `listings` tables | PostgreSQL application database | KiteFS stores curated features, not raw operational data. |
-| House attributes at serving time | Seller form or application database | They are immediately available in the prediction request. |
-| Town and city names | Application database | The model uses `avg_price_per_sqm` as the location signal in this example. |
-| Trained model artifact | Model registry or model serving system | KiteFS provides features to the model. It does not host the model. |
+| Item                                         | Where It Lives                         | Why It Is Not in KiteFS                                                    |
+| -------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------- |
+| Raw `cities`, `towns`, and `listings` tables | PostgreSQL application database        | KiteFS stores curated features, not raw operational data.                  |
+| House attributes at serving time             | Seller form or application database    | They are immediately available in the prediction request.                  |
+| Town and city names                          | Application database                   | The model uses `avg_price_per_sqm` as the location signal in this example. |
+| Trained model artifact                       | Model registry or model serving system | KiteFS provides features to the model. It does not host the model.         |
 
 ## Workflow Walkthrough
 
@@ -409,7 +408,7 @@ This walkthrough shows how the same reference use case exercises the main KiteFS
 
 ### 1. Define Feature Groups
 
-The data scientist writes the two feature definition files shown above under the project `definitions/` directory.
+The data scientist writes the two feature definition files shown above under the project `feature_store/definitions/` directory.
 
 ### 2. Apply Definitions
 
@@ -485,16 +484,16 @@ The `where` filter uses `sold_at` because `sold_at` is the physical column decla
 
 The returned training rows include base structural columns, selected base features, prefixed joined structural columns, and prefixed selected joined features. Base structural columns include the entity key, event timestamp, and join keys. All joined structural columns are returned with the joined feature group prefix. The sample result below uses the same listing IDs and feature names defined earlier. Market values for later months come from the omitted continuation of the monthly market table.
 
-| listing_id | sold_at | town_id | net_area | number_of_rooms | build_year | sold_price | town_market_features_town_id | town_market_features_event_timestamp | town_market_features_avg_price_per_sqm |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1001 | 2024-03-15 11:00:00 | 2 | 75 | 2 | 2020 | 2250000.00 | 2 | 2024-03-01 00:00:00 | 28800.00 |
-| 1003 | 2024-03-18 14:30:00 | 6 | 85 | 2 | 2002 | 1050000.00 | 6 | 2024-03-01 00:00:00 | 11900.00 |
-| 1002 | 2024-04-05 14:00:00 | 1 | 130 | 3 | 2015 | 3400000.00 | 1 | 2024-04-01 00:00:00 | 25400.00 |
-| 1004 | 2024-05-22 16:00:00 | 4 | 110 | 3 | 2010 | 2100000.00 | 4 | 2024-05-01 00:00:00 | 19000.00 |
-| 1005 | 2024-06-11 10:15:00 | 3 | 140 | 4 | 2008 | 2050000.00 | 3 | 2024-06-01 00:00:00 | 14900.00 |
-| 1006 | 2024-07-03 13:45:00 | 5 | 95 | 2 | 2017 | 1400000.00 | 5 | 2024-07-01 00:00:00 | 14600.00 |
-| 1007 | 2024-08-20 09:30:00 | 2 | 60 | 1 | 2019 | 1850000.00 | 2 | 2024-08-01 00:00:00 | 30200.00 |
-| 1008 | 2024-09-14 15:00:00 | 1 | 105 | 3 | 2000 | 2800000.00 | 1 | 2024-09-01 00:00:00 | 26800.00 |
+| listing_id | sold_at             | town_id | net_area | number_of_rooms | build_year | sold_price | town_market_features_town_id | town_market_features_event_timestamp | town_market_features_avg_price_per_sqm |
+| ---------- | ------------------- | ------- | -------- | --------------- | ---------- | ---------- | ---------------------------- | ------------------------------------ | -------------------------------------- |
+| 1001       | 2024-03-15 11:00:00 | 2       | 75       | 2               | 2020       | 2250000.00 | 2                            | 2024-03-01 00:00:00                  | 28800.00                               |
+| 1003       | 2024-03-18 14:30:00 | 6       | 85       | 2               | 2002       | 1050000.00 | 6                            | 2024-03-01 00:00:00                  | 11900.00                               |
+| 1002       | 2024-04-05 14:00:00 | 1       | 130      | 3               | 2015       | 3400000.00 | 1                            | 2024-04-01 00:00:00                  | 25400.00                               |
+| 1004       | 2024-05-22 16:00:00 | 4       | 110      | 3               | 2010       | 2100000.00 | 4                            | 2024-05-01 00:00:00                  | 19000.00                               |
+| 1005       | 2024-06-11 10:15:00 | 3       | 140      | 4               | 2008       | 2050000.00 | 3                            | 2024-06-01 00:00:00                  | 14900.00                               |
+| 1006       | 2024-07-03 13:45:00 | 5       | 95       | 2               | 2017       | 1400000.00 | 5                            | 2024-07-01 00:00:00                  | 14600.00                               |
+| 1007       | 2024-08-20 09:30:00 | 2       | 60       | 1               | 2019       | 1850000.00 | 2                            | 2024-08-01 00:00:00                  | 30200.00                               |
+| 1008       | 2024-09-14 15:00:00 | 1       | 105      | 3               | 2000       | 2800000.00 | 1                            | 2024-09-01 00:00:00                  | 26800.00                               |
 
 Listing 1010 is excluded by the `gte` filter. If it were included, its joined `town_market_features_avg_price_per_sqm` would be `NULL` because no market feature was available on `2024-01-20 17:00:00`.
 
@@ -554,12 +553,12 @@ A seller creates a new listing on `2025-06-05 10:00:00`.
 
 The seller enters:
 
-| Input | Value |
-| --- | --- |
-| Town | Kadıköy, stored as `town_id = 1` |
-| `net_area` | 130 |
-| `number_of_rooms` | 3 |
-| `build_year` | 2015 |
+| Input             | Value                            |
+| ----------------- | -------------------------------- |
+| Town              | Kadıköy, stored as `town_id = 1` |
+| `net_area`        | 130                              |
+| `number_of_rooms` | 3                                |
+| `build_year`      | 2015                             |
 
 The backend uses the form values and retrieves the latest market feature for town 1:
 
@@ -602,13 +601,13 @@ A seller updates an active listing on `2025-07-05 11:00:00`.
 
 The application database already has:
 
-| Field | Value |
-| --- | --- |
-| `id` | 50001 |
-| `town_id` | 5 |
-| `net_area` | 95 |
-| `number_of_rooms` | 2 |
-| `build_year` | 2008 |
+| Field             | Value |
+| ----------------- | ----- |
+| `id`              | 50001 |
+| `town_id`         | 5     |
+| `net_area`        | 95    |
+| `number_of_rooms` | 2     |
+| `build_year`      | 2008  |
 
 The backend retrieves the latest market feature for town 5:
 
@@ -649,10 +648,10 @@ On `2025-09-05 14:30:00`, listing 50001 is sold.
 
 The application updates the source database:
 
-| Field | Value |
-| --- | --- |
-| `listings.sold_at` | 2025-09-05 14:30:00 |
-| `listings.asking_price` | 1400000.00 |
+| Field                   | Value               |
+| ----------------------- | ------------------- |
+| `listings.sold_at`      | 2025-09-05 14:30:00 |
+| `listings.asking_price` | 1400000.00          |
 
 The next monthly batch job runs on `2025-10-01 00:00:00`.
 
@@ -666,18 +665,18 @@ It:
 
 ## Storage Summary
 
-| Feature Group | Field | Offline Store | Online Store |
-| --- | --- | --- | --- |
-| `listing_features` | `listing_id` | Yes | No |
-| `listing_features` | `town_id` | Yes | No |
-| `listing_features` | `net_area` | Yes | No |
-| `listing_features` | `number_of_rooms` | Yes | No |
-| `listing_features` | `build_year` | Yes | No |
-| `listing_features` | `sold_price` | Yes | No |
-| `listing_features` | `sold_at` | Yes | No |
-| `town_market_features` | `town_id` | Yes | Yes |
+| Feature Group          | Field               | Offline Store     | Online Store     |
+| ---------------------- | ------------------- | ----------------- | ---------------- |
+| `listing_features`     | `listing_id`        | Yes               | No               |
+| `listing_features`     | `town_id`           | Yes               | No               |
+| `listing_features`     | `net_area`          | Yes               | No               |
+| `listing_features`     | `number_of_rooms`   | Yes               | No               |
+| `listing_features`     | `build_year`        | Yes               | No               |
+| `listing_features`     | `sold_price`        | Yes               | No               |
+| `listing_features`     | `sold_at`           | Yes               | No               |
+| `town_market_features` | `town_id`           | Yes               | Yes              |
 | `town_market_features` | `avg_price_per_sqm` | Yes, full history | Yes, latest only |
-| `town_market_features` | `event_timestamp` | Yes | Yes, latest only |
+| `town_market_features` | `event_timestamp`   | Yes               | Yes, latest only |
 
 ## Example Consistency Notes
 
@@ -688,4 +687,3 @@ It:
 - `town_market_features.event_timestamp` is the first moment after the month used for the aggregate, always at `00:00:00` UTC.
 - Historical retrieval examples select only feature fields; structural fields are returned automatically, and joined output columns are prefixed with the joined group name.
 - Online serving examples retrieve only `avg_price_per_sqm` from `town_market_features`; house attributes come from the request or application database.
-
