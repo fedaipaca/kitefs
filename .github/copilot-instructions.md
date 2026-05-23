@@ -15,6 +15,54 @@ Treat these as guardrails. For behavior, contracts, and shapes, follow `docs/`.
 
 ---
 
+## Working Principles
+
+These apply to every task, before and during implementation.
+
+### Think before coding
+
+- State your assumptions explicitly before implementing. If uncertain, ask.
+- If multiple interpretations of the request exist, present them — don't pick silently.
+- If a simpler approach exists than what was asked, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+- Hidden confusion produces wasted work; surfaced confusion produces a better task.
+
+### Simplicity first
+
+- Ship the minimum code that solves the stated problem. Nothing speculative.
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for scenarios that cannot occur given the contracts.
+- If you wrote 200 lines and it could be 50, rewrite it. Ask yourself: "would a senior reviewer call this overcomplicated?" If yes, simplify before sending.
+
+### Surgical changes
+
+- Touch only what the task requires. Every changed line should trace directly to the request.
+- Don't "improve" adjacent code, comments, or formatting while you're in the file.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you would write it differently.
+- If you notice unrelated dead code or issues, mention them — don't fix them silently.
+- Clean up orphans **your** change created (now-unused imports, variables, helpers). Leave pre-existing dead code alone unless asked.
+
+### Goal-driven execution
+
+Turn every task into a verifiable goal before coding:
+
+- "Add validation" → write tests for invalid inputs, then make them pass.
+- "Fix the bug" → write a test that reproduces it, then make it pass.
+- "Refactor X" → confirm tests pass before and after; behavior unchanged.
+
+For multi-step tasks, state a short plan with a verification per step:
+
+<step> → verify: <check>
+<step> → verify: <check>
+<step> → verify: <check>
+
+Strong, verifiable success criteria let the work proceed without constant back-and-forth. If the criteria feel weak ("make it work"), tighten them before starting.
+
+---
+
 ## Tech Stack
 
 ### Language & Packaging
@@ -139,6 +187,7 @@ See `docs/03-system-behavior.md`, `docs/04-architecture.md`, `docs/05-data-and-s
 
 - One refined, single-purpose task at a time, aligned with `docs/02-product-requirements.md` through `docs/07-implementation-plan.md`.
 - Read only the authoritative docs needed for the task before coding.
+- Restate the task as a verifiable goal (see _Goal-driven execution_) before writing code.
 - Ship the smallest vertical slice that satisfies the task. No speculative abstractions or unrelated cleanup.
 - Update or add matching tests in the same change (except BDD-only tasks, which use a dedicated prompt).
 - If a BDD scenario fails against current code, treat it as an implementation gap — never weaken the scenario.
@@ -171,8 +220,12 @@ Unless the task explicitly requires otherwise, do not:
 
 ## When Unsure
 
-- Check docs
-- Check code
-- Preserve contracts
-- Keep the change small and explicit
+- Check docs.
+- Check code.
+- Preserve contracts.
+- Keep the change small and explicit.
 - Surface uncertainty instead of guessing.
+
+---
+
+**These guidelines are working when:** diffs contain fewer unrelated changes, fewer rewrites happen due to overcomplication, and clarifying questions arrive before implementation rather than after mistakes.
