@@ -242,7 +242,7 @@ Arrows point from a module to the module it depends on. Storage-specific details
 | ----- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | BB-01 | CLI                   | Parses command-line input, checks project context, delegates SDK-backed work to BB-02, renders user-facing output, and acts as the outermost error boundary.                          |
 | BB-02 | SDK (`FeatureStore`)  | User-facing Python orchestrator. Wires configuration, provider, registry, validation, store managers, and joins into the public workflow surface. Contains no provider-specific code. |
-| BB-03 | Definition Module     | Provides `FeatureGroup`, `EntityKey`, `EventTimestamp`, `Feature`, `Expect`, `JoinKey`, `Metadata`, and related enums for source definitions and schema metadata.                     |
+| BB-03 | Definition Module     | Provides `FeatureGroup`, `EntityKey`, `EventTimestamp`, `Feature`, `Expect`, `JoinKey`, `Metadata`, and related enums for source definitions and schema metadata. Performs single-definition structural validation at construction time per FR-DEF-001 and FR-DEF-002. |
 | BB-04 | Registry Manager      | Discovers feature definitions, validates their structure as a set, maintains the registry artifact, and answers registry lookups for the active runtime target.                       |
 | BB-05 | Validation Engine     | Performs stateless structural checks and feature-value checks against registered feature definitions. Returns validation reports; never reads or writes storage.                      |
 | BB-06 | Offline Store Manager | Coordinates offline feature data reads, writes, and event-timestamp filtering. Delegates physical I/O to BB-09's `OfflineStore` interface.                                            |
@@ -261,7 +261,7 @@ This matrix shows which blocks participate in each operation defined in [03-syst
 | `init`                    |   O   |       |       |       |       |       |       |       |       |       |
 | `init-config`             |   O   |       |       |       |       |       |       |       |       |       |
 | `apply` (and `--publish`) |   I   |   O   |   O   |   O   |       |       |       |       |   O   |   O   |
-| `pull` _(post-MVP)_       |       |   O   |       |   O   |       |       |       |       |   O   |   O   |
+| `pull` _(post-MVP)_       |   I   |   O   |       |   O   |       |       |       |       |   O   |   O   |
 | `list` / `describe`       |   I   |   O   |       |   O   |       |       |       |       |   O   |   O   |
 | `ingest`                  |   I   |   O   |       |   O   |   O   |   O   |       |       |   O   |   O   |
 | `get_historical_features` |       |   O   |       |   O   |   O   |   O   |       |   O   |   O   |   O   |
@@ -305,6 +305,8 @@ Direct dependencies:
 - Provider-specific imports (`boto3`, `sqlite3`, `s3fs`, etc.) outside provider implementations.
 - BB-01 calling core modules directly without going through BB-02.
 - Core modules importing one another bidirectionally (BB-06 and BB-07 are siblings; neither imports the other).
+
+**Scaffolding exception:** `kitefs init` and `kitefs init-config` are CLI-only operations that run before the SDK runtime, configuration, and provider exist (see [03-system-behavior.md](03-system-behavior.md)). Their scaffold writes (`kitefs.yaml`, the definitions example, managed data directories, the empty local registry file, `.gitignore`) use Python standard-library filesystem APIs directly from BB-01. This is the only place where BB-01 performs filesystem writes without going through BB-02 or the provider boundary, and it stays consistent with [AP-1](#architectural-design-principles) (library-first, no runtime service).
 
 ---
 
