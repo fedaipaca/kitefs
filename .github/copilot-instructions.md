@@ -17,6 +17,17 @@ Use these instructions as project guardrails. For detailed behavior, contracts, 
 
 ---
 
+## Instruction Files
+
+Directory-scoped instruction files extend these guardrails for specific areas:
+
+- `.github/instructions/src.instructions.md` — Python and implementation style rules for `src/`.
+- `.github/instructions/tests.instructions.md` — Unit and integration test style rules for `tests/`.
+
+When working in `src/` or `tests/`, apply the matching instruction file in addition to these guardrails.
+
+---
+
 ## Project Directory Structure
 
 ### Top-level
@@ -80,57 +91,11 @@ See `docs/03-system-behavior.md`, `docs/04-architecture.md`, and `docs/05-data-a
 
 ---
 
-## Python Guidelines
-
-Use Python 3.12-compatible idioms.
-
-Prefer:
-
-- precise type annotations
-- PEP 604 unions (`X | None`)
-- `dataclasses` when they reduce boilerplate
-- `pathlib.Path` for paths
-- small functions with explicit inputs and outputs
-- standard library and existing dependencies before new packages
-- explicit names over short or generic names
-- use comments and docstrings generously but purposefully. They should help me and future maintainers understand intent, public behavior, edge cases, architecture boundaries, and non-obvious implementation decisions.
-
-Avoid:
-
-- speculative abstractions
-- unused configuration knobs
-- future-proofing without a concrete caller
-- import-time I/O
-- expensive imports in core modules
-- provider-specific imports in storage-agnostic core modules
-
----
-
 ## Dependencies
 
 - Prefer existing project dependencies.
 - If a new dependency is justified, add it with `uv add`.
 - Do not use `pip install` for project dependency changes.
-
----
-
-## Error Handling
-
-- Expected user errors should not surface raw tracebacks.
-- Error messages should be actionable.
-- When possible, name the affected group, field, record, setting, path, or operation and indicate the next step.
-- Public SDK methods and CLI-backed behavior should use the shared KiteFS exception hierarchy.
-
-See `docs/06-api-and-cli-contracts.md`.
-
----
-
-## CLI and SDK
-
-- Keep SDK and CLI behavior aligned with `docs/06-api-and-cli-contracts.md`.
-- Use Click 8.x patterns for CLI changes.
-- Keep business logic in SDK/core modules, not CLI command handlers.
-- Put presentation concerns in the CLI layer.
 
 ---
 
