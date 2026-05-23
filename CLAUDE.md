@@ -1,4 +1,4 @@
-# KiteFS — Copilot Instructions
+# KiteFS — Claude Code Instructions
 
 ## Purpose
 
