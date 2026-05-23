@@ -38,29 +38,29 @@ The `kitefs` package exports a small, stable surface. Everything below is import
 
 ### Entry Point
 
-| Name           | Kind  | Purpose                                                |
-| -------------- | ----- | ------------------------------------------------------ |
-| `FeatureStore` | class | SDK entry point. Orchestrates all user-facing flows.   |
+| Name           | Kind  | Purpose                                              |
+| -------------- | ----- | ---------------------------------------------------- |
+| `FeatureStore` | class | SDK entry point. Orchestrates all user-facing flows. |
 
 ### Definition Types
 
-| Name             | Kind  | Purpose                                                                                       |
-| ---------------- | ----- | --------------------------------------------------------------------------------------------- |
-| `FeatureGroup`   | class | Declarative feature group definition.                                                         |
-| `EntityKey`      | class | Entity-key field declaration.                                                                 |
-| `EventTimestamp` | class | Event-timestamp field declaration.                                                            |
-| `Feature`        | class | Feature field declaration with type and optional expectations.                                |
-| `JoinKey`        | class | Join-key field declaration referencing another feature group.                                 |
-| `Metadata`       | class | Optional feature group metadata (description, owner, tags).                                   |
-| `Expect`         | class | Fluent builder for feature expectations.                                                      |
+| Name             | Kind  | Purpose                                                        |
+| ---------------- | ----- | -------------------------------------------------------------- |
+| `FeatureGroup`   | class | Declarative feature group definition.                          |
+| `EntityKey`      | class | Entity-key field declaration.                                  |
+| `EventTimestamp` | class | Event-timestamp field declaration.                             |
+| `Feature`        | class | Feature field declaration with type and optional expectations. |
+| `JoinKey`        | class | Join-key field declaration referencing another feature group.  |
+| `Metadata`       | class | Optional feature group metadata (description, owner, tags).    |
+| `Expect`         | class | Fluent builder for feature expectations.                       |
 
 ### Enums
 
-| Name             | Values                              | Purpose                                |
-| ---------------- | ----------------------------------- | -------------------------------------- |
-| `FeatureType`    | `STRING`, `INTEGER`, `FLOAT`, `DATETIME` | Supported field types.            |
-| `StorageTarget`  | `OFFLINE`, `OFFLINE_AND_ONLINE`     | Per-group storage target.              |
-| `ValidationMode` | `ERROR`, `FILTER`, `NONE`           | Per-operation validation mode.         |
+| Name             | Values                                   | Purpose                        |
+| ---------------- | ---------------------------------------- | ------------------------------ |
+| `FeatureType`    | `STRING`, `INTEGER`, `FLOAT`, `DATETIME` | Supported field types.         |
+| `StorageTarget`  | `OFFLINE`, `OFFLINE_AND_ONLINE`          | Per-group storage target.      |
+| `ValidationMode` | `ERROR`, `FILTER`, `NONE`                | Per-operation validation mode. |
 
 ### Return Type Classes
 
@@ -224,16 +224,16 @@ class FeatureStore:
 
 ### Methods Overview
 
-| Method                       | Returns                       | Maps To                                                                            |
-| ---------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
-| `apply`                      | `ApplyResult`                 | [FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation)           |
-| `pull`                       | `PullResult`                  | [FR-REG-005](02-product-requirements.md#fr-reg-005--remote-registry-pull) *(post-MVP)* |
-| `list_feature_groups`        | `list[FeatureGroupSummary]`   | [FR-REG-004](02-product-requirements.md#fr-reg-004--registry-discovery-list-and-describe) |
-| `describe_feature_group`     | `FeatureGroupDescription`     | [FR-REG-004](02-product-requirements.md#fr-reg-004--registry-discovery-list-and-describe) |
-| `ingest`                     | `IngestResult`                | [FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion)             |
-| `get_historical_features`    | `pandas.DataFrame`            | [FR-OFF-002](02-product-requirements.md#fr-off-002--historical-feature-retrieval) + [FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins) |
-| `materialize`                | `MaterializeResult`           | [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups) |
-| `get_online_features`        | `dict[str, Any]`              | [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online--retrieval) |
+| Method                    | Returns                     | Maps To                                                                                                                                                              |
+| ------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apply`                   | `ApplyResult`               | [FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation)                                                                                             |
+| `pull`                    | `PullResult`                | [FR-REG-005](02-product-requirements.md#fr-reg-005--remote-registry-pull) _(post-MVP)_                                                                               |
+| `list_feature_groups`     | `list[FeatureGroupSummary]` | [FR-REG-004](02-product-requirements.md#fr-reg-004--registry-discovery-list-and-describe)                                                                            |
+| `describe_feature_group`  | `FeatureGroupDescription`   | [FR-REG-004](02-product-requirements.md#fr-reg-004--registry-discovery-list-and-describe)                                                                            |
+| `ingest`                  | `IngestResult`              | [FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion)                                                                                               |
+| `get_historical_features` | `pandas.DataFrame`          | [FR-OFF-002](02-product-requirements.md#fr-off-002--historical-feature-retrieval) + [FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins) |
+| `materialize`             | `MaterializeResult`         | [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups)                                                                              |
+| `get_online_features`     | `dict[str, Any]`            | [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online--retrieval)                                                                                 |
 
 ### `apply`
 
@@ -265,7 +265,7 @@ def apply(self, *, publish: bool = False) -> ApplyResult: ...
 
 All discovered errors are collected and reported together before any registry write. Duplicate-name failures identify the conflicting group name.
 
-### `pull` *(post-MVP)*
+### `pull` _(post-MVP)_
 
 ```python
 def pull(self) -> PullResult: ...
@@ -339,14 +339,14 @@ def materialize(
 - A named group must be `OFFLINE_AND_ONLINE`; otherwise raises `FeatureGroupNotMaterializableError`.
 - Returns a `MaterializeResult` with per-group outcomes ([FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups)).
 
-*Raises (no `MaterializeResult` is returned):*
+_Raises (no `MaterializeResult` is returned):_
 
 - `FeatureGroupNotFoundError` — named group not in the registry.
 - `FeatureGroupNotMaterializableError` — named group is `OFFLINE` only.
 - `RegistryReadError` — registry unreadable.
 - `OfflineStoreReadError` — offline data unreadable.
 
-*Operational outcomes (returned in `MaterializeResult`):*
+_Operational outcomes (returned in `MaterializeResult`):_
 
 - Per-group write failures go into `MaterializeResult.failed`; the method does not raise `OnlineStoreWriteError`.
 - Groups with no offline data go into `MaterializeResult.skipped`.
@@ -388,7 +388,7 @@ class ApplyResult:
 
 `registered_groups` lists feature group names in the regenerated registry, sorted alphabetically. `published` is `True` when the remote registry was also written.
 
-### `PullResult` *(post-MVP)*
+### `PullResult` _(post-MVP)_
 
 ```python
 @dataclass(frozen=True)
@@ -514,21 +514,21 @@ class ValidationFailure:
 
 All return-type dataclasses below are importable as `from kitefs import <name>`.
 
-| Name                      | Kind      | Purpose                                                     |
-| ------------------------- | --------- | ----------------------------------------------------------- |
-| `ApplyResult`             | dataclass | Result of `apply()`.                                        |
-| `PullResult`              | dataclass | Result of `pull()`. *(post-MVP)*                            |
-| `FeatureGroupSummary`     | dataclass | Summary row returned by `list_feature_groups()`.            |
-| `FeatureGroupDescription` | dataclass | Full description returned by `describe_feature_group()`.   |
-| `FieldSpec`               | dataclass | Field detail nested in `FeatureGroupDescription`.           |
-| `JoinKeySpec`             | dataclass | Join-key detail nested in `FeatureGroupDescription`.        |
-| `MetadataSpec`            | dataclass | Metadata detail nested in `FeatureGroupDescription`.        |
-| `IngestResult`            | dataclass | Result of `ingest()`.                                       |
-| `ValidationReport`        | dataclass | Validation detail nested in `IngestResult`.                 |
-| `ValidationFailure`       | dataclass | Single failure nested in `ValidationReport`.                |
-| `MaterializeResult`       | dataclass | Result of `materialize()`.                                  |
-| `SkippedGroup`            | dataclass | Skipped-group detail nested in `MaterializeResult`.         |
-| `FailedGroup`             | dataclass | Failed-group detail nested in `MaterializeResult`.          |
+| Name                      | Kind      | Purpose                                                  |
+| ------------------------- | --------- | -------------------------------------------------------- |
+| `ApplyResult`             | dataclass | Result of `apply()`.                                     |
+| `PullResult`              | dataclass | Result of `pull()`. _(post-MVP)_                         |
+| `FeatureGroupSummary`     | dataclass | Summary row returned by `list_feature_groups()`.         |
+| `FeatureGroupDescription` | dataclass | Full description returned by `describe_feature_group()`. |
+| `FieldSpec`               | dataclass | Field detail nested in `FeatureGroupDescription`.        |
+| `JoinKeySpec`             | dataclass | Join-key detail nested in `FeatureGroupDescription`.     |
+| `MetadataSpec`            | dataclass | Metadata detail nested in `FeatureGroupDescription`.     |
+| `IngestResult`            | dataclass | Result of `ingest()`.                                    |
+| `ValidationReport`        | dataclass | Validation detail nested in `IngestResult`.              |
+| `ValidationFailure`       | dataclass | Single failure nested in `ValidationReport`.             |
+| `MaterializeResult`       | dataclass | Result of `materialize()`.                               |
+| `SkippedGroup`            | dataclass | Skipped-group detail nested in `MaterializeResult`.      |
+| `FailedGroup`             | dataclass | Failed-group detail nested in `MaterializeResult`.       |
 
 ---
 
@@ -538,28 +538,28 @@ The CLI command is `kitefs`, registered as a console script entry point ([FR-CLI
 
 ### Global Behavior
 
-| Topic                       | Contract                                                                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Help                        | `kitefs --help` and `kitefs <subcommand> --help` print usage and exit `0`.                                                        |
-| No subcommand               | `kitefs` with no subcommand prints help and exits non-zero.                                                                       |
-| Exit codes                  | `0` on success. `1` for user errors (invalid input, missing groups, configuration problems). `2` for unexpected internal errors. |
-| Error rendering             | Expected errors render as plain text on stderr without tracebacks ([CLI Error Boundary](03-system-behavior.md#cli-error-boundary)). |
-| stdout vs stderr            | Result content goes to stdout. Progress, prompts, and errors go to stderr.                                                        |
-| Color and ANSI              | Disabled when stdout is not a TTY. Respects the `NO_COLOR` environment variable.                                                  |
+| Topic            | Contract                                                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Help             | `kitefs --help` and `kitefs <subcommand> --help` print usage and exit `0`.                                                          |
+| No subcommand    | `kitefs` with no subcommand prints help and exits non-zero.                                                                         |
+| Exit codes       | `0` on success. `1` for user errors (invalid input, missing groups, configuration problems). `2` for unexpected internal errors.    |
+| Error rendering  | Expected errors render as plain text on stderr without tracebacks ([CLI Error Boundary](03-system-behavior.md#cli-error-boundary)). |
+| stdout vs stderr | Result content goes to stdout. Progress, prompts, and errors go to stderr.                                                          |
+| Color and ANSI   | Disabled when stdout is not a TTY. Respects the `NO_COLOR` environment variable.                                                    |
 
 ### Commands
 
 The table below is the complete MVP CLI command surface ([FR-CLI-002](02-product-requirements.md#fr-cli-002--required-cli-operations)). SDK methods not listed as subcommands (such as `get_historical_features` and `get_online_features`) are SDK-only in the MVP.
 
-| Subcommand     | Synopsis                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------- |
-| `init`         | `kitefs init`                                                                                  |
-| `init-config`  | `kitefs init-config`                                                                           |
-| `apply`        | `kitefs apply [--publish] [--no-confirm]`                                                      |
-| `list`         | `kitefs list [--format text\|json] [--output PATH]`                                            |
-| `describe`     | `kitefs describe <name> [--format text\|json] [--output PATH]`                                 |
-| `ingest`       | `kitefs ingest <name> <path>`                                                                  |
-| `materialize`  | `kitefs materialize [<name>]`                                                                  |
+| Subcommand    | Synopsis                                                       |
+| ------------- | -------------------------------------------------------------- |
+| `init`        | `kitefs init`                                                  |
+| `init-config` | `kitefs init-config`                                           |
+| `apply`       | `kitefs apply [--publish] [--no-confirm]`                      |
+| `list`        | `kitefs list [--format text\|json] [--output PATH]`            |
+| `describe`    | `kitefs describe <name> [--format text\|json] [--output PATH]` |
+| `ingest`      | `kitefs ingest <name> <path>`                                  |
+| `materialize` | `kitefs materialize [<name>]`                                  |
 
 #### `init`
 
@@ -575,10 +575,10 @@ Creates a consumer-only `kitefs.yaml` ([FR-CLI-003](02-product-requirements.md#f
 kitefs apply [--publish] [--no-confirm]
 ```
 
-| Flag            | Effect                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------- |
-| `--publish`     | Also overwrite the configured remote registry. Required for any remote registry write.                |
-| `--no-confirm`  | Skip the publish confirmation prompt. Has no effect without `--publish`.                              |
+| Flag           | Effect                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `--publish`    | Also overwrite the configured remote registry. Required for any remote registry write. |
+| `--no-confirm` | Skip the publish confirmation prompt. Has no effect without `--publish`.               |
 
 Without `--no-confirm`, `apply --publish` prints the prompt below to stderr and reads a line from stdin. Only the exact string `yes` continues; any other input aborts before configuration loading ([FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation)):
 
@@ -605,10 +605,10 @@ The "Published to remote registry." line is omitted when `--publish` is not set.
 kitefs list [--format text|json] [--output PATH]
 ```
 
-| Flag            | Default | Effect                                                                  |
-| --------------- | ------- | ----------------------------------------------------------------------- |
-| `--format`      | `text`  | Output format. `text` is a fixed-width human table. `json` is an array. |
-| `--output`      | stdout  | Write the result to the given file path instead of stdout.              |
+| Flag       | Default | Effect                                                                  |
+| ---------- | ------- | ----------------------------------------------------------------------- |
+| `--format` | `text`  | Output format. `text` is a fixed-width human table. `json` is an array. |
+| `--output` | stdout  | Write the result to the given file path instead of stdout.              |
 
 Reads the registry selected by the active runtime target ([`list`](03-system-behavior.md#list)). An empty registry prints `No feature groups registered.` in text mode or `[]` in JSON mode and exits `0`.
 
@@ -885,13 +885,13 @@ The CLI and SDK both read `./kitefs.yaml`. The generated contents differ dependi
 
 KiteFS generates two variants of `kitefs.yaml`:
 
-| Aspect                        | `kitefs init`                        | `kitefs init-config`                    |
-| ----------------------------- | ------------------------------------ | --------------------------------------- |
-| Intended project type         | Full producer project                | Consumer-only project (API / serving)   |
-| Default `runtime.target`      | `local`                              | `remote`                                |
-| Includes `remote.offline_store` | Yes                                | No                                      |
-| Includes `remote.registry`    | Yes                                  | Yes                                     |
-| Includes `remote.online_store` | Yes                                 | Yes                                     |
+| Aspect                          | `kitefs init`         | `kitefs init-config`                  |
+| ------------------------------- | --------------------- | ------------------------------------- |
+| Intended project type           | Full producer project | Consumer-only project (API / serving) |
+| Default `runtime.target`        | `local`               | `remote`                              |
+| Includes `remote.offline_store` | Yes                   | No                                    |
+| Includes `remote.registry`      | Yes                   | Yes                                   |
+| Includes `remote.online_store`  | Yes                   | Yes                                   |
 
 Both variants share the same top-level keys (`version`, `project`, `runtime`, `remote`) and the same environment-variable interpolation syntax. The structural difference is that `kitefs init-config` omits `remote.offline_store` because consumer projects do not ingest or retrieve historical features.
 
@@ -899,11 +899,11 @@ Both variants share the same top-level keys (`version`, `project`, `runtime`, `r
 
 The `type` fields in `remote.registry`, `remote.offline_store`, and `remote.online_store` are fixed literal values. They identify the only supported backend for each store in the MVP. They are not user-selectable backend options and they do not support environment-variable interpolation.
 
-| Setting                      | Required value  | Present in                          |
-| ---------------------------- | --------------- | ----------------------------------- |
-| `remote.registry.type`       | `aws_s3`        | `kitefs init`, `kitefs init-config` |
-| `remote.offline_store.type`  | `aws_s3`        | `kitefs init` only                  |
-| `remote.online_store.type`   | `aws_dynamodb`  | `kitefs init`, `kitefs init-config` |
+| Setting                     | Required value | Present in                          |
+| --------------------------- | -------------- | ----------------------------------- |
+| `remote.registry.type`      | `aws_s3`       | `kitefs init`, `kitefs init-config` |
+| `remote.offline_store.type` | `aws_s3`       | `kitefs init` only                  |
+| `remote.online_store.type`  | `aws_dynamodb` | `kitefs init`, `kitefs init-config` |
 
 Any other value — including an interpolation expression such as `${SOME_VAR:-aws_s3}` — is invalid configuration. Validation raises `ConfigurationError` identifying the exact setting and expected value ([FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration)).
 
@@ -1090,10 +1090,10 @@ runtime:
 
 Local paths are fixed by convention and are not configurable in the MVP ([FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration)):
 
-| Artifact          | Path                                                | Used by `init` | Used by `init-config` |
-| ----------------- | --------------------------------------------------- | --------------- | --------------------- |
-| Configuration     | `./kitefs.yaml`                                     | Yes             | Yes                   |
-| Definitions       | `./feature_store/definitions/`                      | Yes             | No                    |
-| Registry          | `./feature_store/registry.json`                     | Yes             | Yes                   |
-| Offline data root | `./feature_store/data/offline_store/`               | Yes             | No                    |
-| Online database   | `./feature_store/data/online_store/online.db`       | Yes             | Yes                   |
+| Artifact          | Path                                          | Used by `init` | Used by `init-config` |
+| ----------------- | --------------------------------------------- | -------------- | --------------------- |
+| Configuration     | `./kitefs.yaml`                               | Yes            | Yes                   |
+| Definitions       | `./feature_store/definitions/`                | Yes            | No                    |
+| Registry          | `./feature_store/registry.json`               | Yes            | Yes                   |
+| Offline data root | `./feature_store/data/offline_store/`         | Yes            | No                    |
+| Online database   | `./feature_store/data/online_store/online.db` | Yes            | No                    |

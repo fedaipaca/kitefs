@@ -51,10 +51,10 @@ Missing and invalid configuration are distinct failures. Missing configuration p
 
 The active runtime target comes from configuration. Supported values are `local` and `remote` ([FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration)). The provider is built once at startup and passed to registry, offline store, and online store components. Core logic uses the provider boundary, not direct filesystem, S3, SQLite, or DynamoDB calls ([FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary)).
 
-| Runtime target | Offline store      | Online store | Registry location              |
-| -------------- | ------------------ | ------------ | ------------------------------ |
-| `local`        | Local filesystem   | SQLite       | `./feature_store/registry.json` |
-| `remote`       | S3                 | DynamoDB     | Configured remote location     |
+| Runtime target | Offline store    | Online store | Registry location               |
+| -------------- | ---------------- | ------------ | ------------------------------- |
+| `local`        | Local filesystem | SQLite       | `./feature_store/registry.json` |
+| `remote`       | S3               | DynamoDB     | Configured remote location      |
 
 Remote store `type` fields are validation guards, not runtime backend selectors. Configuration loading validates these fields as fixed literal values before provider construction. When an operation needs a specific remote store and the corresponding `type` field is missing or unsupported, configuration validation fails before any store-level work begins. The exact supported values are defined in [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md#fixed-remote-store-types).
 
@@ -70,13 +70,13 @@ All datetime checks use the UTC rule in [CON-006](02-product-requirements.md#con
 
 The table below is not repeated in each operation section.
 
-| Failure class | Default handling |
-| --- | --- |
-| Missing `./kitefs.yaml` | Stop before SDK work and suggest initialization. |
-| Invalid configuration | Stop and identify the setting. |
-| Required store or setting is unavailable | Stop before operation-specific work and identify the missing capability. |
-| Provider read or write fails | Fail the operation. Operation-specific rollback or partial-success rules are stated where they differ. |
-| Missing or invalid remote credentials | Fail without leaking secret values; identify the affected store when known. |
+| Failure class                            | Default handling                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Missing `./kitefs.yaml`                  | Stop before SDK work and suggest initialization.                                                       |
+| Invalid configuration                    | Stop and identify the setting.                                                                         |
+| Required store or setting is unavailable | Stop before operation-specific work and identify the missing capability.                               |
+| Provider read or write fails             | Fail the operation. Operation-specific rollback or partial-success rules are stated where they differ. |
+| Missing or invalid remote credentials    | Fail without leaking secret values; identify the affected store when known.                            |
 
 ### CLI Error Boundary
 
@@ -116,10 +116,10 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                  | Outcome                                  |
-| ------------------------------------------ | ---------------------------------------- |
-| `./kitefs.yaml` already exists | Exit non-zero. No files are overwritten. |
-| Scaffold creation fails | Exit non-zero. No partial scaffold is exposed. |
+| Condition                      | Outcome                                        |
+| ------------------------------ | ---------------------------------------------- |
+| `./kitefs.yaml` already exists | Exit non-zero. No files are overwritten.       |
+| Scaffold creation fails        | Exit non-zero. No partial scaffold is exposed. |
 
 ---
 
@@ -148,10 +148,10 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                         | Outcome                                  |
-| --------------------------------- | ---------------------------------------- |
-| `./kitefs.yaml` already exists | Exit non-zero. No files are overwritten. |
-| Config creation fails | Exit non-zero. No partial config is exposed. |
+| Condition                      | Outcome                                      |
+| ------------------------------ | -------------------------------------------- |
+| `./kitefs.yaml` already exists | Exit non-zero. No files are overwritten.     |
+| Config creation fails          | Exit non-zero. No partial config is exposed. |
 
 ---
 
@@ -207,18 +207,18 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                           | Outcome                                                                                         |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Publish confirmation is not exact `yes` | Exit non-zero before configuration loading, discovery, validation, or writes. |
-| Remote registry is not configured in publish mode | No registry is changed. |
-| No definitions are discovered | Registry unchanged; report that at least one group is needed. |
-| Any definition is invalid | Report all discovered definition errors together; registry unchanged. |
-| Local registry write fails | Previous local registry remains; remote registry is not changed. |
-| Remote registry write fails in publish mode | Operation fails; local working registry may already contain the regenerated content. |
+| Condition                                         | Outcome                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Publish confirmation is not exact `yes`           | Exit non-zero before configuration loading, discovery, validation, or writes.        |
+| Remote registry is not configured in publish mode | No registry is changed.                                                              |
+| No definitions are discovered                     | Registry unchanged; report that at least one group is needed.                        |
+| Any definition is invalid                         | Report all discovered definition errors together; registry unchanged.                |
+| Local registry write fails                        | Previous local registry remains; remote registry is not changed.                     |
+| Remote registry write fails in publish mode       | Operation fails; local working registry may already contain the regenerated content. |
 
 ---
 
-## `pull` *(Should Have — post-MVP)*
+## `pull` _(Should Have — post-MVP)_
 
 Reads the configured remote registry and overwrites the local working registry ([FR-REG-005](02-product-requirements.md#fr-reg-005--remote-registry-pull)). Pull is destructive to local state and SDK-only in the MVP.
 
@@ -246,11 +246,11 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                              | Outcome                                              |
-| -------------------------------------- | ---------------------------------------------------- |
-| Remote registry is not configured | Operation fails. |
-| Remote registry does not exist | Operation fails; message suggests running `apply --publish` first. |
-| Local registry cannot be overwritten | Operation fails. Previous local content is preserved. |
+| Condition                            | Outcome                                                            |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| Remote registry is not configured    | Operation fails.                                                   |
+| Remote registry does not exist       | Operation fails; message suggests running `apply --publish` first. |
+| Local registry cannot be overwritten | Operation fails. Previous local content is preserved.              |
 
 ---
 
@@ -287,8 +287,8 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition | Outcome |
-| --- | --- |
+| Condition                                | Outcome                                                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location and suggesting initialization or publish. |
 
 An existing but empty registry returns an empty result, not an error.
@@ -327,10 +327,10 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition | Outcome |
-| --- | --- |
+| Condition                                | Outcome                                                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location and suggesting initialization or publish. |
-| Group is not registered | Operation fails and suggests valid names when available. |
+| Group is not registered                  | Operation fails and suggests valid names when available.                                                             |
 
 ---
 
@@ -344,7 +344,7 @@ Appends prepared feature data to the offline store for one registered feature gr
 2. Load the registry and resolve the target feature group; abort if not found.
 3. Normalize the input into a DataFrame.
 4. Shape check: required structural columns and declared feature columns are present. Extra columns are dropped, not rejected.
-5. Apply the group's `ingestion_validation` mode ([FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation)).
+5. Apply the group's `ingestion_validation` mode ([FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation)): structural checks run in all modes; feature checks are controlled by the mode.
 6. If no rows are accepted, return a zero-row summary.
 7. Write accepted rows as append-only Parquet ([FR-ING-002](02-product-requirements.md#fr-ing-002--append-only-writes), [NFR-REL-001](02-product-requirements.md#nfr-rel-001--atomic-offline-file-writes)).
 8. Return an ingestion summary with accepted row count and validation report when produced.
@@ -372,14 +372,14 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                          | Outcome                                                                       |
-| -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Target group is not registered | No data is written. |
-| Input cannot be normalized | No data is written. |
-| Required structural or feature columns are missing | No data is written. |
-| Validation rejects the batch | No data is written; return the validation report when produced. |
-| Validation filters all rows | Return a zero-row summary. |
-| Offline write fails | No partial Parquet file is exposed. |
+| Condition                                          | Outcome                                                         |
+| -------------------------------------------------- | --------------------------------------------------------------- |
+| Target group is not registered                     | No data is written.                                             |
+| Input cannot be normalized                         | No data is written.                                             |
+| Required structural or feature columns are missing | No data is written.                                             |
+| Validation rejects the batch                       | No data is written; return the validation report when produced. |
+| Validation filters all rows                        | Return a zero-row summary.                                      |
+| Offline write fails                                | No partial Parquet file is exposed.                             |
 
 ---
 
@@ -393,9 +393,9 @@ Reads historical offline data. The base feature group drives output rows. An opt
 2. Validate request shape before reading data: `select` is required and its shape must match the presence or absence of `join` (flat list or `"*"` without join; dict keyed by group name with join). Validate groups, selected fields, timestamp filters, and join shape.
 3. Read base offline data; apply the event-timestamp filter.
 4. If the base result is empty, return an empty DataFrame with the expected schema.
-5. Apply base field selection and base validation per the base group's `offline_retrieval_validation` mode.
+5. Apply base field selection and base validation per the base group's `offline_retrieval_validation` mode: structural checks run in all modes; feature checks are controlled by the mode.
 6. If no join is requested, return the base result.
-7. Otherwise read the joined group's offline data, apply joined field selection, and validate it using the joined group's own mode.
+7. Otherwise read the joined group's offline data, apply joined field selection, and validate it using the joined group's own mode: structural checks run in all modes; feature checks are controlled by the mode.
 8. Perform the point-in-time join: for each base row, select the most recent joined row whose event timestamp is ≤ the base row's. Joined columns are prefixed with the joined group name; base columns are unprefixed.
 9. Return the joined result.
 
@@ -422,12 +422,12 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                              | Outcome                                                                  |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Request shape is invalid | No offline data is read. |
-| Base validation rejects the result | Operation fails with validation report. |
-| Joined validation rejects the result | Operation fails with validation report. |
-| Either side filters rows | Rows are excluded independently before the final result is returned. |
+| Condition                            | Outcome                                                              |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| Request shape is invalid             | No offline data is read.                                             |
+| Base validation rejects the result   | Operation fails with validation report.                              |
+| Joined validation rejects the result | Operation fails with validation report.                              |
+| Either side filters rows             | Rows are excluded independently before the final result is returned. |
 
 ---
 
@@ -446,9 +446,9 @@ Builds the online store from offline data for one named online-eligible group or
    - Read all offline data for the group.
    - If no offline data exists, skip the group; the existing online state is preserved.
    - Otherwise, extract the latest row per entity key by event timestamp.
-    - Write all latest rows to the online store using the selected provider's write protocol.
-    - If the provider reports full write success, update `last_materialized_at`.
-    - If the provider reports failure, mark the group failed and leave `last_materialized_at` unchanged.
+   - Write all latest rows to the online store using the selected provider's write protocol.
+   - If the provider reports full write success, update `last_materialized_at`.
+   - If the provider reports failure, mark the group failed and leave `last_materialized_at` unchanged.
 5. In all-groups runs, a per-group failure does not roll back already-successful groups and does not stop the run.
 6. Return a per-group summary (succeeded, skipped, failed). The same summary shape is returned for both named-group and all-groups runs.
 
@@ -482,14 +482,14 @@ flowchart TD
 
 Request-validation failures (missing group, offline-only named group) abort before the processing loop. All other outcomes appear in the returned summary.
 
-| Condition                                              | Outcome                                                                                |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Named group is missing or offline-only | Abort with an exception. No target is materialized. |
-| All-groups run has no online-eligible groups | Return an empty summary. |
-| Target has no offline data | Skip the group and preserve existing online state. |
-| SQLite write fails | Mark that group failed; the prior committed online state remains visible, and `last_materialized_at` is unchanged. |
-| DynamoDB write fails | Mark that group failed; items written in earlier batches may be visible, `last_materialized_at` is unchanged, and re-running materialization repairs the group. |
-| One target fails in an all-groups run | Mark that group failed and continue with other groups. |
+| Condition                                    | Outcome                                                                                                                                                         |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Named group is missing or offline-only       | Abort with an exception. No target is materialized.                                                                                                             |
+| All-groups run has no online-eligible groups | Return an empty summary.                                                                                                                                        |
+| Target has no offline data                   | Skip the group and preserve existing online state.                                                                                                              |
+| SQLite write fails                           | Mark that group failed; the prior committed online state remains visible, and `last_materialized_at` is unchanged.                                              |
+| DynamoDB write fails                         | Mark that group failed; items written in earlier batches may be visible, `last_materialized_at` is unchanged, and re-running materialization repairs the group. |
+| One target fails in an all-groups run        | Mark that group failed and continue with other groups.                                                                                                          |
 
 ---
 
@@ -527,9 +527,9 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                              | Outcome                                  |
-| ------------------------------------------------------ | ---------------------------------------- |
-| Group is missing or offline-only | Operation fails. |
-| `where` field is not the entity key, operator is not `eq`, or value type is incompatible | Operation fails. |
-| Selected field is not registered | Operation fails. |
-| No online row or item exists for the entity key | Return an empty result. |
+| Condition                                                                                | Outcome                 |
+| ---------------------------------------------------------------------------------------- | ----------------------- |
+| Group is missing or offline-only                                                         | Operation fails.        |
+| `where` field is not the entity key, operator is not `eq`, or value type is incompatible | Operation fails.        |
+| Selected field is not registered                                                         | Operation fails.        |
+| No online row or item exists for the entity key                                          | Return an empty result. |
