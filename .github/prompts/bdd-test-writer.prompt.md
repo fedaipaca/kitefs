@@ -1,95 +1,100 @@
 ---
-description: "Write runnable pytest-bdd tests from a BDD task ID or full BDD task content. Use when implementing feature files, scenarios, and step definitions under tests/bdd."
 name: "BDD Test Writer"
+description: "Write runnable pytest-bdd coverage for one BDD task ID or full BDD task spec."
 argument-hint: "BDD-012 | <paste full BDD task spec>"
 ---
 
 # BDD Test Writer
 
-Write the BDD tests for a single BDD task. This prompt consumes a finished BDD task spec, such as the output of [bdd-task.prompt.md](./bdd-task.prompt.md), and turns it into runnable `pytest` + `pytest-bdd` coverage.
-
-Assume the general repository guardrails in [copilot-instructions.md](../copilot-instructions.md) are already active. This prompt adds only task-specific rules for authoring BDD tests.
+Write complete, runnable BDD tests for exactly one BDD task.
 
 ## Input
 
 `$ARGUMENTS` is either:
 
-- a BDD task ID such as `BDD-012`
+- a BDD task ID, e.g. `BDD-012`
 - the full BDD task content
 
-If the input is only an ID, first resolve the exact task text from the current chat context or workspace artifacts, including `docs/07-implementation-plan.md` entries with the same ID or test name.
-If you cannot resolve it exactly, stop and ask for the full task content.
+If only an ID is provided:
+
+1. Resolve the exact task text from the current chat context or workspace artifacts.
+2. Include matching entries from `docs/07-implementation-plan.md` when relevant.
+3. If the task cannot be resolved exactly, stop and ask for the full task content.
 
 ## Scope
 
-Produce complete, ready-to-run BDD tests under `tests/bdd`, including any necessary:
+Create or update only BDD test assets under `tests/bdd`, such as:
 
-- feature files in `tests/bdd/features/`
-- step definition files in `tests/bdd/steps/`
-- BDD-specific fixtures or support code, only when existing ones are insufficient
+- `tests/bdd/features/*.feature`
+- `tests/bdd/steps/*.py`
+- BDD-specific fixtures or support code, only when existing helpers are insufficient
+
+Do not modify application code.
 
 ## Workflow
 
-1. Resolve the BDD task and read only the files needed to implement it.
-2. Inspect existing related BDD tests, shared fixtures, and relevant docs for the covered behavior.
-3. Confirm the task has enough detail to write unambiguous tests.
-4. Write the tests.
-5. Run the narrowest relevant BDD command.
-6. If tests fail but correctly match the task and docs, stop and report per Validation Rules.
+1. Resolve the BDD task.
+2. Read only the docs, existing BDD tests, fixtures, helpers, and code needed to author the tests.
+3. Verify the task defines observable behavior clearly enough to test.
+4. Write feature scenarios and step definitions.
+5. Run the narrowest relevant BDD validation command.
+6. If tests fail and tests correctly match the task and docs; then stop and report the failure.
 
 ## Stop Conditions
 
-Stop immediately when any required detail is missing, ambiguous, or conflicting. Do not guess. Report the issue so the user can answer it.
+Stop instead of guessing when required details are missing, ambiguous, or conflicting.
 
-Examples of stop-worthy gaps:
+Stop-worthy gaps include:
 
-- the task does not define the observable behavior precisely enough
-- the docs and the task disagree on inputs, outputs, or errors
-- an expected error type or message is not clear enough to assert
-- required setup data or fixture shape is missing
+- unclear observable behavior
+- task/docs/code conflict
+- unspecified expected error type or message
+- missing setup data or fixture shape
+- unresolved BDD task ID
 
-When stopping, provide:
+When stopping, report:
 
 - the blocking issue
-- why it prevents writing reliable BDD tests
-- the exact question or missing detail the user should answer
+- why it prevents reliable BDD tests
+- the exact question the user must answer
 
 ## Authoring Rules
 
-- Use `pytest` and `pytest-bdd` only.
+- Use `pytest` and `pytest-bdd`.
 - Keep scenarios user-visible and behavior-focused.
-- Write clear feature titles, scenario names, and step text.
-- Cover the behavior in the task completely: happy path, documented error paths, and documented boundary cases.
-- Do not add speculative scenarios or undocumented behavior.
-- Prefer concrete example data over placeholders.
-- Keep step definitions readable, deterministic, and minimal.
-- Keep assertions strong. Do not weaken expectations to fit current code.
-- Reuse existing fixtures and helpers for shared setup instead of duplicating code across steps.
+- Cover only the task’s documented behavior:
+  - happy paths
+  - documented error paths
+  - documented boundary cases
+- Do not add speculative scenarios.
+- Use concrete example data.
+- Prefer existing fixtures and helpers before adding new support code.
+- Keep step definitions deterministic, minimal, and readable.
+- Use strong assertions; do not weaken tests to match current implementation.
 - Do not write or modify application code.
 
 ## Validation Rules
 
-If the new tests fail and you are sure the test is correct:
+If new tests fail but match the task and docs:
 
-- stop immediately
-- do not edit the new tests to make them pass
-- do not start implementing the product behavior
-- report the failure clearly
+- do not edit the tests to force a pass
+- do not implement product behavior
+- report the failure clearly, and stop for user input.
 
-Your failure report must include:
+Include:
 
-- the command you ran
-- which feature or scenario failed
-- the key failure output or mismatch
-- whether the failure looks like a task ambiguity, documentation gap, or implementation gap
+- command run
+- failing feature/scenario
+- key failure output or mismatch
+- classification: task ambiguity, documentation gap, or implementation gap
 
 ## Output
 
-If successful, briefly report:
+On success, report briefly:
 
-- which files you created or changed
-- which validation command you ran
-- that the BDD tests are ready to run
+- files created or changed
+- validation command run
+- whether the BDD tests are ready to run
 
 ---
 

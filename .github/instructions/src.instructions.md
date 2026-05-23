@@ -1,49 +1,40 @@
 ---
 name: "Source Code Guidelines"
-description: "Python and implementation style rules for source modules under the src directory"
+description: "Python style and implementation rules for modules under src/"
 applyTo: "src/**"
 ---
 
-## Python Guidelines
+## Python Style
 
-Use Python 3.12-compatible idioms.
+Target Python 3.12 idioms.
 
 Prefer:
 
-- precise type annotations
-- PEP 604 unions (`X | None`)
+- precise type annotations and PEP 604 unions (`X | None`)
 - `dataclasses` when they reduce boilerplate
-- `pathlib.Path` for paths
+- `pathlib.Path` for filesystem paths
 - small functions with explicit inputs and outputs
+- explicit names over short or generic ones
 - standard library and existing dependencies before new packages
-- explicit names over short or generic names
-- use comments and docstrings generously but purposefully. They should help me and future maintainers understand intent, public behavior, edge cases, architecture boundaries, and non-obvious implementation decisions.
+- use docstrings and comments generously but purposefully. Explain intent, public behavior, edge cases, architecture boundaries, and non-obvious decisions.
 
 Avoid:
 
-- speculative abstractions
-- unused configuration knobs
+- speculative abstractions and unused configuration knobs
 - future-proofing without a concrete caller
-- import-time I/O
-- expensive imports in core modules
+- import-time I/O and expensive imports in core modules
 - provider-specific imports in storage-agnostic core modules
-
----
 
 ## Error Handling
 
-- Expected user errors should not surface raw tracebacks.
-- Error messages should be actionable.
-- When possible, name the affected group, field, record, setting, path, or operation and indicate the next step.
-- Public SDK methods and CLI-backed behavior should use the shared KiteFS exception hierarchy.
+- Do not surface raw tracebacks for expected user errors.
+- Make messages actionable: name the affected group, field, record, setting, path, or operation, and indicate the next step.
+- Public SDK methods and CLI-backed behavior raise from the shared KiteFS exception hierarchy.
 
 See `docs/06-api-and-cli-contracts.md`.
-
----
 
 ## CLI and SDK
 
 - Keep SDK and CLI behavior aligned with `docs/06-api-and-cli-contracts.md`.
 - Use Click 8.x patterns for CLI changes.
-- Keep business logic in SDK/core modules, not CLI command handlers.
-- Put presentation concerns in the CLI layer.
+- Business logic lives in SDK/core modules; CLI handlers hold presentation only.

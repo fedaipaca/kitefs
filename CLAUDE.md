@@ -1,63 +1,107 @@
-# KiteFS — Claude Code Instructions
+# KiteFS — Claude Instructions
 
-## Purpose
+KiteFS is a Python 3.12+ feature store **library** for storing, validating, retrieving, materializing, discovering, and serving precomputed ML feature values via an SDK and CLI. Library-first, store-first.
 
-KiteFS is a Python 3.12+ feature store library for storing, validating, retrieving, materializing, discovering, and serving precomputed ML feature values through an SDK and CLI.
-
-Use these instructions as project guardrails. For detailed behavior, contracts, storage formats, and API shapes, follow the files in `docs/`.
+Treat these as guardrails. For behavior, contracts, and shapes, follow `docs/`.
 
 ---
 
 ## Source of Truth
 
-- Start with `docs/README.md` for the documentation map, reading order, and authority rules.
-- Treat `docs/02-product-requirements.md` through `docs/06-api-and-cli-contracts.md` as authoritative for requirements, behavior, architecture, storage, SDK, CLI, and exception contracts.
-- If docs, code, and these instructions conflict, call out the conflict instead of silently choosing one.
-- Do not invent APIs, flags, storage formats, workflows, or behavior. Verify them in docs or code first.
+- Start at `docs/README.md` for the doc map and authority rules.
+- `docs/02-product-requirements.md` … `docs/06-api-and-cli-contracts.md` are authoritative for requirements, behavior, architecture, storage, SDK, CLI, and exceptions.
+- Do not invent APIs, flags, formats, workflows, or behavior — verify in docs or code.
+- On conflict between docs / code / these instructions: surface the conflict, do not silently pick one.
 
 ---
 
-## Project Directory Structure
+## Tech Stack
+
+### Language & Packaging
+
+- **Python 3.12+** — minimum and target.
+- **uv** — env and deps. Use `uv add` and `uv run`. Never `pip install`.
+- **uv_build** — build backend in `pyproject.toml`. Do not change.
+- **just** — task runner. Prefer `just <recipe>`; run `just` to list recipes.
+
+### Public Interfaces
+
+- **click 8.x** — all `kitefs` CLI commands. Test with `CliRunner`. No business logic in handlers.
+- **FeatureStore SDK** — single user-facing entry point: `from kitefs import FeatureStore`.
+
+### Core Libraries
+
+- **pandas** — `DataFrame` is the primary SDK input/output type.
+- **pyarrow** — Parquet for offline store; `pyarrow.dataset` for partitioned reads.
+- **PyYAML** — parses `kitefs.yaml`.
+
+### Dev Toolchain
+
+- **pytest** + **pytest-bdd** — tests (BDD in `tests/bdd/`).
+- **Ruff** — `just lint`, `just lint-fix`, `just format`.
+- **Pyright** — `standard` mode, Python 3.12. `just type-check`.
+
+### Storage & Providers
+
+Core stays storage-agnostic. Backend libraries are allowed **only** under `src/kitefs/providers/`.
+
+| Backend          | Library             | Notes                                                |
+| ---------------- | ------------------- | ---------------------------------------------------- |
+| Offline — local  | `pyarrow`           | Parquet under `feature_store/data/offline_store/`    |
+| Online — local   | `sqlite3` (stdlib)  | One table per online-capable feature group           |
+| Registry — local | `json` (stdlib)     | `feature_store/registry.json`                        |
+| Offline — AWS    | `pyarrow` + `boto3` | S3 Parquet, same partition layout as local           |
+| Online — AWS     | `boto3`             | DynamoDB, one table per online-capable feature group |
+| Registry — AWS   | `boto3`             | S3 `registry.json`                                   |
+
+`boto3` imports are confined to `src/kitefs/providers/aws/`. The base package must import without AWS extras.
+
+---
+
+## Directory Layout
 
 ### Top-level
 
-- `docs/` - Authoritative project documentation, contracts, and implementation guidance.
-- `src/kitefs/` - Main Python package for the library code.
-- `tests/` - Unit, integration, BDD, fixtures, and test helper coverage.
-- `helpers/` - Shared test support utilities used across the test suite.
+- `docs/` — authoritative documentation and contracts.
+- `src/kitefs/` — library code.
+- `tests/` — unit, integration, BDD, fixtures, helpers.
+- `helpers/` — shared test support utilities.
 
-### Source package
+### `src/kitefs/`
 
-- `src/kitefs/cli/` - CLI entry points and presentation-layer command handling.
-- `src/kitefs/config/` - Project configuration loading and runtime target selection.
-- `src/kitefs/definitions/` - Feature definition types and related schema objects.
-- `src/kitefs/errors/` - Shared KiteFS exception hierarchy.
-- `src/kitefs/join_engine/` - Stateless point-in-time join logic.
-- `src/kitefs/offline_store/` - Offline store coordination logic behind provider interfaces.
-- `src/kitefs/online_store/` - Online store coordination logic behind provider interfaces.
-- `src/kitefs/providers/` - Provider boundary plus local and AWS implementations.
-- `src/kitefs/registry/` - Definition discovery, registry generation, and registry lookups.
-- `src/kitefs/sdk/` - User-facing SDK orchestration.
-- `src/kitefs/validation/` - Stateless structural and feature-value validation.
+- `cli/` — CLI entry points and presentation.
+- `config/` — config loading and runtime target selection.
+- `definitions/` — feature definition types and schemas.
+- `errors/` — shared exception hierarchy.
+- `join_engine/` — stateless point-in-time joins.
+- `offline_store/` — offline coordination behind provider interfaces.
+- `online_store/` — online coordination behind provider interfaces.
+- `providers/` — provider boundary; local and AWS implementations.
+- `registry/` — definition discovery, generation, lookup.
+- `sdk/` — user-facing orchestration.
+- `validation/` — stateless structural and value validation.
 
-### Tests
+### `tests/`
 
-- `tests/unit/` - Fast, isolated tests for individual modules and behaviors.
-- `tests/integration/` - Cross-module tests for end-to-end library flows.
-- `tests/bdd/` - Behavior-driven scenarios, features, and step definitions.
-- `tests/fixtures/` - Reusable test data, definitions, and registry fixtures.
-- `tests/helpers/` - Shared utilities and builders for test setup.
+- `unit/` — fast, isolated module tests.
+- `integration/` — cross-module library flows.
+- `bdd/` — Gherkin scenarios, features and step definitions for user-visible SDK/CLI behavior.
+- `fixtures/` — reusable test data, definitions, registries.
+- `helpers/` — shared builders and setup utilities.
 
 ---
 
 ## Product Boundary
 
-KiteFS is library-first and store-first.
+**DO**:
 
-- Do implement documented SDK, CLI, storage, registry, validation, retrieval, materialization, discovery, and serving behavior.
-- Do not add servers, daemons, workers, background services, containers, or network service layers unless the docs explicitly require them.
-- Do not add feature computation engines, DAG schedulers, SQL orchestration systems, model training systems, or model serving systems.
-- Do not design workflows around manual registry edits.
+- Implement documented SDK, CLI, storage, registry, validation, retrieval, materialization, discovery, and serving behavior.
+
+**DO NOT** (unless explicitly required by docs or user request):
+
+- Add servers, daemons, workers, background services, containers, or network service layers.
+- Add feature computation engines, DAG schedulers, SQL orchestrators, model training, or model serving systems.
+- Design around manual registry edits.
 
 See `docs/00-project-context.md` and `docs/04-architecture.md`.
 
@@ -65,86 +109,70 @@ See `docs/00-project-context.md` and `docs/04-architecture.md`.
 
 ## Architecture Guardrails
 
-- Keep core logic storage-agnostic.
-- Core modules depend on provider interfaces, not concrete local/AWS/vendor implementations.
-- Keep provider-specific imports and behavior inside provider-specific layers.
-- Keep validation and point-in-time join logic stateless where the architecture requires it.
-- Validation and join engines must not perform storage I/O unless the docs explicitly require it.
-- Treat feature definitions as source code and the registry as a deterministic derived artifact.
-- Preserve point-in-time correctness for historical joins.
-- Event timestamps are the temporal anchor. Future values must never leak into training data.
-- All datetimes are UTC. Treat timezone-naive datetimes as UTC, accept timezone-aware UTC datetimes, reject non-UTC timezone-aware datetimes, and never convert between zones.
-- Keep local and AWS providers logically aligned; differences should stay in provider-specific layers and physical read/write protocols.
+- Core logic is storage-agnostic and depends on provider interfaces only.
+- Provider-specific imports and behavior stay in provider layers.
+- Validation and point-in-time join logic are stateless and perform no storage I/O unless docs require it.
+- Treat feature definitions as source code; the registry is a deterministic derived artifact.
+- Preserve point-in-time correctness. Event timestamps are the temporal anchor; future values must never leak into training data.
+- All datetimes are UTC: treat naive as UTC, accept aware UTC, reject non-UTC aware datetimes, never convert zones.
+- Keep local and AWS providers logically aligned; physical differences live inside their provider layers.
 
-See `docs/03-system-behavior.md`, `docs/04-architecture.md`, and `docs/05-data-and-storage-contracts.md`.
+See `docs/03-system-behavior.md`, `docs/04-architecture.md`, `docs/05-data-and-storage-contracts.md`.
 
 ---
 
-## Dependencies
+## Testing Strategy
 
-- Prefer existing project dependencies.
-- If a new dependency is justified, add it with `uv add`.
-- Do not use `pip install` for project dependency changes.
-
----
-
-## Testing
-
-- Use `pytest` for all tests. Use `pytest-bdd` for BDD coverage.
-- Keep tests proportional to the change. Add enough coverage to verify the documented behavior with confidence, but do not add speculative or ceremonial tests.
-- Use `tests/unit/` for fast, isolated checks of one module, class, or function.
-- Use `tests/integration/` for cross-module library flows that exercise collaboration between configuration, providers, stores, registry, SDK, and CLI layers.
-- Use `tests/bdd/` for documented, user-visible SDK and CLI behavior. Scenarios must describe public behavior and observable outcomes, not implementation detail.
-- Prefer the narrowest test layer that proves the behavior. Add integration tests only when a unit test cannot verify the contract. Add BDD tests only for user-visible behavior or when the task is explicitly BDD-scoped.
-- Reuse fixtures and helpers from `tests/fixtures/` and `helpers/` before introducing new test utilities.
-- During development, run the narrowest relevant command first: `just test-unit`, `just test-integration`, `just test-bdd`, or `just test-file <path>`.
+- Use `pytest`; use `pytest-bdd` for BDD.
+- Pick the narrowest layer that proves the contract:
+  - `tests/unit/` — one module/class/function.
+  - `tests/integration/` — cross-module flows (config, providers, stores, registry, SDK, CLI).
+  - `tests/bdd/` — documented, user-visible SDK/CLI behavior and observable outcomes only.
+- Add integration tests only when a unit test cannot verify the contract. Add BDD only for user-visible behavior or when the task is BDD-scoped.
+- Reuse `tests/fixtures/` and `helpers/` before adding new utilities.
+- Keep coverage proportional to the change. No speculative or ceremonial tests.
+- Run narrowly first: `just test-unit`, `just test-integration`, `just test-bdd`, or `just test-file <path>`.
 
 ---
 
 ## Implementation Workflow
 
-- Work one refined task at a time. Keep scope single-purpose and aligned with `docs/02-product-requirements.md` through `docs/07-implementation-plan.md`.
-- Before coding, read only the authoritative docs needed for the task: requirements, behavior, architecture, storage contracts, API/CLI contracts, and task scope.
-- Implement the smallest vertical slice that satisfies the task. Do not broaden APIs, add speculative abstractions, or bundle unrelated cleanup.
-- For implementation tasks, write or update the matching tests in the same change, following the Testing section and the task's documented surface.
-- For BDD-only tasks, their implementation will taken care with help of a separete and special prompt. Intentionally skipping instructions for that in this line.
-- During implementation workflow, if a BDD scenario fails against the current codebase, treat that as a separate implementation gap. Do not weaken the scenario to fit the code.
-- Validate with the narrowest relevant checks first, then finish with `just clean-build` before considering the task complete.
-- If the docs are missing, ambiguous, or conflicting, stop and surface the gap instead of inventing behavior.
+- One refined, single-purpose task at a time, aligned with `docs/02-product-requirements.md` through `docs/07-implementation-plan.md`.
+- Read only the authoritative docs needed for the task before coding.
+- Ship the smallest vertical slice that satisfies the task. No speculative abstractions or unrelated cleanup.
+- Update or add matching tests in the same change (except BDD-only tasks, which use a dedicated prompt).
+- If a BDD scenario fails against current code, treat it as an implementation gap — never weaken the scenario.
+- Validate narrowly first; finish with `just clean-build` before declaring done.
+- If docs are missing, ambiguous, or conflicting, stop and surface the gap.
 
 ---
 
-## Tooling and Commands
+## Tooling
 
-- Prefer `just` recipes first. Check `justfile` or run `just` to list available recipes.
-- If a command is not available via `just`, use `uv`.
-- Use project commands instead of manual formatting or lint-only edits:
-  - `just format`
-  - `just lint-fix`
-
-### Verification of Completion
-
-- Before considering a change complete, `just clean-build` should pass.
+- Prefer `just` recipes; check `justfile` or run `just`.
+- Fall back to `uv` if no recipe exists.
+- Use `just format` and `just lint-fix` instead of manual formatting edits.
+- Completion gate: `just clean-build` passes.
 
 ---
 
 ## Change Boundaries
 
-Unless the task explicitly requires otherwise:
+Unless the task explicitly requires otherwise, do not:
 
-- do not broaden the public API
-- do not introduce new runtime services
-- do not move business logic into the CLI
-- do not couple core logic to a specific storage backend
-- do not change storage contracts or serialization formats without matching docs and tests
-- do not silently resolve documentation/code conflicts
+- broaden the public API,
+- introduce runtime services,
+- move business logic into the CLI,
+- couple core logic to a specific storage backend,
+- change storage contracts or serialization formats without matching docs and tests,
+- silently resolve doc/code conflicts.
 
 ---
 
-## If Unsure
+## When Unsure
 
-- Check the docs.
-- Check the existing code.
-- Preserve existing contracts.
-- Keep the implementation small and explicit.
-- Call out uncertainty or conflicts instead of guessing.
+- Check docs
+- Check code
+- Preserve contracts
+- Keep the change small and explicit
+- Surface uncertainty instead of guessing.
