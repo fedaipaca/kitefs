@@ -32,7 +32,7 @@ These rules apply unless an operation says otherwise.
 KiteFS treats the current working directory as the project root. It does not search parent directories.
 
 - `init` and `init-config` create `./kitefs.yaml` and fail if it already exists.
-- Every other operation requires `./kitefs.yaml` before SDK work starts. For `apply --publish` without `--no-confirm`, confirmation happens first.
+- Every other operation requires `./kitefs.yaml` before SDK work starts. For `apply --publish` without `--no-confirm`, the confirmation prompt runs first, **before** the `./kitefs.yaml` check; if the user declines, no project-root check is performed.
 
 ### Configuration Loading Sequence
 
@@ -53,8 +53,8 @@ The active runtime target comes from configuration. Supported values are `local`
 
 | Runtime target | Offline store    | Online store | Registry location               |
 | -------------- | ---------------- | ------------ | ------------------------------- |
-| `local`        | Local filesystem | SQLite       | `./feature_store/registry.json` |
-| `remote`       | S3               | DynamoDB     | Configured remote location      |
+| `local`        | Local filesystem | SQLite       | `./feature_store/registry.json`        |
+| `remote`       | S3               | DynamoDB     | Configured remote location (see [CON-007](02-product-requirements.md#con-007--local-and-aws-providers-only)) |
 
 Remote store `type` fields are validation guards, not runtime backend selectors. Configuration loading validates these fields as fixed literal values before provider construction. When an operation needs a specific remote store and the corresponding `type` field is missing or unsupported, configuration validation fails before any store-level work begins. The exact supported values are defined in [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md#fixed-remote-store-types).
 
@@ -64,7 +64,7 @@ Each operation checks only the stores and settings it needs ([FR-CFG-004](02-pro
 
 ### UTC Datetime Handling
 
-All datetime checks use the UTC rule in [CON-006](02-product-requirements.md#con-006--utc-only-datetimes). KiteFS does not convert between time zones.
+All datetime checks use the UTC rule in [CON-006](02-product-requirements.md#con-006--utc-only-datetimes). KiteFS does not convert between time zones. This applies to event timestamp values written to and read from any store, event timestamp filter values in `get_historical_features`, and `event_timestamp` returned by online retrieval.
 
 ### Common Failure Handling
 
@@ -99,7 +99,7 @@ Creates a producer project scaffold. This is CLI-only and does not load the SDK 
 2. If absent, create the scaffold:
    - `kitefs.yaml` with `runtime.target: local` as default.
    - `./feature_store/definitions/` with one example feature group definition.
-   - Managed offline and online data directories.
+   - Managed offline and online data directories at fixed conventional paths defined in [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md). These paths are not configurable and are not written to `kitefs.yaml` (see [FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration), [FR-CLI-003](02-product-requirements.md#fr-cli-003--project-initialization)).
    - An empty registry file at `./feature_store/registry.json`.
    - `.gitignore` entries for managed data directories and the local registry file.
 3. Print a confirmation summary.
@@ -132,7 +132,7 @@ Creates a consumer-only configuration for projects that read a remote registry a
 1. Check for `./kitefs.yaml` in the current directory.
 2. If absent, create `kitefs.yaml` only, with:
    - `runtime.target: remote` as default.
-   - A consumer `remote` section template containing registry and online store settings, no offline store.
+   - A consumer `remote` section template with placeholders for `registry.bucket`, `online_store.table_prefix`, and other required fields; no offline store. The user must edit these placeholders before the first `list`, `describe`, or `get_online_features` call.
 3. Do not create definitions, data directories, examples, or `.gitignore` entries.
 4. Print a confirmation summary.
 
@@ -169,7 +169,7 @@ Regenerates the registry from current feature definitions. Plain `apply` writes 
    - Files outside `./feature_store/definitions/` are not scanned.
 5. Validate the full discovered set; collect all errors before deciding.
 6. Abort without registry changes if no definitions are found or validation fails.
-7. Regenerate the registry, preserving runtime-managed fields (e.g. `last_materialized_at`) for groups that still exist.
+7. Regenerate the registry, preserving runtime-managed fields (e.g. `last_materialized_at`) for groups that still exist, and update `applied_at` to the current UTC time for each registered group ([FR-REG-001](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact)).
 8. Write the local working registry.
 9. If `--publish` is passed, write the same content to the remote registry location as a full overwrite.
 10. Report the result.
@@ -220,7 +220,7 @@ flowchart TD
 
 ## `pull` _(Should Have — post-MVP)_
 
-Reads the configured remote registry and overwrites the local working registry ([FR-REG-005](02-product-requirements.md#fr-reg-005--remote-registry-pull)). Pull is destructive to local state and SDK-only in the MVP.
+Reads the configured remote registry and overwrites the local working registry ([FR-REG-005](02-product-requirements.md#fr-reg-005--remote-registry-pull)). Pull is post-MVP for both SDK and CLI; when shipped, it is destructive to local state.
 
 **Behavior:**
 
@@ -238,7 +238,7 @@ flowchart TD
     NO_REMOTE --> END_FAIL(["Stop"])
     CONFIG -- Yes --> READ["Read remote registry"]
     READ --> EXISTS{"Remote<br>exists?"}
-    EXISTS -- No --> NOT_FOUND["Abort:<br>apply --publish first"]
+    EXISTS -- No --> NOT_FOUND["Abort:<br>remote registry not found"]
     NOT_FOUND --> END_FAIL
     EXISTS -- Yes --> OVERWRITE["Overwrite local<br>working registry"]
     OVERWRITE --> END_OK(["Done"])
@@ -289,7 +289,7 @@ flowchart TD
 
 | Condition                                | Outcome                                                                                                              |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location and suggesting initialization or publish. |
+| Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location. On `local` target the message suggests running `init` and `apply`; on `remote` target it suggests a producer running `apply --publish` first. |
 
 An existing but empty registry returns an empty result, not an error.
 
@@ -329,7 +329,7 @@ flowchart TD
 
 | Condition                                | Outcome                                                                                                              |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location and suggesting initialization or publish. |
+| Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location. On `local` target the message suggests running `init` and `apply`; on `remote` target it suggests a producer running `apply --publish` first. |
 | Group is not registered                  | Operation fails and suggests valid names when available.                                                             |
 
 ---
@@ -343,11 +343,12 @@ Appends prepared feature data to the offline store for one registered feature gr
 1. Load project configuration.
 2. Load the registry and resolve the target feature group; abort if not found.
 3. Normalize the input into a DataFrame.
-4. Shape check: required structural columns and declared feature columns are present. Extra columns are dropped, not rejected.
-5. Apply the group's `ingestion_validation` mode ([FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation)): structural checks run in all modes; feature checks are controlled by the mode.
-6. If no rows are accepted, return a zero-row summary.
-7. Write accepted rows as append-only Parquet ([FR-ING-002](02-product-requirements.md#fr-ing-002--append-only-writes), [NFR-REL-001](02-product-requirements.md#nfr-rel-001--atomic-offline-file-writes)).
-8. Return an ingestion summary with accepted row count and validation report when produced.
+4. Shape check (column-level): required structural columns and declared feature columns are present in the input. Columns that are not part of the target group's declaration are ignored — they are not validated and are not written ([FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion)). Row values are not inspected at this stage.
+5. Row-level structural checks: presence of entity key, event timestamp, and join key values; type compatibility with the declaration; UTC for datetime values ([FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation)). These checks run in **every** `ingestion_validation` mode; failure rejects the entire operation and writes nothing.
+6. Row-level feature checks: declared types and feature expectations on feature fields run according to the group's `ingestion_validation` mode (`ERROR`, `FILTER`, or `NONE`).
+7. If no rows are accepted, return a zero-row summary.
+8. Write accepted rows as append-only Parquet ([FR-ING-002](02-product-requirements.md#fr-ing-002--append-only-writes), [NFR-REL-001](02-product-requirements.md#nfr-rel-001--atomic-offline-file-writes)).
+9. Return an ingestion summary with accepted row count and validation report when produced.
 
 ```mermaid
 flowchart TD
@@ -361,8 +362,12 @@ flowchart TD
     SHAPE --> SHAPE_OK{"Shape OK?"}
     SHAPE_OK -- No --> SHAPE_FAIL["Abort: missing columns"]
     SHAPE_FAIL --> END_FAIL
-    SHAPE_OK -- Yes --> VALIDATE["Row-level validation<br>per ingestion mode"]
-    VALIDATE --> ACCEPTED{"Any accepted<br>rows?"}
+    SHAPE_OK -- Yes --> STRUCT["Row-level structural checks<br>(always; mode-independent)"]
+    STRUCT --> STRUCT_OK{"Structural OK?"}
+    STRUCT_OK -- No --> STRUCT_FAIL["Abort: structural failure;<br>nothing written"]
+    STRUCT_FAIL --> END_FAIL
+    STRUCT_OK -- Yes --> FEATURE["Row-level feature checks<br>per ingestion_validation mode"]
+    FEATURE --> ACCEPTED{"Any accepted<br>rows?"}
     ACCEPTED -- No --> ZERO["Return summary:<br>0 rows"]
     ZERO --> END_OK(["Done"])
     ACCEPTED -- Yes --> WRITE["Append to offline store<br>(atomic Parquet write)"]
@@ -393,9 +398,9 @@ Reads historical offline data. The base feature group drives output rows. An opt
 2. Validate request shape before reading data: `select` is required and its shape must match the presence or absence of `join` (flat list or `"*"` without join; dict keyed by group name with join). Validate groups, selected fields, timestamp filters, and join shape.
 3. Read base offline data; apply the event-timestamp filter.
 4. If the base result is empty, return an empty DataFrame with the expected schema.
-5. Apply base field selection and base validation per the base group's `offline_retrieval_validation` mode: structural checks run in all modes; feature checks are controlled by the mode.
+5. Apply base field selection. Run row-level structural checks on the base result (always; mode-independent under [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation)); structural failure aborts the operation. Then run row-level feature checks per the base group's `offline_retrieval_validation` mode.
 6. If no join is requested, return the base result.
-7. Otherwise read the joined group's offline data, apply joined field selection, and validate it using the joined group's own mode: structural checks run in all modes; feature checks are controlled by the mode.
+7. Otherwise read the joined group's offline data and apply joined field selection. Run row-level structural checks on the joined result (always; mode-independent); structural failure aborts the operation. Then run row-level feature checks per the joined group's own `offline_retrieval_validation` mode.
 8. Perform the point-in-time join: for each base row, select the most recent joined row whose event timestamp is ≤ the base row's. Joined columns are prefixed with the joined group name; base columns are unprefixed.
 9. Return the joined result.
 
@@ -410,12 +415,21 @@ flowchart TD
     READ_BASE --> EMPTY{"Base empty?"}
     EMPTY -- Yes --> RETURN_EMPTY["Return empty DataFrame"]
     RETURN_EMPTY --> END_OK(["Done"])
-    EMPTY -- No --> BASE_SEL["Apply base selection<br>and base validation"]
-    BASE_SEL --> JOIN{"Join requested?"}
+    EMPTY -- No --> BASE_SEL["Apply base selection"]
+    BASE_SEL --> BASE_STRUCT["Base structural checks<br>(always; mode-independent)"]
+    BASE_STRUCT --> BASE_STRUCT_OK{"Structural OK?"}
+    BASE_STRUCT_OK -- No --> RETRIEVE_FAIL["Abort: validation failure"]
+    RETRIEVE_FAIL --> END_FAIL
+    BASE_STRUCT_OK -- Yes --> BASE_FEAT["Base feature checks<br>per offline_retrieval_validation"]
+    BASE_FEAT --> JOIN{"Join requested?"}
     JOIN -- No --> RETURN_BASE["Return base result"]
     RETURN_BASE --> END_OK
-    JOIN -- Yes --> READ_JOIN["Read joined offline data,<br>apply joined selection<br>and joined validation"]
-    READ_JOIN --> PIT["Point-in-time join:<br>latest joined row<br>≤ base timestamp"]
+    JOIN -- Yes --> READ_JOIN["Read joined offline data,<br>apply joined selection"]
+    READ_JOIN --> JOIN_STRUCT["Joined structural checks<br>(always; mode-independent)"]
+    JOIN_STRUCT --> JOIN_STRUCT_OK{"Structural OK?"}
+    JOIN_STRUCT_OK -- No --> RETRIEVE_FAIL
+    JOIN_STRUCT_OK -- Yes --> JOIN_FEAT["Joined feature checks<br>per offline_retrieval_validation"]
+    JOIN_FEAT --> PIT["Point-in-time join:<br>latest joined row<br>≤ base timestamp"]
     PIT --> RETURN_JOINED["Return joined result<br>with prefixed columns"]
     RETURN_JOINED --> END_OK
 ```
@@ -440,14 +454,14 @@ Builds the online store from offline data for one named online-eligible group or
 1. Load project configuration.
 2. Load the registry.
 3. Resolve target groups:
-   - Named group: abort with `FeatureGroupNotFoundError` if not registered, or `FeatureGroupNotMaterializableError` if offline-only. These are request-validation aborts before the processing loop.
-   - All groups: take all registered online-eligible groups. Offline-only groups are skipped silently.
+   - Named group: abort with `FeatureGroupNotFoundError` if not registered, or `FeatureGroupNotMaterializableError` if registered but offline-only. These are request-validation aborts before the processing loop.
+   - All groups: take all registered online-eligible groups. Offline-only groups are **excluded from the target set** and **do not appear in the summary**.
 4. For each target:
    - Read all offline data for the group.
-   - If no offline data exists, skip the group; the existing online state is preserved.
-   - Otherwise, extract the latest row per entity key by event timestamp.
+   - If no offline data exists, **report the group as skipped in the summary**; the existing online state is preserved.
+   - Otherwise, extract the latest row per entity key by event timestamp. When two offline rows share the same entity key and the same event timestamp, the **later-ingested row wins**; "later-ingested" is determined by the offline partition's ingest sequence (file write order) ([FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups)).
    - Write all latest rows to the online store using the selected provider's write protocol.
-   - If the provider reports full write success, update `last_materialized_at`.
+   - If the provider reports full write success, update `last_materialized_at` in the **local working registry**. This applies in both runtime targets; users must `apply --publish` to propagate the new value to the remote registry, consistent with [FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation).
    - If the provider reports failure, mark the group failed and leave `last_materialized_at` unchanged.
 5. In all-groups runs, a per-group failure does not roll back already-successful groups and does not stop the run.
 6. Return a per-group summary (succeeded, skipped, failed). The same summary shape is returned for both named-group and all-groups runs.
@@ -458,21 +472,25 @@ flowchart TD
     CTX --> REG["Load registry"]
     REG --> RESOLVE["Resolve target groups"]
     RESOLVE --> NAMED{"Named group?"}
-    NAMED -- Yes,<br>offline-only --> REJECT["Abort: offline-only"]
-    REJECT --> END_FAIL(["Stop"])
-    NAMED -- Yes,<br>online-eligible --> LOOP
     NAMED -- No<br>(all groups) --> LOOP["For each target group"]
+    NAMED -- Yes --> EXISTS{"Registered?"}
+    EXISTS -- No --> NOT_FOUND["Abort: not registered"]
+    NOT_FOUND --> END_FAIL(["Stop"])
+    EXISTS -- Yes --> ELIGIBLE{"Online-eligible?"}
+    ELIGIBLE -- No --> REJECT["Abort: offline-only"]
+    REJECT --> END_FAIL
+    ELIGIBLE -- Yes --> LOOP
     LOOP --> READ["Read offline data"]
     READ --> HAS{"Has data?"}
     HAS -- No --> SKIP["Skip;<br>preserve online state"]
-    SKIP --> NEXT
-    HAS -- Yes --> LATEST["Extract latest row<br>per entity key"]
+    SKIP --> NEXT{"More targets?"}
+    HAS -- Yes --> LATEST["Extract latest row<br>per entity key<br>(tie-break: later ingest wins)"]
     LATEST --> WRITE["Write online data<br>using provider protocol"]
     WRITE --> WRITE_OK{"Full write<br>succeeded?"}
     WRITE_OK -- No --> FAIL_GROUP["Mark failed;<br>report repair guidance"]
     FAIL_GROUP --> NEXT
-    WRITE_OK -- Yes --> META["Update<br>last_materialized_at"]
-    META --> NEXT{"More targets?"}
+    WRITE_OK -- Yes --> META["Update last_materialized_at<br>in local working registry"]
+    META --> NEXT
     NEXT -- Yes --> LOOP
     NEXT -- No --> SUMMARY["Return per-group summary"]
     SUMMARY --> END_OK(["Done"])
@@ -533,3 +551,5 @@ flowchart TD
 | `where` field is not the entity key, operator is not `eq`, or value type is incompatible | Operation fails.        |
 | Selected field is not registered                                                         | Operation fails.        |
 | No online row or item exists for the entity key                                          | Return an empty result. |
+
+Batch online retrieval ([FR-ONL-003](02-product-requirements.md#fr-onl-003--batch-online-retrieval), Could Have) is out of MVP scope and is not covered by this flow.

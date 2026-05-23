@@ -482,6 +482,8 @@ training_df = store.get_historical_features(
 
 The `where` filter uses `sold_at` because `sold_at` is the physical column declared as the event timestamp role for `listing_features`. For the MVP, `get_historical_features` accepts filtering only on the base group's event timestamp column.
 
+This example uses `select` as a dict because a `join` is requested. When no `join` is requested, `select` is a flat list (or `"*"`); see [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md) for the full signature.
+
 The returned training rows include base structural columns, selected base features, prefixed joined structural columns, and prefixed selected joined features. Base structural columns include the entity key, event timestamp, and join keys. All joined structural columns are returned with the joined feature group prefix. The sample result below uses the same listing IDs and feature names defined earlier. Market values for later months come from the omitted continuation of the monthly market table.
 
 | listing_id | sold_at             | town_id | net_area | number_of_rooms | build_year | sold_price | town_market_features_town_id | town_market_features_event_timestamp | town_market_features_avg_price_per_sqm |

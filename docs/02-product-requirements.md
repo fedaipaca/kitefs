@@ -145,6 +145,7 @@ KiteFS regenerates the registry from current source definitions through `apply` 
 - A failure before registry writes begin leaves all registries unchanged.
 - If `apply --publish` fails while writing the remote registry after the local write succeeds, the operation fails and the local working registry may already contain the regenerated content.
 - On success, runtime-managed fields like `last_materialized_at` are preserved for groups that still exist.
+- On success, `applied_at` is updated per registered group to the current UTC time. This is sufficient for MVP scope.
 - Plain `apply` never writes the remote registry, regardless of runtime target.
 - `apply --publish` requires a configured remote registry location.
 - `apply --publish` requires explicit user confirmation before any work starts, unless `--no-confirm` is passed. Any response other than the exact confirmation word aborts the command.
@@ -164,6 +165,8 @@ Users list registered feature groups and describe individual feature groups from
 - Describing an unknown group fails with an actionable error.
 - List and describe read from the registry selected by the current runtime target.
 - If the selected registry is missing, unreachable, or not configured, list and describe fail with an actionable error.
+
+The **registry artifact** is the registry file (`local`) or registry object (`remote`) at the location selected by `runtime.target`. Downstream documents may use this term to refer to either backing form.
 
 #### FR-REG-005 — Remote Registry Pull
 
@@ -282,10 +285,12 @@ _Operational outcomes (returned in the result):_
 - In an all-groups run, a per-group failure does not roll back other successfully materialized groups and does not stop the run.
 - Re-running materialization for a failed group is the supported repair action.
 - A successful run updates `last_materialized_at` for each materialized group.
+- `last_materialized_at` is written to the **local working registry** in both runtime targets. Propagation to the remote registry requires a subsequent `apply --publish`, consistent with [FR-REG-003](#fr-reg-003--registry-generation); until then the remote value is stale.
 
 _General:_
 
 - After successful materialization, the online store holds at most one row per entity key — the row with the latest event timestamp from the offline data.
+- When two offline rows for the same entity key share the same event timestamp, the later-ingested row wins. "Later-ingested" is determined by the offline partition's ingest sequence (file write order).
 - Re-running materialization against unchanged offline data produces the same online state (idempotent).
 - Materialization never runs automatically; it is only triggered by an explicit SDK or CLI call.
 
@@ -464,7 +469,7 @@ Installing the package exposes a CLI command. The CLI runs without requiring use
 - **Priority:** Must Have
 - **Traces To:** G-3, PP-5
 
-The MVP CLI surface is the set of subcommands listed below. SDK operations not listed here are SDK-only in the MVP unless a later requirement adds CLI coverage. When a listed subcommand maps to an SDK operation, it produces the same observable outcome and does not define separate behavior.
+The MVP CLI surface is the set of subcommands listed below. SDK operations not listed here are SDK-only in the MVP unless a later requirement adds CLI coverage, with one exception: `pull` ([FR-REG-005](#fr-reg-005--remote-registry-pull)) is **post-MVP for both SDK and CLI** and is not part of the MVP surface in either form. When a listed subcommand maps to an SDK operation, it produces the same observable outcome and does not define separate behavior.
 
 | CLI Subcommand | Maps To                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------ |
