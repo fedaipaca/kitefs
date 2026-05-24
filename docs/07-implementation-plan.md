@@ -35,142 +35,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 
 ---
 
-## P-1 — Project Skeleton and Foundations
-
-**Goal:** A buildable, testable Python package with dev tooling, the shared error model, and shared enums in place.
-
-### T-001 — Local Package Skeleton
-
-**Status:** not started
-**Branch:** `feat/T-001-package-skeleton`
-**Refined status:** yes
-
-**Goal:** A clean-venv `uv pip install -e .` produces an importable `kitefs` package with one empty sub-package per BB-XX, a working `kitefs --help` console script (placeholder Click group, no subcommands), and `just` recipes that pass on the empty skeleton — all with base dependencies only, no AWS extras.
-
-**Scope:**
-
-_In scope:_
-
-- `pyproject.toml`: keep existing base dependencies (`click`, `pandas`, `pyarrow`, `pyyaml`) and dev group (`pyright`, `pytest`, `pytest-bdd`, `ruff`); confirm `requires-python = ">=3.12"` and `uv_build` backend; add `[project.scripts] kitefs = "kitefs.cli:main"`.
-- `src/kitefs/__init__.py`: replace placeholder `hello()` with module body containing `__version__ = "0.1.0"` only. No re-exports yet.
-- `src/kitefs/cli/__init__.py`: define `main` as a Click group with no subcommands so `kitefs --help` prints Click's auto-generated usage. No error boundary, no subcommand wiring.
-- `src/kitefs/py.typed`: empty marker file present.
-- Confirm every BB sub-package directory exists per [Building Block to Source Path Mapping](04-architecture.md#building-block-to-source-path-mapping) with an empty `__init__.py`: `cli/`, `sdk/`, `definitions/`, `registry/`, `validation/`, `offline_store/`, `online_store/`, `join_engine/`, `providers/` (with `local/` and `aws/` subfolders; `base.py` deferred to T-014), `config/`, `errors/`, plus the empty `enums.py` file. No symbols defined.
-- Verify `just lint`, `just format-check`, `just type-check`, `just test`, `just build`, and `just clean-build` pass on the empty skeleton.
-
-_Out of scope:_
-
-- AWS optional extras and the `[aws]` extra group (deferred to T-041).
-- Real CLI subcommands and the CLI error boundary (T-003 onward).
-- Exception classes and shared enum members (T-002).
-- Provider ABCs and `providers/base.py` body (T-014).
-- Public re-exports of definition types, `FeatureStore`, return-type dataclasses (T-022).
-- Test scaffolding beyond `tests/` directories that already exist.
-
-**Acceptance Criteria:**
-
-1. In a clean Python 3.12+ venv, `uv pip install -e .` from the repo root completes successfully and exposes `kitefs` as an installed distribution.
-2. `kitefs --help` prints Click's auto-generated usage block to stdout and exits with code `0`.
-3. `python -c "import kitefs; print(kitefs.__version__)"` succeeds and prints `0.1.0`. No `boto3` import is triggered (no `boto3` import anywhere under `src/kitefs/` outside `providers/aws/`, which is empty here).
-4. Every BB sub-package listed in the source-path-mapping table exists under `src/kitefs/` with an `__init__.py` (empty body acceptable). `enums.py` and `py.typed` exist at the package root.
-5. `just clean-build` (which chains `clear → check → test → build`) exits `0` on the unmodified skeleton.
-6. The base install does not declare or pull in any AWS-specific runtime dependency; `pyproject.toml` contains no `[aws]` extras group.
-
-**Doc References:**
-
-- [CON-001 — Python 3.12+](02-product-requirements.md#con-001--python-312) — declared in package metadata.
-- [CON-002 — Pip-Installable Library](02-product-requirements.md#con-002--pip-installable-library) — single pip-installable package, no companion service.
-- [CON-005 — No Server or Daemon](02-product-requirements.md#con-005--no-server-or-daemon) — only SDK calls or CLI invocations exist.
-- [NFR-MAINT-001 — Modular Architecture](02-product-requirements.md#nfr-maint-001--modular-architecture) — separate concerns mapped to sub-packages.
-- [Packaging Model](04-architecture.md#packaging-model) — `src/kitefs/` layout, `kitefs` console script, AWS extra deferred.
-- [Building Block to Source Path Mapping](04-architecture.md#building-block-to-source-path-mapping) — exact directory mapping per BB.
-- [FR-CLI-001 — Installed CLI Entry Point](02-product-requirements.md#fr-cli-001--installed-cli-entry-point) — partial coverage; full FR-CLI-001 conformance lands in T-003.
-
-**Flags, Open Questions, Assumptions, Recommendations:**
-
-- **Flag — Partial FR-CLI-001 coverage:** the placeholder CLI satisfies "command available after install" and "`--help` works" but does NOT yet enforce the full FR-CLI-001 contract (no-subcommand → non-zero exit with help, plain-text error rendering). T-003 owns the full contract. _Recommendation:_ accept Click's default invoke-without-subcommand behavior (which already exits non-zero with usage); do not add custom no-subcommand handling here.
-- **Assumption:** `pyproject.toml` and `justfile` are already partially set up in the repo and only need the `[project.scripts]` addition plus the `kitefs.cli:main` target. Validated against the current files.
-- **Assumption:** `src/kitefs/__init__.py` carries only `__version__` for now; full re-exports are scheduled by T-002 (errors/enums) and T-022 (definition types and `FeatureStore`).
-- **Open Question — `__version__` source:** hard-coded `"0.1.0"` vs. dynamic `importlib.metadata.version("kitefs")`. _Recommendation:_ hard-code for the skeleton — dynamic resolution adds complexity not required here and is easy to flip later.
-
-**Test Strategy:**
-
-- _Unit tests:_ `tests/unit/test_package_metadata.py` — assert `kitefs.__version__` is a string equal to the value in `pyproject.toml`; assert importing `kitefs` does not raise.
-- _Integration tests:_ `tests/integration/test_cli_entry.py` — using `click.testing.CliRunner`, invoke `kitefs --help` and assert exit code `0` and non-empty `result.output`. No subprocess test required; `pip install -e .` and the `kitefs` console script are verified manually as part of `just clean-build`.
-
-### T-002 — Error Model and Shared Enums
-
-**Status:** not started
-**Branch:** `feat/T-002-errors-and-enums`
-**Refined status:** yes
-
-**Goal:** The full `KiteFSError` exception hierarchy from [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) and the three shared enums (`FeatureType`, `StorageTarget`, `ValidationMode`) are defined as importable symbols from the top-level `kitefs` package, with no behavior logic beyond declaration and a small message-formatting helper.
-
-**Scope:**
-
-_In scope:_
-
-- `src/kitefs/errors/__init__.py`: define `KiteFSError` as the base class and every concrete exception class listed in [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy):
-  - `ConfigurationError`, `DefinitionError`, `DefinitionDiscoveryError`, `DefinitionValidationError`
-  - `RegistryError` → `RegistryReadError`, `RegistryWriteError`
-  - `FeatureGroupNotFoundError`, `FeatureGroupNotMaterializableError`
-  - `ValidationError` (with a `report` attribute typed via forward reference; see Open Questions)
-  - `IngestionShapeError`
-  - `RetrievalParameterError`, `JoinError`
-  - `OfflineStoreError` → `OfflineStoreReadError`, `OfflineStoreWriteError`
-  - `OnlineStoreError` → `OnlineStoreReadError`, `OnlineStoreWriteError`
-  - `ProviderError`
-- One small helper for actionable error messages (e.g. `format_actionable(*, setting=None, group=None, field=None, problem, next_step) -> str` returning a single-line plain string). Used optionally by raisers; not enforced via subclass logic.
-- `src/kitefs/enums.py`: define `FeatureType` (`STRING`, `INTEGER`, `FLOAT`, `DATETIME`), `StorageTarget` (`OFFLINE`, `OFFLINE_AND_ONLINE`), and `ValidationMode` (`ERROR`, `FILTER`, `NONE`) as `enum.Enum` subclasses with string values matching the names.
-- `src/kitefs/__init__.py`: re-export every public exception class, `KiteFSError`, and the three enums so `from kitefs import KiteFSError, ConfigurationError, FeatureType, ...` works. Definition types and `FeatureStore` re-exports remain deferred to T-022.
-
-_Out of scope:_
-
-- `ValidationReport` / `ValidationFailure` dataclasses — owned by T-011 (validation engine). T-002 references `ValidationReport` only via a `TYPE_CHECKING` forward reference annotation on `ValidationError.report`.
-- CLI error boundary that catches and renders these (T-003).
-- Any raise-site code that uses these exceptions (lands in tasks that introduce each behavior).
-- Provider-specific cause chaining (`__cause__`) wiring — implemented as raisers are added.
-
-**Acceptance Criteria:**
-
-1. `KiteFSError` exists in `kitefs.errors` and is a subclass of `Exception`.
-2. Every exception class enumerated in [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) exists with the documented inheritance: `RegistryReadError` and `RegistryWriteError` inherit from `RegistryError`; `OfflineStoreReadError` / `OfflineStoreWriteError` inherit from `OfflineStoreError`; `OnlineStoreReadError` / `OnlineStoreWriteError` inherit from `OnlineStoreError`; all bases inherit from `KiteFSError`.
-3. Every exception class is reachable via `from kitefs import <ClassName>` and via `from kitefs.errors import <ClassName>`.
-4. `ValidationError` defines a `report` attribute (typed annotation referencing `ValidationReport` via forward reference under `TYPE_CHECKING`); constructing `ValidationError("msg", report=<sentinel>)` stores the sentinel on the instance and returns it via `error.report`.
-5. `FeatureType`, `StorageTarget`, and `ValidationMode` are `enum.Enum` subclasses defined in `kitefs.enums` with the exact members listed in [docs/06 § Public Package Surface › Enums](06-api-and-cli-contracts.md#enums); each is reachable via `from kitefs import <EnumName>`.
-6. The actionable-message helper is a pure function with no I/O and is importable from `kitefs.errors`. Calling it with all kwargs returns a single-line `str`.
-7. Importing `kitefs.errors` triggers no provider-specific imports (no `boto3`, `sqlite3`, `pyarrow`, `pandas`).
-
-**Doc References:**
-
-- [Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) — authoritative class list and inheritance diagram.
-- [Selection Rules](06-api-and-cli-contracts.md#selection-rules) — taxonomy intent (configuration vs. operation, shape vs. validation, store-error provider-cause rule).
-- [`ValidationError` Attribute](06-api-and-cli-contracts.md#validationerror-attribute) — `report: ValidationReport` contract.
-- [AP-7 — Explicit Failure with Actionable Errors](04-architecture.md#architectural-design-principles) — single shared error taxonomy across SDK and CLI.
-- [Error Model](04-architecture.md#error-model) — actionable-error standard.
-- [02 § Conventions](02-product-requirements.md#conventions) — definition of "actionable error".
-- [FR-DEF-002 — Field Type Definitions](02-product-requirements.md#fr-def-002--field-type-definitions) — supported `FeatureType` values.
-- [FR-DEF-003 — Storage Target](02-product-requirements.md#fr-def-003--storage-target) — `StorageTarget` values.
-- [FR-DEF-005 — Per-Operation Validation Modes](02-product-requirements.md#fr-def-005--per-operation-validation-modes) — `ValidationMode` values.
-- [docs/06 § Public Package Surface › Enums](06-api-and-cli-contracts.md#enums) — exact member names.
-
-**Flags, Open Questions, Assumptions, Recommendations:**
-
-- **Flag — `ValidationError.report` typing cycle:** `ValidationReport` is documented in [docs/06 § Return Types](06-api-and-cli-contracts.md#return-types) and conceptually lives in `kitefs.sdk.results` (T-011). Defining the concrete dataclass in T-002 would pull SDK return-type concerns into the foundation layer; not defining it leaves `ValidationError.report` typed loosely. _Recommendation:_ annotate via `if TYPE_CHECKING: from kitefs.sdk.results import ValidationReport` and use a string forward reference (`report: "ValidationReport"`); accept `report` as a constructor argument with no runtime isinstance check. T-011 owns the dataclass itself.
-- **Open Question — Enum value style:** `enum.Enum` with string values matching member names (e.g. `FeatureType.STRING.value == "STRING"`) is the simplest serialization fit for the registry JSON contract. _Recommendation:_ use `enum.Enum` (not `IntEnum` or `StrEnum`) with explicit string values; verify against [05 § Feature Group Entry Schema](05-data-and-storage-contracts.md) when T-021 lands and adjust if mismatched.
-- **Open Question — Helper signature:** docs do not prescribe a specific helper API. _Recommendation:_ keep the helper internal to `kitefs.errors` for now (`format_actionable(*, setting=None, group=None, field=None, problem, next_step) -> str`); raise-site callers import it by name. Refactor freely as the first real raiser arrives in T-003 / T-012.
-- **Assumption:** No exception class needs custom `__init__` beyond `Exception`'s default; `ValidationError` adds `report`, every other class is `pass`-bodied. Validated against the docs — no other attributes are documented.
-
-**Test Strategy:**
-
-- _Unit tests:_ `tests/unit/errors/test_hierarchy.py` — parametrized over every concrete exception class, assert `issubclass(cls, KiteFSError)` and the documented intermediate base (e.g. `OfflineStoreReadError → OfflineStoreError → KiteFSError`); assert each is reachable via `from kitefs import <name>` and `from kitefs.errors import <name>`.
-- _Unit tests:_ `tests/unit/errors/test_validation_error.py` — construct `ValidationError("msg", report=object())`, assert `error.report is sentinel`, `str(error) == "msg"`.
-- _Unit tests:_ `tests/unit/errors/test_actionable_message.py` — given representative kwargs, assert the helper returns a single-line non-empty string containing each provided value.
-- _Unit tests:_ `tests/unit/test_enums.py` — assert each enum's member set equals the documented set; assert `FeatureType` reachable from top-level package.
-- _Integration tests:_ none required; the contracts are import- and inheritance-shaped only, fully verifiable at the unit layer.
-
----
-
 ## P-2 — CLI Entry and Project Scaffolding
 
 **Goal:** Users can scaffold a producer or consumer project from the terminal before the SDK runtime exists. Downstream tasks build on these scaffold outputs.
@@ -230,11 +94,11 @@ _Out of scope:_
 **Flags, Open Questions, Assumptions, Recommendations:**
 
 - **Flag — Exit code for `kitefs` with no subcommand:** Click's default `MissingCommand` exits with `2`, but [docs/06 § Global Behavior](06-api-and-cli-contracts.md#global-behavior) reserves `2` for "unexpected internal errors" and `1` for "user errors (invalid input, missing groups, configuration problems)". A missing subcommand is arguably user input invalid, not internal. _Recommendation:_ accept Click's default (`2`) without remapping — FR-CLI-001's only stated requirement is "non-zero exit code", and remapping `MissingCommand → 1` would require swallowing and re-raising Click's exception, increasing surface area for bugs. If a stricter mapping is required later, file a follow-up after observing real usage. The acceptance criteria above intentionally assert "non-zero" rather than a specific code for AC-2.
-- **Flag — Order of `try/except` clauses in the wrapper:** the wrapper must catch `KiteFSError` *before* the bare `Exception` clause, and must let `click.exceptions.ClickException`/`SystemExit`/`KeyboardInterrupt` propagate. _Recommendation:_ structure the wrapper as: `try: main(standalone_mode=True) ... except KiteFSError as e: print(f"Error: {e}", file=sys.stderr); sys.exit(1) except SystemExit: raise except KeyboardInterrupt: raise except BaseException: traceback.print_exc(); sys.exit(2)`. Click already calls `sys.exit` internally with `standalone_mode=True`, so `SystemExit` carries Click's intended exit code through unchanged.
+- **Flag — Order of `try/except` clauses in the wrapper:** the wrapper must catch `KiteFSError` _before_ the bare `Exception` clause, and must let `click.exceptions.ClickException`/`SystemExit`/`KeyboardInterrupt` propagate. _Recommendation:_ structure the wrapper as: `try: main(standalone_mode=True) ... except KiteFSError as e: print(f"Error: {e}", file=sys.stderr); sys.exit(1) except SystemExit: raise except KeyboardInterrupt: raise except BaseException: traceback.print_exc(); sys.exit(2)`. Click already calls `sys.exit` internally with `standalone_mode=True`, so `SystemExit` carries Click's intended exit code through unchanged.
 - **Open Question — Should the boundary print operation context (e.g. command name, args) alongside the error?** Docs require "plain text on stderr with operation context" but do not specify whether that context is the subcommand name or comes from the exception message itself. _Recommendation:_ rely on `KiteFSError` messages to carry their own operation context (per the actionable-error standard already enforced at raise sites in T-002 and downstream tasks); the boundary contributes only the `Error: ` prefix. If future tasks need a richer prefix, extend then.
 - **Assumption:** T-001 has landed before T-003, so `kitefs.cli.main` exists as a no-subcommand Click group and `[project.scripts]` already targets `kitefs.cli:main`. T-003 only renames the entry-point target to `kitefs.cli:cli` and adds the wrapper; it does not re-author the group. Validated against the T-001 spec at [P-1 § T-001](#t-001--local-package-skeleton).
 - **Assumption:** T-002 has landed, so `from kitefs.errors import KiteFSError` is importable. The boundary catches the base class only; subclass-specific handling is not the boundary's concern.
-- **Assumption:** Exit code `2` for unexpected internal errors is implemented by an explicit `sys.exit(2)` after `traceback.print_exc()`, *not* by allowing Python's default unhandled-exception path (which exits `1`). Without this, AC-5 would fail. Validated by inspecting CPython behavior — unhandled exceptions exit `1`, so the wrapper must override.
+- **Assumption:** Exit code `2` for unexpected internal errors is implemented by an explicit `sys.exit(2)` after `traceback.print_exc()`, _not_ by allowing Python's default unhandled-exception path (which exits `1`). Without this, AC-5 would fail. Validated by inspecting CPython behavior — unhandled exceptions exit `1`, so the wrapper must override.
 
 **Test Strategy:**
 
@@ -249,18 +113,123 @@ _Out of scope:_
 
 **Status:** not started
 **Branch:** `feat/T-004-cli-init`
-**Goal:** Scaffold a complete producer project from the CLI.
-**Description:** When `./kitefs.yaml` does not exist, create the full producer scaffold: `kitefs.yaml` with `runtime.target: local`, `./feature_store/definitions/` containing one example feature group definition, the managed offline and online data directories at their fixed conventional paths, an empty local registry file, and `.gitignore` entries for the managed data directories and the local registry file. Abort with a non-zero exit code if a configuration already exists. Print a confirmation summary. CLI-only — does not load the SDK runtime.
-**Watchpoints:** Scaffold creation must be atomic — a mid-way failure leaves no partial output visible (pre-flight all target paths before any write, or write-to-temp-then-rename). See `docs/03-system-behavior.md` `kitefs init`.
-**Requirements and References:** [FR-CLI-003](02-product-requirements.md#fr-cli-003--project-initialization), [FR-REG-001](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact), [`kitefs init`](03-system-behavior.md)
+**Refined status:** yes
+
+**Goal:** Running `kitefs init` in a directory without `./kitefs.yaml` produces the complete producer scaffold — config, one example definition, the managed data directories, an empty registry, and `.gitignore` entries — exits `0` with a confirmation summary on stdout, and aborts with exit code `1` (exposing no partial scaffold) when a configuration already exists.
+
+**Scope:**
+
+_In scope:_
+
+- Register the `init` subcommand on the existing `main` Click group under `src/kitefs/cli/`, invoked as `kitefs init`. No flags; `--help` works via the group's `help_option_names`. The Click handler is thin (no business logic per CLAUDE.md) and delegates to a pure scaffold function.
+- Add a CLI-only scaffold module (e.g. `src/kitefs/cli/scaffold.py`) holding the pure scaffold logic. It imports only the standard library (`pathlib`, `os`, `tempfile`, `json`) and `kitefs.errors` — never `kitefs.sdk`, `kitefs.config`, `kitefs.providers`, `kitefs.registry`, `kitefs.offline_store`, `kitefs.online_store`, `kitefs.validation`, or `kitefs.join_engine`. This preserves the import-isolation contract from T-003 AC-7.
+- Pre-flight: if `./kitefs.yaml` exists, write nothing and raise a `KiteFSError` subclass (see Open Questions) so the T-003 error boundary renders `Error: <msg>` on stderr and exits `1`.
+- Create the producer tree under the current working directory at the fixed, non-configurable paths (these paths are not written into `kitefs.yaml`):
+  - `kitefs.yaml` — the exact producer template from [docs/06 § Full Project Configuration](06-api-and-cli-contracts.md#full-project-configuration-kitefs-init), written as **literal text** (the inline comments are part of the generated output; do not round-trip through `yaml.dump`), with `<current_directory_name>` replaced by the project-root directory basename.
+  - `feature_store/definitions/` containing one example feature group definition `.py` file (contents — see Assumptions).
+  - `feature_store/registry.json` — the empty registry `{"feature_groups": {}}` serialized per the [Registry JSON serialization rules](05-data-and-storage-contracts.md#serialization-rules) (`indent=2`, `sort_keys=True`, trailing `\n`).
+  - `feature_store/data/offline_store/` and `feature_store/data/online_store/` as empty managed directories. (`online.db` and per-group offline partition dirs are created lazily on first write, not by `init` — see [docs/05 § SQLite Online Store](05-data-and-storage-contracts.md#sqlite-online-store).)
+  - `.gitignore` at the project root with entries for the managed data directory and the local registry file (`feature_store/data/` and `feature_store/registry.json`), leaving `feature_store/definitions/` trackable ([FR-REG-001](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact)).
+- Atomicity: a failure partway through scaffold creation leaves no partial output. Track every path this invocation creates and remove them best-effort in reverse order on any exception before re-raising. Write `kitefs.yaml` last so it doubles as the commit marker (see Flags).
+- Print a confirmation summary to **stdout** listing the created paths and a next-step hint (e.g. `kitefs apply`).
+- `tests/integration/test_cli_init.py` plus unit tests for the scaffold module covering the Acceptance Criteria.
+
+_Out of scope:_
+
+- The `init-config` consumer scaffold — T-005.
+- Registry generation, definition discovery, and validation — `apply` (P-7/P-8). The example definition file is created as text only; its runtime importability is not exercised here (definition types land in P-3).
+- Loading or validating `kitefs.yaml` — the configuration loader is T-012. `init` writes the file and never reads it back through the loader.
+- Creating `online.db` or any per-group offline partition directories.
+- Any merge/dedup into a pre-existing `.gitignore` beyond the policy chosen in Open Questions.
+
+**Acceptance Criteria:**
+
+1. In an empty directory, `kitefs init` exits `0` and creates exactly: `kitefs.yaml`, `feature_store/definitions/<example>.py`, `feature_store/registry.json`, `feature_store/data/offline_store/`, `feature_store/data/online_store/`, and `.gitignore`.
+2. The generated `kitefs.yaml` is byte-identical to the documented producer template except that `<current_directory_name>` is replaced by the project-root basename; it includes `remote.registry`, `remote.offline_store`, and `remote.online_store`, defaults `runtime.target` to `${KITEFS_RUNTIME_TARGET:-local}`, and contains no local store path fields.
+3. `feature_store/registry.json` content equals `{\n  "feature_groups": {}\n}\n` (two-space indent, trailing newline).
+4. `.gitignore` ignores `feature_store/data/` and `feature_store/registry.json` and does not ignore `feature_store/definitions/`.
+5. When `./kitefs.yaml` already exists, `kitefs init` exits `1`, writes nothing (no new files or directories; existing files unchanged), and prints an actionable plain-text message on stderr with no traceback.
+6. When scaffold creation fails partway (simulate by patching a write to raise mid-run, or making a target path unwritable), the command exits non-zero and none of the paths this invocation would have created remain on disk.
+7. The success confirmation summary is written to stdout (not stderr) and names the created paths.
+8. Importing `kitefs.cli` (and the scaffold module) does not import `kitefs.sdk`, `kitefs.config`, `kitefs.providers`, `kitefs.registry`, `kitefs.offline_store`, `kitefs.online_store`, `kitefs.validation`, or `kitefs.join_engine` (verified by inspecting `sys.modules` after a fresh import in a subprocess).
+9. `just clean-build` passes after the change.
+
+**Doc References:**
+
+- [FR-CLI-003 — Project Initialization](02-product-requirements.md#fr-cli-003--project-initialization) — producer mode creates the full scaffold; abort when a config exists; generated config contains no local store path fields.
+- [FR-REG-001 — Registry as Derived Artifact](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact) — initialization creates an empty registry and a Git ignore rule for the local registry file while keeping definitions trackable.
+- [`kitefs init`](03-system-behavior.md#kitefs-init) — step-by-step behavior, atomic scaffold, abort/exit outcomes.
+- [docs/06 § Full Project Configuration (`kitefs init`)](06-api-and-cli-contracts.md#full-project-configuration-kitefs-init) — exact producer `kitefs.yaml` template, including comments that are part of the output.
+- [docs/06 § Local Paths](06-api-and-cli-contracts.md#local-paths) — fixed local artifact paths used by `init`.
+- [docs/05 § Registry JSON — Serialization Rules](05-data-and-storage-contracts.md#serialization-rules) — deterministic empty-registry serialization.
+- [docs/06 § CLI Global Behavior](06-api-and-cli-contracts.md#global-behavior) — exit codes; result on stdout, errors/prompts on stderr.
+
+**Flags, Open Questions, Assumptions, Recommendations:**
+
+- **Flag — Atomicity strategy:** the scaffold spans multiple independent top-level entries (`kitefs.yaml` at root, the `feature_store/` tree, `.gitignore`), so a single atomic rename cannot commit the whole set. _Recommendation:_ track created paths and remove them best-effort in reverse order on failure, and write `kitefs.yaml` last as the de-facto commit marker. The watchpoint's "write-to-temp-then-rename" applies cleanly to the individual `kitefs.yaml` and `registry.json` files but not to the directory set as a whole.
+- **Open Question — Exception type for "already initialized":** [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) has no dedicated "already exists" error, and `ConfigurationError` is defined as *missing/invalid* `kitefs.yaml`, not *present*. _Recommendation:_ raise `ConfigurationError` (closest documented category — a setup state the user must resolve) with an actionable message; alternatively raise base `KiteFSError`. Either renders correctly through the T-003 boundary at exit `1`. Needs a decision; keep it consistent with T-005.
+- **Open Question — Pre-existing `.gitignore` or `feature_store/` when `./kitefs.yaml` is absent:** [docs/03 § kitefs init](03-system-behavior.md#kitefs-init) gates only on `./kitefs.yaml`. _Recommendation:_ if `.gitignore` already exists, append the KiteFS entries guarded by a marker comment (idempotent, no duplicates) rather than overwrite; if `feature_store/` already exists, create only the missing children without clobbering existing files. Confirm before implementing.
+- **Assumption — Example definition contents:** [docs/03](03-system-behavior.md#kitefs-init) says "one example feature group definition" but does not specify the contents. _Recommendation:_ ship one minimal, self-contained group mirroring the constructor shapes in [docs/06 § Definition Types](06-api-and-cli-contracts.md#definition-types) (e.g. a trimmed `town_market_features` from [docs/01](01-reference-use-case.md)). Its import/executability becomes provable only once P-3 (definition types) lands; this task asserts file existence plus a content sanity check (e.g. contains `FeatureGroup(`), not import success.
+- **Assumption — T-001 and T-003 have landed:** the `main` Click group exists and the `kitefs.cli:cli` error boundary is in place. `init` registers on `main`; this task does not author the group or the wrapper.
+- **Assumption — Project name source:** `<current_directory_name>` resolves to `Path.cwd().name`. The template already double-quotes the value; a directory name containing a `"` is an unlikely edge case — flag if it must be handled.
+
+**Test Strategy:**
+
+- _Unit tests:_ exercise the pure scaffold function against a `tmp_path` working directory — assert the created tree, file contents (template substitution, exact registry bytes, gitignore lines), that the already-exists guard raises the chosen `KiteFSError` subclass without writing, and that a write failure mid-run removes all paths the invocation created (patch a write to raise).
+- _Integration tests:_ `tests/integration/test_cli_init.py` via `CliRunner(mix_stderr=False)` in an isolated `tmp_path` cwd — exit `0` and stdout summary on success; exit `1`, stderr message, and nothing written when `kitefs.yaml` already exists; a subprocess import-isolation check for AC-8.
 
 ### T-005 — kitefs init-config (Consumer Scaffold)
 
 **Status:** not started
 **Branch:** `feat/T-005-cli-init-config`
-**Goal:** Scaffold a consumer-only project from the CLI.
-**Description:** Create only `kitefs.yaml` with `runtime.target: remote` and a remote section that includes the remote registry and online store but omits the offline store. Abort if a configuration already exists. Do not create a definitions directory, data directories, an example, or `.gitignore` entries. CLI-only — does not load the SDK runtime.
-**Requirements and References:** [FR-CLI-003](02-product-requirements.md#fr-cli-003--project-initialization), [`kitefs init-config`](03-system-behavior.md)
+**Refined status:** yes
+
+**Goal:** Running `kitefs init-config` in a directory without `./kitefs.yaml` creates only the consumer `kitefs.yaml` (remote target; remote registry and online store, no offline store), exits `0` with a confirmation summary on stdout, and aborts with exit code `1` when a configuration already exists.
+
+**Scope:**
+
+_In scope:_
+
+- Register the `init-config` subcommand on the existing `main` Click group, invoked as `kitefs init-config`. No flags; `--help` works. Thin handler delegating to the shared scaffold module.
+- Reuse the scaffold module from T-004 for the project-name substitution, the atomic single-file write of `kitefs.yaml`, and the already-exists guard. Add a consumer-template writer that emits only `kitefs.yaml`.
+- Pre-flight: if `./kitefs.yaml` exists, write nothing and raise the same `KiteFSError` subclass chosen in T-004 (exit `1`, plain stderr message).
+- Write `kitefs.yaml` only, from the exact consumer template in [docs/06 § Consumer Configuration](06-api-and-cli-contracts.md#consumer-configuration-kitefs-init-config), as literal text (comments included), with `<current_directory_name>` replaced by the project-root basename. `runtime.target` defaults to `${KITEFS_RUNTIME_TARGET:-remote}`; the template includes `remote.registry` and `remote.online_store` and omits `remote.offline_store`; it contains no local store path fields.
+- Do **not** create `feature_store/`, definitions, data directories, an example, or `.gitignore`.
+- Print a confirmation summary to **stdout** naming the created config and noting that the `bucket` / `dynamodb_table_prefix` placeholders must be edited before the first `list`, `describe`, or `get_online_features` call.
+- `tests/integration/test_cli_init_config.py` plus unit tests for the consumer-template writer.
+
+_Out of scope:_
+
+- The producer scaffold — T-004.
+- Any configuration loading/validation, remote reachability checks, or operations — later phases (T-012 config loader, T-044 per-operation remote validation, P-12+).
+
+**Acceptance Criteria:**
+
+1. In an empty directory, `kitefs init-config` exits `0` and creates exactly one file — `kitefs.yaml` — and creates no `feature_store/` directory and no `.gitignore`.
+2. The generated `kitefs.yaml` is byte-identical to the documented consumer template except that `<current_directory_name>` is replaced by the project-root basename; `runtime.target` defaults to `${KITEFS_RUNTIME_TARGET:-remote}`; it includes `remote.registry` and `remote.online_store`, omits `remote.offline_store`, and contains no local store path fields.
+3. When `./kitefs.yaml` already exists, `kitefs init-config` exits `1`, writes nothing, and prints an actionable plain-text message on stderr with no traceback.
+4. The success confirmation summary is written to stdout (not stderr), names the created config, and states the placeholder-edit next step.
+5. Importing `kitefs.cli` (and the scaffold module) does not import any of the modules listed in T-004 AC-8 (import isolation per T-003 AC-7).
+6. `just clean-build` passes after the change.
+
+**Doc References:**
+
+- [FR-CLI-003 — Project Initialization](02-product-requirements.md#fr-cli-003--project-initialization) — consumer mode creates configuration only; a consumer project can list/describe and perform online retrieval from a configured remote without further setup; generated config contains no local store path fields.
+- [`kitefs init-config`](03-system-behavior.md#kitefs-init-config) — step-by-step behavior, abort/exit outcomes, config-only output.
+- [docs/06 § Consumer Configuration (`kitefs init-config`)](06-api-and-cli-contracts.md#consumer-configuration-kitefs-init-config) — exact consumer `kitefs.yaml` template, including comments.
+- [docs/06 § Generated File Shapes](06-api-and-cli-contracts.md#generated-file-shapes) — both variants share top-level keys; `init-config` omits `remote.offline_store`.
+- [docs/06 § CLI Global Behavior](06-api-and-cli-contracts.md#global-behavior) — exit codes; result on stdout, errors on stderr.
+
+**Flags, Open Questions, Assumptions, Recommendations:**
+
+- **Open Question — Exception type for "already initialized":** identical to the T-004 Open Question; keep the chosen `KiteFSError` subclass consistent across both commands.
+- **Assumption — Sequencing:** T-004 lands before T-005 so the shared scaffold helper (project-name substitution, atomic config write, already-exists guard) already exists. _Recommendation:_ sequence T-004 → T-005; if T-005 lands first, the shared helper originates here and T-004 reuses it.
+- **Assumption — Confirmation summary content:** [docs/03](03-system-behavior.md#kitefs-init-config) requires a "confirmation summary" but does not specify its content. _Recommendation:_ name the created `kitefs.yaml` and state the placeholder-edit next step; keep it to stdout.
+
+**Test Strategy:**
+
+- _Unit tests:_ exercise the consumer-template writer against a `tmp_path` cwd — assert the exact file content (template substitution, `remote.offline_store` absent, `remote.registry`/`remote.online_store` present, no local path fields) and that the already-exists guard raises without writing.
+- _Integration tests:_ `tests/integration/test_cli_init_config.py` via `CliRunner(mix_stderr=False)` in an isolated `tmp_path` cwd — exit `0` with only `kitefs.yaml` created and a stdout summary; exit `1` with a stderr message and nothing written when `kitefs.yaml` already exists.
 
 ---
 
@@ -291,7 +260,7 @@ _Out of scope:_
 **Branch:** `feat/T-008-feature-group`
 **Goal:** Implement `FeatureGroup` with within-group structural checks.
 **Description:** Validates: required fields present, non-empty features list, exactly one entity key, exactly one event timestamp, at most one join key, unique field names across structural and feature fields, identifier names match the CON-009 regex, event timestamp is `DATETIME`. Holds per-operation validation modes with declared defaults. Raises `DefinitionError` on violations.
-**Watchpoints:** CON-009 identifier-name regex is enforced *here at construction time*. Cross-set checks (duplicate group names, reserved names `year`/`month`, join references, dtype matching) belong to T-020 — do not duplicate them here.
+**Watchpoints:** CON-009 identifier-name regex is enforced _here at construction time_. Cross-set checks (duplicate group names, reserved names `year`/`month`, join references, dtype matching) belong to T-020 — do not duplicate them here.
 **Requirements and References:** [FR-DEF-001](02-product-requirements.md#fr-def-001--feature-group-definition-as-code), [FR-DEF-005](02-product-requirements.md#fr-def-005--per-operation-validation-modes), [CON-004](02-product-requirements.md#con-004--single-entity-key), [CON-009](02-product-requirements.md#con-009--identifier-naming-rules)
 
 ---
@@ -322,7 +291,7 @@ _Out of scope:_
 **Branch:** `feat/T-011-validation-modes`
 **Goal:** Orchestrate validation with mode semantics (`ERROR`, `FILTER`, `NONE`) and produce reports.
 **Description:** Structural-check failures reject the operation in every mode. `ERROR` rejects the entire operation on any feature-check failure. `FILTER` excludes failing rows and continues (empty result is allowed and reported). `NONE` skips feature checks. Produce a validation report with summary counts and per-failure details sufficient to identify which rows and fields failed and why.
-**Watchpoints:** Structural checks (T-009) run in *every* mode including `NONE` — `NONE` skips feature checks only, not structural checks. `FILTER` with all rows failing must produce an empty result with a report, not raise an error.
+**Watchpoints:** Structural checks (T-009) run in _every_ mode including `NONE` — `NONE` skips feature checks only, not structural checks. `FILTER` with all rows failing must produce an empty result with a report, not raise an error.
 **Requirements and References:** [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation), [FR-DEF-005](02-product-requirements.md#fr-def-005--per-operation-validation-modes)
 
 ---
@@ -586,7 +555,7 @@ _Out of scope:_
 **Branch:** `feat/T-036-online-manager`
 **Goal:** Implement the online store manager for writes and reads (BB-07).
 **Description:** Coordinate latest-per-entity materialization writes and key-based reads through the `OnlineStore` interface. Preserve prior committed online state on write failure. Surface the underlying error message for per-group failures.
-**Watchpoints:** "Latest-per-entity" describes the *result*, not the write pattern. The SQLite implementation (T-017) uses full-table replacement — not upsert. On write failure the table state is whatever was last committed; no partial writes are visible.
+**Watchpoints:** "Latest-per-entity" describes the _result_, not the write pattern. The SQLite implementation (T-017) uses full-table replacement — not upsert. On write failure the table state is whatever was last committed; no partial writes are visible.
 **Requirements and References:** [FR-ONL-001](02-product-requirements.md#fr-onl-001--online-storage-backend), [NFR-REL-002](02-product-requirements.md#nfr-rel-002--online-materialization-failure-handling)
 
 ### T-037 — FeatureStore.materialize (Named Group)
@@ -595,7 +564,7 @@ _Out of scope:_
 **Branch:** `feat/T-037-materialize-named`
 **Goal:** Materialize a single named online-eligible group.
 **Description:** Validate the named group exists and is online-eligible; reject offline-only and unknown groups with actionable errors. Read latest-per-entity from offline, write to online. A group with no offline data is reported as skipped. Idempotent. Report a per-group outcome and update `last_materialized_at` in the local working registry on success.
-**Watchpoints:** `last_materialized_at` is written to the *local* working registry on success regardless of runtime target — it propagates to the remote registry only via a subsequent `apply --publish`. Write failures go into `MaterializeResult.failed`, not raised as exceptions.
+**Watchpoints:** `last_materialized_at` is written to the _local_ working registry on success regardless of runtime target — it propagates to the remote registry only via a subsequent `apply --publish`. Write failures go into `MaterializeResult.failed`, not raised as exceptions.
 **Requirements and References:** [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups)
 
 ### T-038 — FeatureStore.materialize (All Groups)
@@ -604,7 +573,7 @@ _Out of scope:_
 **Branch:** `feat/T-038-materialize-all`
 **Goal:** Materialize all online-eligible groups with per-group failure isolation.
 **Description:** Silently exclude offline-only groups. Run materialization for each remaining group. Report per-group outcomes (succeeded, skipped, failed) through the same result shape as the named-group case. A per-group failure does not stop the run or roll back other groups.
-**Watchpoints:** Offline-only groups are silently excluded from the run *and* from the result — they do not appear in succeeded, skipped, or failed buckets. A per-group failure does not roll back already-completed groups.
+**Watchpoints:** Offline-only groups are silently excluded from the run _and_ from the result — they do not appear in succeeded, skipped, or failed buckets. A per-group failure does not roll back already-completed groups.
 **Requirements and References:** [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups), [NFR-REL-002](02-product-requirements.md#nfr-rel-002--online-materialization-failure-handling)
 
 ### T-039 — kitefs materialize CLI
