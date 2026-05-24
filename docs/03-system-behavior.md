@@ -19,7 +19,7 @@ This file explains how each user-facing KiteFS operation works end-to-end, at th
 
 ## Content
 
-This file describes operation phases, major branches, state changes, and returned results. It does not repeat detailed acceptance criteria. When a flow says "validate request" or "report errors", the exact rules live in the owner files linked above.
+This file describes operation phases, state changes, and returned results. It does not repeat detailed acceptance criteria. When a flow says "validate request" or "report errors", the exact rules live in the owner files linked above.
 
 ---
 
@@ -51,9 +51,9 @@ Missing and invalid configuration are distinct failures. Missing configuration p
 
 The active runtime target comes from configuration. Supported values are `local` and `remote` ([FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration)). The provider is built once at startup and passed to registry, offline store, and online store components. Core logic uses the provider boundary, not direct filesystem, S3, SQLite, or DynamoDB calls ([FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary)).
 
-| Runtime target | Offline store    | Online store | Registry location               |
-| -------------- | ---------------- | ------------ | ------------------------------- |
-| `local`        | Local filesystem | SQLite       | `./feature_store/registry.json`        |
+| Runtime target | Offline store    | Online store | Registry location                                                                                            |
+| -------------- | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------ |
+| `local`        | Local filesystem | SQLite       | `./feature_store/registry.json`                                                                              |
 | `remote`       | S3               | DynamoDB     | Configured remote location (see [CON-007](02-product-requirements.md#con-007--local-and-aws-providers-only)) |
 
 Remote store `type` fields are validation guards, not runtime backend selectors. Configuration loading validates these fields as fixed literal values before provider construction. When an operation needs a specific remote store and the corresponding `type` field is missing or unsupported, configuration validation fails before any store-level work begins. The exact supported values are defined in [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md#fixed-remote-store-types).
@@ -287,8 +287,8 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                | Outcome                                                                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Condition                                | Outcome                                                                                                                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location. On `local` target the message suggests running `init` and `apply`; on `remote` target it suggests a producer running `apply --publish` first. |
 
 An existing but empty registry returns an empty result, not an error.
@@ -327,10 +327,10 @@ flowchart TD
 
 **Operation-specific outcomes:**
 
-| Condition                                | Outcome                                                                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Condition                                | Outcome                                                                                                                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Registry artifact missing or unreachable | Operation fails with an actionable error identifying the expected location. On `local` target the message suggests running `init` and `apply`; on `remote` target it suggests a producer running `apply --publish` first. |
-| Group is not registered                  | Operation fails and suggests valid names when available.                                                             |
+| Group is not registered                  | Operation fails and suggests valid names when available.                                                                                                                                                                  |
 
 ---
 

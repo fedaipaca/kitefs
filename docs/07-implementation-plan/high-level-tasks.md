@@ -8,7 +8,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 
 - Phases.
 - Tasks.
-- Branch names.
 - Task status: done or not started.
 - Task scope and boundaries.
 - Dependencies between tasks.
@@ -28,7 +27,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 
 - **Task ID:** `T-NNN` — monotonically increasing, zero-padded.
 - **Phase ID:** `P-N` — sequential.
-- **Branch naming:** `feat/T-NNN-short-slug`.
 - **Status:** `not started` or `done`.
 - **Development flow:** Vertical. Each phase delivers a demoable outcome where possible.
 - **Task scope:** Single-purpose. Small, self-contained changes.
@@ -42,7 +40,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-006 — Atomic Field Classes
 
 **Status:** not started
-**Branch:** `feat/T-006-field-classes`
 **Goal:** Implement `EntityKey`, `EventTimestamp`, `Feature`, `JoinKey`, and `Metadata`.
 **Description:** Each class validates its own constraints at construction time (e.g. entity key dtype must be `STRING` or `INTEGER`, event timestamp must be `DATETIME`, metadata `description` and `owner` required when metadata is present). Raises `DefinitionError` on violations. Re-export from the top-level package.
 **Watchpoints:** Per-class construction-time constraints are fully enumerated in `docs/06-api-and-cli-contracts.md`. Refinement must enumerate each as an explicit acceptance criterion rather than leaving them implicit in prose.
@@ -51,7 +48,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-007 — Expect Builder
 
 **Status:** not started
-**Branch:** `feat/T-007-expect-builder`
 **Goal:** Implement the `Expect` fluent builder for feature expectations.
 **Description:** Support `not_null`, `gt`, `gte`, `lt`, `lte`, `is_in`. Validate argument types at call time. Raises `DefinitionError` on invalid arguments. Reject expectations on structural fields at the point where they would be attached.
 **Requirements and References:** [FR-DEF-004](02-product-requirements.md#fr-def-004--feature-expectations)
@@ -59,7 +55,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-008 — FeatureGroup Composite
 
 **Status:** not started
-**Branch:** `feat/T-008-feature-group`
 **Goal:** Implement `FeatureGroup` with within-group structural checks.
 **Description:** Validates: required fields present, non-empty features list, exactly one entity key, exactly one event timestamp, at most one join key, unique field names across structural and feature fields, identifier names match the CON-009 regex, event timestamp is `DATETIME`. Holds per-operation validation modes with declared defaults. Raises `DefinitionError` on violations.
 **Watchpoints:** CON-009 identifier-name regex is enforced _here at construction time_. Cross-set checks (duplicate group names, reserved names `year`/`month`, join references, dtype matching) belong to T-020 — do not duplicate them here.
@@ -74,7 +69,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-009 — Structural Checks
 
 **Status:** not started
-**Branch:** `feat/T-009-structural-checks`
 **Goal:** Validate row-level structural fields (presence, type compatibility, UTC).
 **Description:** Check that entity key, event timestamp, and join key values are present, type-compatible with the declaration, and — for datetimes — UTC per CON-006. These checks are always enforced regardless of validation mode.
 **Requirements and References:** [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation), [CON-006](02-product-requirements.md#con-006--utc-only-datetimes)
@@ -82,7 +76,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-010 — Feature Expectation Checks
 
 **Status:** not started
-**Branch:** `feat/T-010-expectation-checks`
 **Goal:** Validate feature field values against declared types and expectations.
 **Description:** Apply type checks and declared `Expect` operators (`gt`, `gte`, `lt`, `lte`, `is_in`, `not_null`) per feature field. Return per-row, per-field failure details.
 **Requirements and References:** [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation), [FR-DEF-004](02-product-requirements.md#fr-def-004--feature-expectations)
@@ -90,7 +83,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-011 — Mode-Aware Orchestration and Report
 
 **Status:** not started
-**Branch:** `feat/T-011-validation-modes`
 **Goal:** Orchestrate validation with mode semantics (`ERROR`, `FILTER`, `NONE`) and produce reports.
 **Description:** Structural-check failures reject the operation in every mode. `ERROR` rejects the entire operation on any feature-check failure. `FILTER` excludes failing rows and continues (empty result is allowed and reported). `NONE` skips feature checks. Produce a validation report with summary counts and per-failure details sufficient to identify which rows and fields failed and why.
 **Watchpoints:** Structural checks (T-009) run in _every_ mode including `NONE` — `NONE` skips feature checks only, not structural checks. `FILTER` with all rows failing must produce an empty result with a report, not raise an error.
@@ -105,7 +97,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-012 — Configuration Loader
 
 **Status:** not started
-**Branch:** `feat/T-012-config-loader`
 **Goal:** Implement the full `kitefs.yaml` load-and-validate pipeline in one coherent task.
 **Description:** Read `./kitefs.yaml` from the project root and run the prescribed configuration loading sequence: parse the file; validate required project-level fields (version, project name, runtime target); validate fixed literal fields (remote store backend types) as literal values; apply environment variable interpolation (`${VAR:-default}`) to configurable fields only; reject interpolation expressions in fixed fields; validate the fully resolved configuration. Validate the structural shape of the optional `remote` section (required keys present, value types correct, unsupported backend identifiers rejected, remote runtime target requires a remote section) without checking whether individual store settings are complete or reachable — that check is deferred to operation time (T-031). Distinguish missing configuration (suggests initialization) from invalid configuration (identifies the offending setting and the source variable when interpolation is involved).
 **Watchpoints:** Large task — refinement should produce acceptance criteria across all five distinct concerns: (1) parse, (2) required-field validation, (3) fixed-literal vs. interpolatable field distinction, (4) `${VAR:-default}` interpolation semantics, (5) structural remote-section shape. Operation-time remote completeness checks are deferred to T-044, not here.
@@ -114,7 +105,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-013 — Runtime Target Override
 
 **Status:** not started
-**Branch:** `feat/T-013-target-override`
 **Goal:** Allow runtime target switching via environment variable.
 **Description:** Check for a `KITEFS_RUNTIME_TARGET` environment variable. When set, it overrides the `runtime.target` field from config without modifying the file.
 **Requirements and References:** [FR-CFG-002](02-product-requirements.md#fr-cfg-002--runtime-target-switching)
@@ -128,7 +118,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-014 — Provider ABCs
 
 **Status:** not started
-**Branch:** `feat/T-014-provider-abcs`
 **Goal:** Define `Provider`, `RegistryStore`, `OfflineStore`, `OnlineStore` abstract base classes.
 **Description:** Create `src/kitefs/providers/base.py` with the three store interfaces and the `Provider` factory ABC. Core modules will depend on these interfaces only. No provider-specific imports here.
 **Requirements and References:** [FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary), [NFR-MAINT-001](02-product-requirements.md#nfr-maint-001--modular-architecture), [Provider Abstraction Boundary](04-architecture.md#provider-abstraction-boundary)
@@ -136,7 +125,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-015 — Local RegistryStore
 
 **Status:** not started
-**Branch:** `feat/T-015-local-registry-store`
 **Goal:** Implement the `RegistryStore` interface for the local provider, backed by a single JSON file.
 **Description:** Provide whole-document read and overwrite of the registry artifact at the fixed local path `./feature_store/registry.json`. Serialization is deterministic so the file can be inspected and diffed per the storage contract. This is the only place that touches the local registry file on disk; higher-level registry logic in BB-04 calls this interface and never reads or writes the file directly.
 **Watchpoints:** "Deterministic serialization" is a four-part spec in `docs/05-data-and-storage-contracts.md` — `sort_keys=True`, features sorted by name, join_keys sorted by name, trailing newline. `json.dumps` default order is not sufficient.
@@ -145,7 +133,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-016 — Local OfflineStore
 
 **Status:** not started
-**Branch:** `feat/T-016-local-offline-store`
 **Goal:** Implement local offline storage with Parquet files and the prescribed partition layout.
 **Description:** Write Parquet files under the managed directory with year/month partitioning and the documented file-naming convention (including the ingestion source prefix and short-id collision resolution). Reads support partition-scoped access. Writes are atomic (write-to-temp then rename) so that a failed write leaves no partial file visible.
 **Watchpoints:** Reads must use `pyarrow.dataset` with `partitioning='hive'` and scanner filter pushdown — not manual filesystem walk or filename parsing. Partition path (year=/month=) is the only authoritative time signal; file-name timestamp is not used for filtering.
@@ -154,7 +141,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-017 — Local OnlineStore
 
 **Status:** not started
-**Branch:** `feat/T-017-local-online-store`
 **Goal:** Implement local online storage with SQLite (one table per online-capable group).
 **Description:** Create and manage SQLite tables for materialized online data per the documented schema. Support latest-per-entity upserts and key-based point lookups. Preserve prior committed state on write failure (no partial visibility).
 **Watchpoints:** Write pattern is full-table replacement within one transaction (`BEGIN; DELETE FROM …; executemany INSERT …; COMMIT`) — not upsert. Set `journal_mode=WAL` and `busy_timeout=5000` on every connection open, not only at creation time.
@@ -163,7 +149,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-018 — Provider Factory Wiring
 
 **Status:** not started
-**Branch:** `feat/T-018-provider-factory`
 **Goal:** Wire the provider factory to return the local provider based on configuration.
 **Description:** Build the `LocalProvider` bundle that returns the three local store implementations. Factory selects provider based on the resolved runtime target. AWS provider returns a not-implemented stub until P-12. Core modules receive only the interface types — never provider-specific clients.
 **Requirements and References:** [FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary), [FR-CFG-002](02-product-requirements.md#fr-cfg-002--runtime-target-switching), [CON-007](02-product-requirements.md#con-007--local-and-aws-providers-only)
@@ -179,7 +164,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-019 — Definition Discovery
 
 **Status:** not started
-**Branch:** `feat/T-019-definition-discovery`
 **Goal:** Automatically discover feature group objects from the definitions directory.
 **Description:** Scan `./feature_store/definitions/` for Python modules. Collect all module-level `FeatureGroup` instances regardless of variable name. Files outside `definitions/` are not scanned. Report an actionable message when no definitions are found.
 **Requirements and References:** [FR-REG-002](02-product-requirements.md#fr-reg-002--definition-discovery)
@@ -187,7 +171,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-020 — Cross-Definition Validation
 
 **Status:** not started
-**Branch:** `feat/T-020-cross-validation`
 **Goal:** Validate discovered definitions as a complete set before any registry write.
 **Description:** Check for duplicate group names, invalid join references, join dtype mismatches between referencing and referenced join keys, and reserved field names (e.g. `year`, `month`). Collect all errors and report together in a single error before any registry write begins.
 **Requirements and References:** [FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation), [CON-009](02-product-requirements.md#con-009--identifier-naming-rules)
@@ -195,7 +178,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-021 — Registry Artifact Builder
 
 **Status:** not started
-**Branch:** `feat/T-021-registry-builder`
 **Goal:** Build the registry artifact from validated definitions.
 **Description:** Produce a JSON-serializable registry structure per the storage contract. Preserve runtime-managed fields (notably `last_materialized_at`) for groups that survive regeneration. Update `applied_at` per registered group to the current UTC time on success.
 **Watchpoints:** Output must be byte-deterministic per the Registry JSON contract (see T-015 watchpoint). Groups absent from the new definition set drop their registry entry entirely — no tombstoning.
@@ -204,7 +186,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-022 — FeatureStore Construction and Public Surface
 
 **Status:** not started
-**Branch:** `feat/T-022-feature-store-init`
 **Goal:** Implement `FeatureStore.__init__` and finalize the top-level package re-exports.
 **Description:** Constructor treats the current working directory as the project root, follows the configuration loading sequence, and builds the provider. Raises `ConfigurationError` on missing or invalid configuration. Wire the public package surface (`from kitefs import FeatureStore, FeatureGroup, EntityKey, ...`) per the contracts doc.
 **Requirements and References:** [FR-CFG-001](02-product-requirements.md#fr-cfg-001--project-configuration), [NFR-MAINT-001](02-product-requirements.md#nfr-maint-001--modular-architecture), [Public Package Surface](06-api-and-cli-contracts.md#public-package-surface)
@@ -212,7 +193,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-023 — FeatureStore.apply (Local)
 
 **Status:** not started
-**Branch:** `feat/T-023-sdk-apply`
 **Goal:** Wire `FeatureStore.apply` for local-only registry generation.
 **Description:** Orchestrate discovery → cross-validation → artifact build → local registry write. Return `ApplyResult`. A failure before registry writes begin leaves the registry unchanged. Publish mode is deferred to P-12.
 **Watchpoints:** The atomicity invariant — any failure during discovery, cross-validation, or artifact build must leave the on-disk registry unchanged. Acceptance criteria must include a test scenario for each failure point.
@@ -221,7 +201,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-024 — List and Describe Feature Groups
 
 **Status:** not started
-**Branch:** `feat/T-024-list-describe`
 **Goal:** Implement `list_feature_groups` and `describe_feature_group` on the SDK.
 **Description:** Read from the active registry. Return summaries or full descriptions including runtime-managed fields when present. Empty registry returns an empty list (not an error). Unknown group raises `FeatureGroupNotFoundError`. A missing or unreachable selected registry fails with an actionable error.
 **Requirements and References:** [FR-REG-004](02-product-requirements.md#fr-reg-004--registry-discovery-list-and-describe)
@@ -237,7 +216,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-025 — kitefs apply
 
 **Status:** not started
-**Branch:** `feat/T-025-cli-apply`
 **Goal:** Expose `apply` as a CLI subcommand.
 **Description:** Call `FeatureStore.apply`. Wire the `--publish` and `--no-confirm` flags (actual remote write is deferred to P-12). Render `ApplyResult` as human-readable output.
 **Requirements and References:** [FR-CLI-002](02-product-requirements.md#fr-cli-002--required-cli-operations), [FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation)
@@ -245,7 +223,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-026 — kitefs list and kitefs describe
 
 **Status:** not started
-**Branch:** `feat/T-026-cli-list-describe`
 **Goal:** Expose list and describe as CLI subcommands with output format options.
 **Description:** Default human-readable table output. Support `--format text|json` for output format selection. Support `--output <path>` to write to a file.
 **Watchpoints:** `--format json` must emit the on-disk registry entry shape, not the `FeatureGroupDescription` dataclass repr — requires explicit translation. Error message for missing registry differs by runtime target (local: suggest `init` + `apply`; remote: suggest producer `apply --publish`).
@@ -262,7 +239,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-027 — Offline Store Manager Write Path
 
 **Status:** not started
-**Branch:** `feat/T-027-offline-write`
 **Goal:** Implement append-only write coordination in the offline store manager (BB-06).
 **Description:** Accept validated data, write through the `OfflineStore` interface with the ingestion source prefix and partition layout. Never modify or delete prior files. Multi-partition batch writes guarantee per-file atomicity.
 **Requirements and References:** [FR-ING-002](02-product-requirements.md#fr-ing-002--append-only-writes), [FR-OFF-001](02-product-requirements.md#fr-off-001--offline-storage-backend), [NFR-REL-001](02-product-requirements.md#nfr-rel-001--atomic-offline-file-writes)
@@ -270,7 +246,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-028 — FeatureStore.ingest
 
 **Status:** not started
-**Branch:** `feat/T-028-sdk-ingest`
 **Goal:** Wire SDK `ingest` for DataFrame input with shape checks and the ingestion validation gate.
 **Description:** Verify the target group exists, check the input contains the entity key, event timestamp, join key, and declared feature fields, drop undeclared columns, apply the group's ingestion validation mode via the validation engine, then write through the offline store manager. Return `IngestResult` with row counts and the validation report (when produced).
 **Watchpoints:** Five phases run in strict order with distinct error types: group lookup (`FeatureGroupNotFoundError`) → shape check (`IngestionShapeError`) → row-level structural checks (always-on, independent of mode) → feature checks (mode-driven, `ValidationError` with `error.report` in ERROR mode) → write. `IngestResult.written_files` carries absolute paths for local writes.
@@ -279,7 +254,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-029 — File Input Support (CSV/Parquet)
 
 **Status:** not started
-**Branch:** `feat/T-029-file-input`
 **Goal:** Allow `FeatureStore.ingest` to accept a local `.csv` or `.parquet` file path in addition to a DataFrame.
 **Description:** Detect format by file extension and load into a DataFrame inside the SDK, then follow the normal ingest flow. Reject unsupported extensions. File loading is the SDK's responsibility — the CLI passes the path directly without parsing.
 **Requirements and References:** [FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion), [NFR-UX-001](02-product-requirements.md#nfr-ux-001--standard-python-interfaces)
@@ -287,7 +261,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-030 — kitefs ingest CLI
 
 **Status:** not started
-**Branch:** `feat/T-030-cli-ingest`
 **Goal:** Expose ingestion as a CLI subcommand.
 **Description:** Accept group name and file path arguments. Pass the path directly to the SDK `ingest`. Render result and any validation report to stdout/stderr.
 **Requirements and References:** [FR-CLI-002](02-product-requirements.md#fr-cli-002--required-cli-operations)
@@ -303,7 +276,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-031 — Offline Store Manager Read Path
 
 **Status:** not started
-**Branch:** `feat/T-031-offline-read`
 **Goal:** Implement offline reads with event-timestamp filtering and partition pruning.
 **Description:** Read Parquet data through the `OfflineStore` interface. Apply partition-level pruning for year/month. Support timestamp comparison operators (`gt`, `gte`, `lt`, `lte`) on the event timestamp column.
 **Watchpoints:** Use `pyarrow.dataset` with `partitioning='hive'` and scanner filter pushdown — do not enumerate files manually or parse filenames for filtering.
@@ -312,7 +284,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-032 — get_historical_features (Single Group)
 
 **Status:** not started
-**Branch:** `feat/T-032-historical-single`
 **Goal:** Implement single-group historical retrieval with `select` and `where`.
 **Description:** Validate request shape (group exists, `select` provided and fields valid, filters target the event timestamp column with supported operators) before any read. Read offline data with filters. Return a DataFrame containing the group's structural columns plus the selected feature fields.
 **Requirements and References:** [FR-OFF-002](02-product-requirements.md#fr-off-002--historical-feature-retrieval), [NFR-UX-001](02-product-requirements.md#nfr-ux-001--standard-python-interfaces)
@@ -320,7 +291,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-033 — Join Engine
 
 **Status:** not started
-**Branch:** `feat/T-033-join-engine`
 **Goal:** Implement point-in-time correct joins (BB-08).
 **Description:** Stateless, no I/O. For each base row, find the most recent joined row with event timestamp ≤ base timestamp. Equality is eligible; rows with later timestamps are never selected. Ties resolve deterministically. Re-running against unchanged data returns the same rows in the same order. Unmatched base rows remain with null joined columns.
 **Watchpoints:** Tie-break semantics (equal join-key + equal event timestamp) must use a pinned secondary sort key — refinement must define it explicitly so re-runs against unchanged data are provably identical, not just probably identical.
@@ -329,7 +299,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-034 — get_historical_features (Joined)
 
 **Status:** not started
-**Branch:** `feat/T-034-historical-joined`
 **Goal:** Support one joined feature group in historical retrieval.
 **Description:** Validate join shape (at most one joined group, registered join relationship exists, `select` dict shape valid) before any read. Read base and joined groups, apply the join engine, prefix joined columns with the joined group name; base columns remain unprefixed.
 **Watchpoints:** `select` shape changes for the join path: `list[str] | "*"` for single-group, `dict[str, list[str] | "*"]` keyed by group name with join. Structural fields (entity key, event timestamp, join key) are always returned regardless of `select` — callers cannot exclude them.
@@ -338,7 +307,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-035 — Offline Retrieval Validation Gate
 
 **Status:** not started
-**Branch:** `feat/T-035-retrieval-validation`
 **Goal:** Apply validation to retrieved offline data per each group's retrieval mode.
 **Description:** After reading data, apply the validation engine with the group's `offline_retrieval_validation` mode. For joined retrieval, validate the base group and the joined group independently per their respective modes.
 **Requirements and References:** [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation), [FR-DEF-005](02-product-requirements.md#fr-def-005--per-operation-validation-modes)
@@ -354,7 +322,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-036 — Online Store Manager
 
 **Status:** not started
-**Branch:** `feat/T-036-online-manager`
 **Goal:** Implement the online store manager for writes and reads (BB-07).
 **Description:** Coordinate latest-per-entity materialization writes and key-based reads through the `OnlineStore` interface. Preserve prior committed online state on write failure. Surface the underlying error message for per-group failures.
 **Watchpoints:** "Latest-per-entity" describes the _result_, not the write pattern. The SQLite implementation (T-017) uses full-table replacement — not upsert. On write failure the table state is whatever was last committed; no partial writes are visible.
@@ -363,7 +330,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-037 — FeatureStore.materialize (Named Group)
 
 **Status:** not started
-**Branch:** `feat/T-037-materialize-named`
 **Goal:** Materialize a single named online-eligible group.
 **Description:** Validate the named group exists and is online-eligible; reject offline-only and unknown groups with actionable errors. Read latest-per-entity from offline, write to online. A group with no offline data is reported as skipped. Idempotent. Report a per-group outcome and update `last_materialized_at` in the local working registry on success.
 **Watchpoints:** `last_materialized_at` is written to the _local_ working registry on success regardless of runtime target — it propagates to the remote registry only via a subsequent `apply --publish`. Write failures go into `MaterializeResult.failed`, not raised as exceptions.
@@ -372,7 +338,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-038 — FeatureStore.materialize (All Groups)
 
 **Status:** not started
-**Branch:** `feat/T-038-materialize-all`
 **Goal:** Materialize all online-eligible groups with per-group failure isolation.
 **Description:** Silently exclude offline-only groups. Run materialization for each remaining group. Report per-group outcomes (succeeded, skipped, failed) through the same result shape as the named-group case. A per-group failure does not stop the run or roll back other groups.
 **Watchpoints:** Offline-only groups are silently excluded from the run _and_ from the result — they do not appear in succeeded, skipped, or failed buckets. A per-group failure does not roll back already-completed groups.
@@ -381,7 +346,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-039 — kitefs materialize CLI
 
 **Status:** not started
-**Branch:** `feat/T-039-cli-materialize`
 **Goal:** Expose materialization as a CLI subcommand.
 **Description:** Accept an optional group name. Call SDK `materialize`. Render per-group outcomes to stdout.
 **Requirements and References:** [FR-CLI-002](02-product-requirements.md#fr-cli-002--required-cli-operations)
@@ -389,7 +353,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-040 — FeatureStore.get_online_features
 
 **Status:** not started
-**Branch:** `feat/T-040-online-retrieval`
 **Goal:** Implement single-entity online retrieval.
 **Description:** Validate request shape (group exists and is online-eligible, `select` provided, `where` targets the entity key with a single `eq` operator, value is type-compatible). Return a dict on hit (structural fields plus selected features), empty dict on miss. No validation gate on online retrieval.
 **Requirements and References:** [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online-retrieval), [NFR-UX-001](02-product-requirements.md#nfr-ux-001--standard-python-interfaces)
@@ -405,7 +368,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-041 — AWS Packaging Extra and Provider Stub
 
 **Status:** not started
-**Branch:** `feat/T-041-aws-packaging`
 **Goal:** Introduce the `[aws]` optional install extra and the `providers/aws/` sub-package.
 **Description:** Add the `[aws]` optional dependency group to `pyproject.toml` covering boto3 and any other AWS-only dependencies. Create the `providers/aws/` sub-package as the only place AWS clients may be imported. Replace the not-implemented AWS provider stub from T-018 with a real factory entry that resolves AWS implementations. Confirm `pip install kitefs` (without extras) still imports the base package cleanly without any AWS dependency available.
 **Watchpoints:** Add a packaging-level integration test that `import kitefs` succeeds in a clean environment without the `[aws]` extra — verifies no top-level boto3 import path was accidentally introduced.
@@ -414,7 +376,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-042 — AWS Credential Chain and Error Mapping
 
 **Status:** not started
-**Branch:** `feat/T-042-aws-credentials`
 **Goal:** Rely on the standard AWS credential chain and map permission errors.
 **Description:** Use the standard boto3 credential resolution (env vars, AWS config, IAM role). Map missing or insufficient credentials/permissions to actionable errors that identify the affected store. Never leak secret values.
 **Requirements and References:** [FR-PROV-002](02-product-requirements.md#fr-prov-002--aws-credential-chain)
@@ -422,7 +383,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-043 — AWS RegistryStore
 
 **Status:** not started
-**Branch:** `feat/T-043-aws-registry`
 **Goal:** Implement AWS registry storage as a JSON object in S3.
 **Description:** Read and overwrite the registry JSON at the configured S3 key (`s3://{bucket}/{s3_prefix}/registry.json`). Same interface as local.
 **Requirements and References:** [FR-PROV-001](02-product-requirements.md#fr-prov-001--provider-boundary), [FR-REG-001](02-product-requirements.md#fr-reg-001--registry-as-derived-artifact)
@@ -430,7 +390,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-044 — Per-Operation Remote Configuration Validation
 
 **Status:** not started
-**Branch:** `feat/T-044-remote-op-validation`
 **Goal:** Validate remote store availability before each operation that needs it.
 **Description:** Before an operation touches a remote store, check that the required remote sub-section (registry, offline, or online) is present, fully configured, and internally valid. Fail with an actionable error that identifies the missing or invalid capability and the operation that triggered the check. This is the lazy validation counterpart to T-012's structural parse.
 **Requirements and References:** [FR-CFG-004](02-product-requirements.md#fr-cfg-004--per-operation-configuration-validation)
@@ -438,7 +397,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-045 — apply --publish End-to-End
 
 **Status:** not started
-**Branch:** `feat/T-045-apply-publish`
 **Goal:** Enable `apply --publish` to write local then remote registries with confirmation.
 **Description:** Unless `--no-confirm` is passed, the CLI prompts for the exact confirmation word **before** the `./kitefs.yaml` check; any response other than the exact word aborts. On confirm: write the local registry, then write the remote registry. Handle partial failure (local succeeds, remote fails) so the local working registry may contain regenerated content while the remote remains stale, and the operation reports failure.
 **Requirements and References:** [FR-REG-003](02-product-requirements.md#fr-reg-003--registry-generation), [FR-CLI-002](02-product-requirements.md#fr-cli-002--required-cli-operations), [Project Root Discovery](03-system-behavior.md#project-root-discovery)
@@ -446,7 +404,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-046 — Remote List and Describe Verification
 
 **Status:** not started
-**Branch:** `feat/T-046-remote-list-describe`
 **Goal:** Verify list and describe work against the remote registry from both project types.
 **Description:** Confirm that `list` and `describe` read from the S3 registry when the runtime target is remote. Confirm a project created by `init-config` can list and describe from the published registry without further setup.
 **Requirements and References:** [FR-REG-004](02-product-requirements.md#fr-reg-004--registry-discovery-list-and-describe), [FR-CLI-003](02-product-requirements.md#fr-cli-003--project-initialization)
@@ -462,7 +419,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-047 — AWS OfflineStore
 
 **Status:** not started
-**Branch:** `feat/T-047-aws-offline`
 **Goal:** Implement AWS offline storage with S3 Parquet via PyArrow and boto3.
 **Description:** Same partition layout and file-naming convention as local. Atomic writes via S3 put semantics. Reads support partition-scoped access and event-timestamp filtering. Importable only from `providers/aws/` so the base package install does not require boto3.
 **Requirements and References:** [FR-OFF-001](02-product-requirements.md#fr-off-001--offline-storage-backend), [NFR-REL-001](02-product-requirements.md#nfr-rel-001--atomic-offline-file-writes)
@@ -470,7 +426,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-048 — Remote Offline End-to-End Verification
 
 **Status:** not started
-**Branch:** `feat/T-048-remote-offline-e2e`
 **Goal:** Verify ingestion and historical retrieval (single and joined) work against S3 and match local.
 **Description:** Confirm `ingest` writes Parquet files to S3 in the same partition layout and naming as local, and that append-only semantics hold. Confirm `get_historical_features` with single-group and joined retrieval produces equivalent results on local and remote for the same logical data.
 **Requirements and References:** [FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion), [FR-ING-002](02-product-requirements.md#fr-ing-002--append-only-writes), [FR-OFF-002](02-product-requirements.md#fr-off-002--historical-feature-retrieval), [FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins)
@@ -486,7 +441,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-049 — AWS OnlineStore
 
 **Status:** not started
-**Branch:** `feat/T-049-aws-online`
 **Goal:** Implement AWS online storage with DynamoDB per-group tables.
 **Description:** Create and manage per-group DynamoDB tables with the documented naming (`{dynamodb_table_prefix}{group_name}`). Support latest-per-entity upserts and key-based reads. Surface underlying errors for per-group failure isolation. Importable only from `providers/aws/`.
 **Requirements and References:** [FR-ONL-001](02-product-requirements.md#fr-onl-001--online-storage-backend), [NFR-REL-002](02-product-requirements.md#nfr-rel-002--online-materialization-failure-handling)
@@ -494,7 +448,6 @@ This file defines implementation sequencing for the KiteFS feature store library
 ### T-050 — Remote Online End-to-End and Consumer Acceptance
 
 **Status:** not started
-**Branch:** `feat/T-050-remote-online-consumer`
 **Goal:** Verify materialization, online retrieval, and consumer-only project flows work end-to-end against DynamoDB.
 **Description:** Confirm `materialize` writes latest-per-entity rows to DynamoDB, isolates per-group failures, and updates `last_materialized_at` only on success. Confirm `get_online_features` returns equivalent results on local and remote. Confirm a project created by `init-config` can perform online retrieval against the configured remote online store without further setup.
 **Requirements and References:** [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups), [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online-retrieval), [FR-CLI-003](02-product-requirements.md#fr-cli-003--project-initialization)

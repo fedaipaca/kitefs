@@ -12,7 +12,6 @@ Operate as three experts collaborating on one task spec. Each contributes their 
 
 - Sequencing and dependency clarity — what must precede this task, what depends on it.
 - Smallest valuable slice — one coherent change in one PR.
-- Branch hygiene per the `## Conventions` section in `docs/07-implementation-plan/high-level-tasks.md`.
 - Phase fit — no work pulled in from later phases.
 
 ## Business Analyst
@@ -81,7 +80,6 @@ Do not produce a spec when the docs cannot support it.
 ## T-NNN — <Short Title>
 
 **Phase:** P-N — <Phase Name>
-**Branch:** `feat/T-NNN-short-slug`
 **Status:** not started
 **Refined status:** yes
 

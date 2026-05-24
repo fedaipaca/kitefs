@@ -7,7 +7,6 @@
 ### T-003 — CLI Entry Point and Error Boundary
 
 **Status:** not started
-**Branch:** `feat/T-003-cli-entry`
 **Refined status:** yes
 
 **Goal:** The `kitefs` console script honors the full FR-CLI-001 contract — `kitefs --help` exits `0`, `kitefs` with no subcommand prints help to stderr and exits non-zero, and any `KiteFSError` raised below the entry point renders as a plain-text actionable message on stderr with exit code `1`, while unexpected exceptions fall through with their traceback and exit code `2`.
@@ -75,7 +74,6 @@ _Out of scope:_
 ### T-004 — kitefs init (Producer Scaffold)
 
 **Status:** not started
-**Branch:** `feat/T-004-cli-init`
 **Refined status:** yes
 
 **Goal:** Running `kitefs init` in a directory without `./kitefs.yaml` produces the complete producer scaffold — config, one example definition, the managed data directories, an empty registry, and `.gitignore` entries — exits `0` with a confirmation summary on stdout, and aborts with exit code `1` (exposing no partial scaffold) when a configuration already exists.
@@ -144,7 +142,6 @@ _Out of scope:_
 ### T-005 — kitefs init-config (Consumer Scaffold)
 
 **Status:** not started
-**Branch:** `feat/T-005-cli-init-config`
 **Refined status:** yes
 
 **Goal:** Running `kitefs init-config` in a directory without `./kitefs.yaml` creates only the consumer `kitefs.yaml` (remote target; remote registry and online store, no offline store), exits `0` with a confirmation summary on stdout, and aborts with exit code `1` when a configuration already exists.

@@ -5,7 +5,6 @@
 ### T-001 — Local Package Skeleton
 
 **Status:** done
-**Branch:** `feat/T-001-package-skeleton`
 **Refined status:** yes
 
 **Goal:** A clean-venv `uv pip install -e .` produces an importable `kitefs` package with one empty sub-package per BB-XX, a working `kitefs --help` console script (placeholder Click group, no subcommands), and `just` recipes that pass on the empty skeleton — all with base dependencies only, no AWS extras.
@@ -65,7 +64,6 @@ _Out of scope:_
 ### T-002 — Error Model and Shared Enums
 
 **Status:** done
-**Branch:** `feat/T-002-errors-and-enums`
 **Refined status:** yes
 
 **Goal:** The full `KiteFSError` exception hierarchy from [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) and the three shared enums (`FeatureType`, `StorageTarget`, `ValidationMode`) are defined as importable symbols from the top-level `kitefs` package, with no behavior logic beyond declaration and a small message-formatting helper.
