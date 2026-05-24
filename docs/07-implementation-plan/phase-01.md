@@ -64,7 +64,7 @@ _Out of scope:_
 
 ### T-002 — Error Model and Shared Enums
 
-**Status:** not started
+**Status:** done
 **Branch:** `feat/T-002-errors-and-enums`
 **Refined status:** yes
 
