@@ -207,6 +207,8 @@ Partitions are derived from each record's event timestamp value, not from the wr
 
 A single ingestion batch can produce multiple Parquet files when its rows span multiple partitions. Each output file contains rows from exactly one partition.
 
+The offline backend uses `year` and `month` as Hive partition column names. These names are therefore reserved and cannot be used for any field in a feature group definition (entity key, event timestamp, join key, or feature). A definition that uses either name is rejected at validation time.
+
 Readers SHOULD use `pyarrow.dataset.dataset(..., partitioning='hive')` and pass PyArrow filter expressions (e.g., `ds.field("col") == value)` to `to_table(filter=...)` or `scanner(filter=...)`; the dataset API evaluates these expressions against partition metadata before opening any files, handling partition pruning automatically.
 
 ### File Naming

@@ -233,7 +233,7 @@ class FeatureStore:
 | `ingest`                  | `IngestResult`              | [FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion)                                                                                               |
 | `get_historical_features` | `pandas.DataFrame`          | [FR-OFF-002](02-product-requirements.md#fr-off-002--historical-feature-retrieval) + [FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins) |
 | `materialize`             | `MaterializeResult`         | [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups)                                                                              |
-| `get_online_features`     | `dict[str, Any]`            | [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online--retrieval)                                                                                 |
+| `get_online_features`     | `dict[str, Any]`            | [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online-retrieval)                                                                                 |
 
 ### `apply`
 
@@ -257,7 +257,7 @@ def apply(self, *, publish: bool = False) -> ApplyResult: ...
 - Non-`DATETIME` event timestamp fields.
 - Duplicate feature group names across the discovered set.
 - Duplicate field names within a single group (across structural and feature fields).
-- `year` and `month` are rejected as field names because they conflict with offline store partition directory columns.
+- Field names that collide with reserved offline-store partition columns (see [05 › Offline Store Parquet Layout › Partition Strategy](05-data-and-storage-contracts.md#partition-strategy)). In the MVP these are `year` and `month`.
 - Field or group names violating [CON-009](02-product-requirements.md#con-009--identifier-naming-rules).
 - Invalid join declarations (e.g., more than one join key in MVP).
 - Missing referenced groups (a join key's `referenced_group` does not exist in the discovered set).
@@ -763,7 +763,7 @@ class RegistryStore(abc.ABC):
         """Return the deserialized registry document.
 
         An existing registry with zero groups is returned normally as
-        {"version": "1.0", "feature_groups": {}}.
+        {"feature_groups": {}}.
 
         Raises:
             RegistryReadError: The registry artifact does not exist at

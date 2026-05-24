@@ -559,7 +559,8 @@ The SDK uses standard Python types for data exchange. No custom KiteFS container
 
 **Acceptance Criteria:**
 
-- Batch data exchange (ingestion, historical retrieval) uses Pandas DataFrames.
+- Batch data exchange (historical retrieval) uses Pandas DataFrames.
+- `FeatureStore.ingest` additionally accepts a local `.csv` or `.parquet` file path; format is detected by extension. The CLI `ingest` command passes the file path directly to the SDK — file loading is the SDK's responsibility.
 - Single-record retrieval uses standard Python types (dict/list).
 - Basic usage does not require importing or constructing custom KiteFS container types.
 
