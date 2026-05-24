@@ -17,7 +17,7 @@ Write complete, runnable BDD tests for exactly one BDD task.
 If only an ID is provided:
 
 1. Resolve the exact task text from the current chat context or workspace artifacts.
-2. Include matching entries from `docs/07-implementation-plan.md` when relevant.
+2. Include matching entries from the relevant `docs/07-implementation-plan/phase-N.md` file when relevant.
 3. If the task cannot be resolved exactly, stop and ask for the full task content.
 
 ## Scope

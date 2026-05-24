@@ -12,7 +12,7 @@ Operate as three experts collaborating on one task spec. Each contributes their 
 
 - Sequencing and dependency clarity — what must precede this task, what depends on it.
 - Smallest valuable slice — one coherent change in one PR.
-- Branch hygiene per `docs/07-implementation-plan.md` conventions.
+- Branch hygiene per the `## Conventions` section in `docs/07-implementation-plan/high-level-tasks.md`.
 - Phase fit — no work pulled in from later phases.
 
 ## Business Analyst
@@ -40,7 +40,7 @@ Authoritative (highest first):
 3. `docs/04-architecture.md`
 4. `docs/05-data-and-storage-contracts.md`
 5. `docs/06-api-and-cli-contracts.md`
-6. `docs/07-implementation-plan.md`
+6. `docs/07-implementation-plan/phase-N.md` (the relevant phase file for the task being worked on)
 
 Supporting context: `docs/00-project-context.md`, `docs/01-reference-use-case.md`.
 
@@ -50,8 +50,8 @@ Supporting context: `docs/00-project-context.md`, `docs/01-reference-use-case.md
 
 Determine the mode from user's input to this prompt:
 
-- **Review** — input is a task ID or title from `docs/07-implementation-plan.md`. Read the existing definition, apply all three lenses, produce a refined spec.
-- **Refine** — input is a rough idea or partial description. Map it to phase and requirements; shape it into a properly scoped task.
+- **Review** — input is a task ID or title. Look it up in the relevant `docs/07-implementation-plan/phase-N.md` file (for already-refined tasks) or in `docs/07-implementation-plan/high-level-tasks.md` (for unrefined tasks). Read the existing definition, apply all three lenses, produce a refined spec.
+- **Refine** — input is a rough idea, partial description, or an unrefined task entry from `docs/07-implementation-plan/high-level-tasks.md`. Map it to phase and requirements; shape it into a properly scoped task.
 - **Create** — input is a goal, possibly referencing a phase. Assign the next available `T-NNN`, place it in the correct phase, fully specify it.
 
 ---
@@ -108,9 +108,9 @@ Numbered list. Each criterion is testable — a test can pass or fail against it
 - ...
 
 ### Flags, Open Questions, Assumptions, Recommendations
-- **Flags:** Any known unknowns or risks that need resolution before implementation. Provided recommendations if possible.
-- **Open Questions:** Specific questions that must be answered to clarify the task. Provided recommendations if possible.
-- **Assumptions:** Any assumptions made during task definition that need validation. Provided recommendations if possible.
+1. Flags/Open Questions/Assumptions should be specific and actionable. Avoid vague statements. Provide recommendations when possible to guide resolution.
+2. ...
+3. ...
 
 ### Test Strategy
 - **Unit tests:** What to test in isolation, key parametrize axes.
@@ -129,6 +129,7 @@ Adapt to complexity. Simple tasks may omit integration tests. Never omit Goal, S
 - **Single-purpose.** One PR, one coherent change. Split if needed.
 - **Respect phases.** Reference future-phase work as a dependency; never pull it in.
 - **Easy to understand.** The output tasks should be easy to understand and easy to read.
+- **Output placement.** Place the finished refined task spec in the relevant `docs/07-implementation-plan/phase-N.md` file. The phase file is the canonical task definition once refined.
 
 ---
 

@@ -185,7 +185,7 @@ See `docs/03-system-behavior.md`, `docs/04-architecture.md`, `docs/05-data-and-s
 
 ## Implementation Workflow
 
-- One refined, single-purpose task at a time, aligned with `docs/02-product-requirements.md` through `docs/07-implementation-plan.md`.
+- One refined, single-purpose task at a time. Task scope and status live in the relevant `docs/07-implementation-plan/phase-N.md` file.
 - Read only the authoritative docs needed for the task before coding.
 - Restate the task as a verifiable goal (see _Goal-driven execution_) before writing code.
 - Ship the smallest vertical slice that satisfies the task. No speculative abstractions or unrelated cleanup.

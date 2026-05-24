@@ -15,15 +15,15 @@ Treat KiteFS as a **product** — its user-facing operations, contracts, and gua
 
 A single behavior may span requirements, flows, API signatures, and storage contracts. Cross-reference these to build a holistic picture:
 
-| Purpose                              | Doc                                     |
-| ------------------------------------ | --------------------------------------- |
-| Scope and goals                      | `docs/00-project-context.md`            |
-| Concrete usage scenario              | `docs/01-reference-use-case.md`         |
-| Requirements and acceptance criteria | `docs/02-product-requirements.md`       |
-| Operation flows                      | `docs/03-system-behavior.md`            |
-| Storage formats (when relevant)      | `docs/05-data-and-storage-contracts.md` |
-| SDK signatures, CLI, errors          | `docs/06-api-and-cli-contracts.md`      |
-| Task scope, status, dependencies     | `docs/07-implementation-plan.md`        |
+| Purpose                              | Doc                                                                |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| Scope and goals                      | `docs/00-project-context.md`                                       |
+| Concrete usage scenario              | `docs/01-reference-use-case.md`                                    |
+| Requirements and acceptance criteria | `docs/02-product-requirements.md`                                  |
+| Operation flows                      | `docs/03-system-behavior.md`                                       |
+| Storage formats (when relevant)      | `docs/05-data-and-storage-contracts.md`                            |
+| SDK signatures, CLI, errors          | `docs/06-api-and-cli-contracts.md`                                 |
+| Task scope, status, dependencies     | `docs/07-implementation-plan/phase-N.md` (the relevant phase file) |
 
 Every scenario must be consistent with **all** relevant docs. For example: A scenario about `apply` must align with its requirement in `02`, its flow in `03`, and its signature in `06`.
 
@@ -31,7 +31,7 @@ Every scenario must be consistent with **all** relevant docs. For example: A sce
 
 # Workflow
 
-1. **Read task definitions** in `docs/07-implementation-plan.md`. A task counts as done when its status is `done`.
+1. **Read task definitions** from the relevant `docs/07-implementation-plan/phase-N.md` file. A task counts as done when its status is `done`.
 2. **Read relevant docs** for the behaviors those tasks touch.
 3. **Identify user-visible behavior** introduced by the done tasks — new/changed SDK methods, CLI commands, error conditions, or observable output formats.
 4. **Apply the Decision Gate** below. If no BDD is needed, report why and stop.

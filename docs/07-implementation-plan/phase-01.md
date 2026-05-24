@@ -38,6 +38,7 @@ _Out of scope:_
 4. Every BB sub-package listed in the source-path-mapping table exists under `src/kitefs/` with an `__init__.py` (empty body acceptable). `enums.py` and `py.typed` exist at the package root.
 5. `just clean-build` (which chains `clear → check → test → build`) exits `0` on the unmodified skeleton.
 6. The base install does not declare or pull in any AWS-specific runtime dependency; `pyproject.toml` contains no `[aws]` extras group.
+7. For now `src/kitefs/providers/aws/__init__.py` must be completely blank and must not import `boto3`. This solidifies the constraint that importing the base package on a machine without AWS extras will not fail.
 
 **Doc References:**
 
@@ -51,10 +52,10 @@ _Out of scope:_
 
 **Flags, Open Questions, Assumptions, Recommendations:**
 
-- **Flag — Partial FR-CLI-001 coverage:** the placeholder CLI satisfies "command available after install" and "`--help` works" but does NOT yet enforce the full FR-CLI-001 contract (no-subcommand → non-zero exit with help, plain-text error rendering). T-003 owns the full contract. _Recommendation:_ accept Click's default invoke-without-subcommand behavior (which already exits non-zero with usage); do not add custom no-subcommand handling here.
+- **Flag — Partial FR-CLI-001 coverage:** the placeholder CLI satisfies "command available after install" and "`--help` works" but does NOT yet enforce the full FR-CLI-001 contract (no-subcommand → non-zero exit with help, plain-text error rendering). T-003 owns the full contract. _Answer:_ accept Click's default invoke-without-subcommand behavior (which already exits non-zero with usage); do not add custom no-subcommand handling here. T-003 owns the full contract
 - **Assumption:** `pyproject.toml` and `justfile` are already partially set up in the repo and only need the `[project.scripts]` addition plus the `kitefs.cli:main` target. Validated against the current files.
 - **Assumption:** `src/kitefs/__init__.py` carries only `__version__` for now; full re-exports are scheduled by T-002 (errors/enums) and T-022 (definition types and `FeatureStore`).
-- **Open Question — `__version__` source:** hard-coded `"0.1.0"` vs. dynamic `importlib.metadata.version("kitefs")`. _Recommendation:_ hard-code for the skeleton — dynamic resolution adds complexity not required here and is easy to flip later.
+- **Open Question — `__version__` source:** hard-coded `"0.1.0"` vs. dynamic `importlib.metadata.version("kitefs")`. _Answer:_ hard-code for the skeleton — dynamic resolution adds complexity not required here and is easy to flip later.
 
 **Test Strategy:**
 
@@ -119,9 +120,9 @@ _Out of scope:_
 
 **Flags, Open Questions, Assumptions, Recommendations:**
 
-- **Flag — `ValidationError.report` typing cycle:** `ValidationReport` is documented in [docs/06 § Return Types](06-api-and-cli-contracts.md#return-types) and conceptually lives in `kitefs.sdk.results` (T-011). Defining the concrete dataclass in T-002 would pull SDK return-type concerns into the foundation layer; not defining it leaves `ValidationError.report` typed loosely. _Recommendation:_ annotate via `if TYPE_CHECKING: from kitefs.sdk.results import ValidationReport` and use a string forward reference (`report: "ValidationReport"`); accept `report` as a constructor argument with no runtime isinstance check. T-011 owns the dataclass itself.
-- **Open Question — Enum value style:** `enum.Enum` with string values matching member names (e.g. `FeatureType.STRING.value == "STRING"`) is the simplest serialization fit for the registry JSON contract. _Recommendation:_ use `enum.Enum` (not `IntEnum` or `StrEnum`) with explicit string values; verify against [05 § Feature Group Entry Schema](05-data-and-storage-contracts.md) when T-021 lands and adjust if mismatched.
-- **Open Question — Helper signature:** docs do not prescribe a specific helper API. _Recommendation:_ keep the helper internal to `kitefs.errors` for now (`format_actionable(*, setting=None, group=None, field=None, problem, next_step) -> str`); raise-site callers import it by name. Refactor freely as the first real raiser arrives in T-003 / T-012.
+- **Flag — `ValidationError.report` typing cycle:** `ValidationReport` is documented in [docs/06 § Return Types](06-api-and-cli-contracts.md#return-types) and conceptually lives in `kitefs.sdk.results` (T-011). Defining the concrete dataclass in T-002 would pull SDK return-type concerns into the foundation layer; not defining it leaves `ValidationError.report` typed loosely. _Answer:_ annotate via `if TYPE_CHECKING: from kitefs.sdk.results import ValidationReport` and use a string forward reference (`report: "ValidationReport"`); accept `report` as a constructor argument with no runtime isinstance check. T-011 owns the dataclass itself.
+- **Open Question — Enum value style:** `enum.Enum` with string values matching member names (e.g. `FeatureType.STRING.value == "STRING"`) is the simplest serialization fit for the registry JSON contract. _Answer:_ use `enum.Enum` (not `IntEnum` or `StrEnum`) with explicit string values; verify against [05 § Feature Group Entry Schema](05-data-and-storage-contracts.md) when T-021 lands and adjust if mismatched.
+- **Open Question — Helper signature:** docs do not prescribe a specific helper API. _Answer:_ keep the helper internal to `kitefs.errors` for now (`format_actionable(*, setting=None, group=None, field=None, problem, next_step) -> str`); raise-site callers import it by name. Refactor freely as the first real raiser arrives in T-003 / T-012.
 - **Assumption:** No exception class needs custom `__init__` beyond `Exception`'s default; `ValidationError` adds `report`, every other class is `pass`-bodied. Validated against the docs — no other attributes are documented.
 
 **Test Strategy:**
