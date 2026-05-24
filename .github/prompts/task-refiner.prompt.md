@@ -83,6 +83,7 @@ Do not produce a spec when the docs cannot support it.
 **Phase:** P-N — <Phase Name>
 **Branch:** `feat/T-NNN-short-slug`
 **Status:** not started
+**Refined status:** yes
 
 ### Goal
 One sentence: what is true after this task is done that wasn't true before.
@@ -106,6 +107,11 @@ Numbered list. Each criterion is testable — a test can pass or fail against it
 - [Requirement ID](docs/0N-document.md#section) — one-line summary of what it mandates.
 - ...
 
+### Flags, Open Questions, Assumptions, Recommendations
+- **Flags:** Any known unknowns or risks that need resolution before implementation. Provided recommendations if possible.
+- **Open Questions:** Specific questions that must be answered to clarify the task. Provided recommendations if possible.
+- **Assumptions:** Any assumptions made during task definition that need validation. Provided recommendations if possible.
+
 ### Test Strategy
 - **Unit tests:** What to test in isolation, key parametrize axes.
 - **Integration tests:** Which multi-module flows through the library's internal layers to verify (if any). These exercise the collaboration between modules (e.g., config → provider → store) without external services.
@@ -121,8 +127,8 @@ Adapt to complexity. Simple tasks may omit integration tests. Never omit Goal, S
 - **No invention.** Every behavior, API, flag, or storage detail traces to a doc, or is flagged.
 - **No ambiguity.** If a criterion has two interpretations, pick one and cite the doc — or flag it.
 - **Single-purpose.** One PR, one coherent change. Split if needed.
-- **Flag unknowns.** Use `OPEN QUESTION:` followed by what needs resolution.
 - **Respect phases.** Reference future-phase work as a dependency; never pull it in.
+- **Easy to understand.** The output tasks should be easy to understand and easy to read.
 
 ---
 

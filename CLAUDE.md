@@ -193,6 +193,7 @@ See `docs/03-system-behavior.md`, `docs/04-architecture.md`, `docs/05-data-and-s
 - If a BDD scenario fails against current code, treat it as an implementation gap — never weaken the scenario.
 - Validate narrowly first; finish with `just clean-build` before declaring done.
 - If docs are missing, ambiguous, or conflicting, stop and surface the gap.
+- **Important**: Do not update tasks status by yourself. User will do that.
 
 ---
 
