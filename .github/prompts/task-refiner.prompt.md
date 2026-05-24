@@ -127,6 +127,7 @@ Adapt to complexity. Simple tasks may omit integration tests. Never omit Goal, S
 - **Single-purpose.** One PR, one coherent change. Split if needed.
 - **Respect phases.** Reference future-phase work as a dependency; never pull it in.
 - **Easy to understand.** The output tasks should be easy to understand and easy to read.
+- **Recommendations.** When you find "Flags, Open Questions, Assumptions, Recommendations", do your best to provide a recommendation for how to resolve it, not just the problem. Follow the agent instructions provided to you to find the optimal solution.
 - **Output placement.** Place the finished refined task spec in the relevant `docs/07-implementation-plan/phase-N.md` file. The phase file is the canonical task definition once refined.
 
 ---
