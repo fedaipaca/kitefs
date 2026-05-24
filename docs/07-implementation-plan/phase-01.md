@@ -4,7 +4,7 @@
 
 ### T-001 — Local Package Skeleton
 
-**Status:** not started
+**Status:** done
 **Branch:** `feat/T-001-package-skeleton`
 **Refined status:** yes
 
