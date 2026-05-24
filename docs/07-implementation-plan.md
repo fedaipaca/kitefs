@@ -181,9 +181,69 @@ _Out of scope:_
 
 **Status:** not started
 **Branch:** `feat/T-003-cli-entry`
-**Goal:** Set up the CLI framework and the outermost error boundary.
-**Description:** Create the CLI command group and wire the console-script. Every subcommand has a `--help` flag and rejects invalid input before doing any work. Catch `KiteFSError` subclasses and render plain-text actionable messages on stderr with a non-zero exit code. No raw tracebacks for expected user errors. Unexpected errors fall through with their traceback.
-**Requirements and References:** [FR-CLI-001](02-product-requirements.md#fr-cli-001--installed-cli-entry-point), [AP-7](04-architecture.md#architectural-design-principles), [CLI Error Boundary](03-system-behavior.md#cli-error-boundary)
+**Refined status:** yes
+
+**Goal:** The `kitefs` console script honors the full FR-CLI-001 contract — `kitefs --help` exits `0`, `kitefs` with no subcommand prints help to stderr and exits non-zero, and any `KiteFSError` raised below the entry point renders as a plain-text actionable message on stderr with exit code `1`, while unexpected exceptions fall through with their traceback and exit code `2`.
+
+**Scope:**
+
+_In scope:_
+
+- `src/kitefs/cli/__init__.py`: keep the existing Click group named `main` from T-001 (no subcommands added here); set `context_settings={"help_option_names": ["-h", "--help"]}` only if it does not already exist; do not add `invoke_without_command=True` (the default missing-subcommand behavior already exits non-zero with usage on stderr per Click's `MissingCommand`).
+- `src/kitefs/cli/__init__.py`: add a thin entry-point wrapper (e.g. `def cli() -> None`) that invokes the Click group inside an error boundary; update `[project.scripts] kitefs = "kitefs.cli:cli"` in `pyproject.toml` so the console script targets this wrapper instead of the bare Click group.
+- Error boundary in the wrapper:
+  - Let `click.exceptions.ClickException` and `SystemExit` propagate unchanged so Click's own usage/help/exit-code handling continues to work.
+  - Catch `kitefs.errors.KiteFSError` (and subclasses), print `f"Error: {error}"` to `sys.stderr` (one line, no traceback, no `repr`), and exit with code `1`.
+  - Any other `Exception` is re-raised so the Python default excepthook prints the traceback and the process exits with code `2` via `sys.exit(2)` from a `try/except BaseException` outermost layer that prints the traceback via `traceback.print_exception` to stderr before exiting `2`. Keyboard interrupt (`KeyboardInterrupt`) propagates with Python's default behavior — do not catch it.
+- Stdout vs. stderr: confirm Click's defaults route `--help` text to stdout and usage/error text from `MissingCommand` and `UsageError` to stderr; do not override these channels.
+- No subcommands are wired in this task. The wrapper exists purely as the outermost boundary; producer/consumer scaffolding lands in T-004/T-005, and other subcommands land in P-8 onward.
+- `tests/integration/test_cli_entry.py` (or a dedicated `tests/integration/test_cli_error_boundary.py`): cover the contract points listed in Acceptance Criteria using `click.testing.CliRunner` against `main`, plus subprocess invocation of the installed `kitefs` console script for the wrapper-level paths that `CliRunner` cannot cover (raw exception → exit `2` with traceback on stderr).
+
+_Out of scope:_
+
+- Any concrete subcommand body (`init`, `init-config`, `apply`, `list`, `describe`, `ingest`, `materialize`) — owned by their respective tasks.
+- Color and `NO_COLOR` handling — Click 8 already disables ANSI when stdout is not a TTY and respects `NO_COLOR`; this task does not add custom logic for it. If a deviation is observed, file a follow-up task.
+- Subcommand-level input validation. Each subcommand task is responsible for rejecting invalid input before doing any work; T-003 only guarantees the boundary that surfaces those rejections cleanly when they raise `KiteFSError`.
+- Project-root discovery, configuration loading, or any SDK construction inside the CLI entry — the wrapper is purely presentational and does not import `kitefs.sdk` or `kitefs.config` at module top.
+- Logging configuration and verbosity flags.
+
+**Acceptance Criteria:**
+
+1. `kitefs --help` exits `0` and prints Click's auto-generated usage block to stdout.
+2. `kitefs` (no arguments) exits non-zero and prints usage information to stderr (stdout remains empty for the usage text). Verified via subprocess against the installed console script.
+3. The console script entry point in `pyproject.toml` resolves to `kitefs.cli:cli` (the wrapper) and the wrapper invokes the existing `main` Click group.
+4. When a function below `main` raises a `KiteFSError` subclass with message `"<msg>"`, the process exits with code `1` and stderr contains exactly one line matching `"Error: <msg>\n"`; stdout is empty; no Python traceback appears in either stream. Verified by parametrizing across at least three subclasses from [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) (e.g. `ConfigurationError`, `FeatureGroupNotFoundError`, `OfflineStoreReadError`).
+5. When a function below `main` raises a non-`KiteFSError` exception (e.g. `RuntimeError("boom")`), the process exits with code `2` and stderr contains a Python traceback ending with the raised exception's repr; stdout is empty.
+6. `click.exceptions.UsageError` raised within a subcommand callback continues to render via Click's default formatting (does not get re-wrapped by the `KiteFSError` branch). Confirmed by registering a throwaway test-only subcommand inside the test that raises `click.UsageError("bad")` and asserting Click's standard `Usage: ...\nError: bad\n` rendering and exit code `2`.
+7. Importing `kitefs.cli` does not import `kitefs.sdk`, `kitefs.config`, `kitefs.providers`, `kitefs.offline_store`, `kitefs.online_store`, `kitefs.registry`, `kitefs.validation`, or `kitefs.join_engine` (verified by inspecting `sys.modules` after a fresh `import kitefs.cli` in a subprocess). The CLI module imports only `click`, `sys`, `traceback`, and `kitefs.errors`.
+8. `just clean-build` continues to pass after the change.
+
+**Doc References:**
+
+- [FR-CLI-001 — Installed CLI Entry Point](02-product-requirements.md#fr-cli-001--installed-cli-entry-point) — entry point exists, `--help` works, no-subcommand exits non-zero with help, actionable errors without raw tracebacks for normal user errors.
+- [AP-7 — Explicit Failure with Actionable Errors](04-architecture.md#architectural-design-principles) — single shared error taxonomy across SDK and CLI; CLI is the outermost error boundary.
+- [CLI Error Boundary](03-system-behavior.md#cli-error-boundary) — exit `0` on success, non-zero on failure, plain text on stderr, no tracebacks for expected user errors.
+- [Error Model](04-architecture.md#error-model) — unexpected errors fall through with their traceback; expected errors meet the actionable-error standard.
+- [docs/06 § CLI Global Behavior](06-api-and-cli-contracts.md#global-behavior) — `0` success, `1` user errors, `2` unexpected internal; result on stdout, errors on stderr; Click as the framework.
+- [docs/06 § Exception Hierarchy](06-api-and-cli-contracts.md#exception-hierarchy) — concrete `KiteFSError` subclasses the boundary must catch.
+
+**Flags, Open Questions, Assumptions, Recommendations:**
+
+- **Flag — Exit code for `kitefs` with no subcommand:** Click's default `MissingCommand` exits with `2`, but [docs/06 § Global Behavior](06-api-and-cli-contracts.md#global-behavior) reserves `2` for "unexpected internal errors" and `1` for "user errors (invalid input, missing groups, configuration problems)". A missing subcommand is arguably user input invalid, not internal. _Recommendation:_ accept Click's default (`2`) without remapping — FR-CLI-001's only stated requirement is "non-zero exit code", and remapping `MissingCommand → 1` would require swallowing and re-raising Click's exception, increasing surface area for bugs. If a stricter mapping is required later, file a follow-up after observing real usage. The acceptance criteria above intentionally assert "non-zero" rather than a specific code for AC-2.
+- **Flag — Order of `try/except` clauses in the wrapper:** the wrapper must catch `KiteFSError` *before* the bare `Exception` clause, and must let `click.exceptions.ClickException`/`SystemExit`/`KeyboardInterrupt` propagate. _Recommendation:_ structure the wrapper as: `try: main(standalone_mode=True) ... except KiteFSError as e: print(f"Error: {e}", file=sys.stderr); sys.exit(1) except SystemExit: raise except KeyboardInterrupt: raise except BaseException: traceback.print_exc(); sys.exit(2)`. Click already calls `sys.exit` internally with `standalone_mode=True`, so `SystemExit` carries Click's intended exit code through unchanged.
+- **Open Question — Should the boundary print operation context (e.g. command name, args) alongside the error?** Docs require "plain text on stderr with operation context" but do not specify whether that context is the subcommand name or comes from the exception message itself. _Recommendation:_ rely on `KiteFSError` messages to carry their own operation context (per the actionable-error standard already enforced at raise sites in T-002 and downstream tasks); the boundary contributes only the `Error: ` prefix. If future tasks need a richer prefix, extend then.
+- **Assumption:** T-001 has landed before T-003, so `kitefs.cli.main` exists as a no-subcommand Click group and `[project.scripts]` already targets `kitefs.cli:main`. T-003 only renames the entry-point target to `kitefs.cli:cli` and adds the wrapper; it does not re-author the group. Validated against the T-001 spec at [P-1 § T-001](#t-001--local-package-skeleton).
+- **Assumption:** T-002 has landed, so `from kitefs.errors import KiteFSError` is importable. The boundary catches the base class only; subclass-specific handling is not the boundary's concern.
+- **Assumption:** Exit code `2` for unexpected internal errors is implemented by an explicit `sys.exit(2)` after `traceback.print_exc()`, *not* by allowing Python's default unhandled-exception path (which exits `1`). Without this, AC-5 would fail. Validated by inspecting CPython behavior — unhandled exceptions exit `1`, so the wrapper must override.
+
+**Test Strategy:**
+
+- _Unit tests:_ `tests/unit/cli/test_help.py` — invoke `main` via `CliRunner` with `["--help"]`; assert `result.exit_code == 0` and `"Usage:" in result.output`. Invoke `main` via `CliRunner` with `[]` and assert `result.exit_code != 0` and the usage text is present in `result.output` (CliRunner merges streams unless `mix_stderr=False`; use `mix_stderr=False` to assert stdout is empty and stderr carries the usage line for the no-subcommand case).
+- _Integration tests:_ `tests/integration/test_cli_error_boundary.py` —
+  - Register a temporary subcommand on a copy of the Click group (or on `main` inside the test, removed in teardown) that raises a parametrized `KiteFSError` subclass; invoke via `CliRunner(mix_stderr=False)` and assert exit code `1`, stdout empty, stderr equals `"Error: <msg>\n"`, no `"Traceback"` substring.
+  - Same setup, but the temporary subcommand raises `RuntimeError("boom")`; invoke via subprocess against the installed `kitefs` script (CliRunner does not preserve traceback formatting) and assert exit code `2`, stdout empty, stderr contains `"Traceback"` and `"RuntimeError: boom"`.
+  - Same setup, but the temporary subcommand raises `click.UsageError("bad")`; assert Click's default rendering and exit code (Click defaults to `2` for `UsageError`) — the boundary must not interfere.
+  - Subprocess-launch `python -c "import kitefs.cli; import sys; print(sorted(k for k in sys.modules if k.startswith('kitefs.')))"` and assert no forbidden modules from AC-7 are imported.
 
 ### T-004 — kitefs init (Producer Scaffold)
 
