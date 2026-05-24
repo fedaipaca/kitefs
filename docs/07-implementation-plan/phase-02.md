@@ -6,7 +6,7 @@
 
 ### T-003 — CLI Entry Point and Error Boundary
 
-**Status:** not started
+**Status:** done
 **Refined status:** yes
 
 **Goal:** The `kitefs` console script honors the full FR-CLI-001 contract — `kitefs --help` exits `0`, `kitefs` with no subcommand prints help to stderr and exits non-zero, and any `KiteFSError` raised below the entry point renders as a plain-text actionable message on stderr with exit code `1`, while unexpected exceptions fall through with their traceback and exit code `2`.
@@ -120,10 +120,11 @@ _Out of scope:_
    - (c) present with one entry already → only the missing entry appended.
    - (d) present with both entries already → file left untouched (byte-identical content asserted).
    - In all cases, `feature_store/definitions/` is **not** ignored (no rule matches it).
-7. When `./kitefs.yaml` already exists, `kitefs init` exits `1`, writes nothing (no new files or directories; existing files unchanged), and stderr is exactly `Error: kitefs.yaml already exists at <absolute-path>; remove it or run \`kitefs init\` from a different directory.\n` with no traceback. The exception raised is `ConfigurationError`.
+7. When `./kitefs.yaml` already exists, `kitefs init` exits `1`, writes nothing (no new files or directories; existing files unchanged), and stderr is exactly `Error: kitefs.yaml already exists at <absolute-path>; remove it or run \`kitefs init\` from a different directory.\n`with no traceback. The exception raised is`ConfigurationError`.
 8. When `feature_store/registry.json` or `feature_store/definitions/town_market_features.py` already exists while `./kitefs.yaml` is absent, `kitefs init` exits `1` via `ConfigurationError`, writes nothing new, and stderr names the conflicting absolute path.
 9. When scaffold creation fails partway (simulate by patching the `kitefs.yaml` write or the `registry.json` write to raise), the command exits non-zero and only the files this invocation created are removed. Pre-existing directories (e.g. a `feature_store/` that existed before the run) remain intact. `kitefs.yaml` is never observed in a partial state on disk.
 10. The success confirmation summary is written to stdout (not stderr) and matches this exact format:
+
     ```
     Created KiteFS producer scaffold in <absolute-cwd>:
       kitefs.yaml
@@ -135,7 +136,9 @@ _Out of scope:_
 
     Next step: edit feature_store/definitions/, then run 'kitefs apply' to register them.
     ```
+
     The `.gitignore` line is replaced by `  .gitignore (appended N entry/entries)` when entries were appended to an existing file, and omitted entirely when both entries were already present.
+
 11. Importing `kitefs.cli` (and the scaffold module) does not import `kitefs.sdk`, `kitefs.config`, `kitefs.providers`, `kitefs.registry`, `kitefs.offline_store`, `kitefs.online_store`, `kitefs.validation`, or `kitefs.join_engine` (verified by inspecting `sys.modules` after a fresh `python -c "import kitefs.cli"` in a subprocess). The scaffold module's top-level imports are exactly `pathlib`, `os`, `tempfile`, `json`, and `kitefs.errors`.
 12. `just clean-build` passes after the change.
 
@@ -151,7 +154,7 @@ _Out of scope:_
 
 **Resolved Decisions:**
 
-- **D1 — Exception for "already initialized":** raise `ConfigurationError` (see AC-7 for exact message). Selected via the rule at `docs/06-api-and-cli-contracts.md` § Exception Hierarchy — *"`ConfigurationError` always indicates a setup problem the user must fix in `kitefs.yaml` or environment variables."* T-005 reuses this choice.
+- **D1 — Exception for "already initialized":** raise `ConfigurationError` (see AC-7 for exact message). Selected via the rule at `docs/06-api-and-cli-contracts.md` § Exception Hierarchy — _"`ConfigurationError` always indicates a setup problem the user must fix in `kitefs.yaml` or environment variables."_ T-005 reuses this choice.
 - **D2 — Atomicity:** track every **file** the invocation creates; on failure remove them best-effort in reverse creation order, then re-raise. `kitefs.yaml` is written last (de-facto commit marker). The two text files (`kitefs.yaml`, `registry.json`) use temp-file-then-rename. Pre-existing directories are tolerated and not removed on rollback. Covered by AC-9.
 - **D3 — Pre-existing `feature_store/` and `.gitignore`:** directories created with `exist_ok=True`. `feature_store/registry.json` and `feature_store/definitions/town_market_features.py` are conflict-aborts via `ConfigurationError` (AC-8). `.gitignore` is append-only per AC-6.
 - **D4 — Example definition contents:** byte-identical copy of `town_market_features` from `docs/01-reference-use-case.md` § Town Market Features, embedded as a string constant in the scaffold module. Runtime importability asserted only after P-3 lands; T-004 asserts byte-equality (AC-5).

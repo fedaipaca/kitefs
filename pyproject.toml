@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-kitefs = "kitefs.cli:main"
+kitefs = "kitefs.cli:cli"
 
 [build-system]
 requires = ["uv_build>=0.11.1,<0.12.0"]
