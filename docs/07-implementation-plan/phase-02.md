@@ -76,7 +76,7 @@ _Out of scope:_
 
 ### T-004 — kitefs init (Producer Scaffold)
 
-**Status:** not started
+**Status:** done
 **Refined status:** yes
 
 **Goal:** Running `kitefs init` in a directory without `./kitefs.yaml` produces the complete producer scaffold — config, one example definition, the managed data directories, an empty registry, and `.gitignore` entries — exits `0` with a confirmation summary on stdout, and aborts with exit code `1` (exposing no partial scaffold) when a configuration already exists.
@@ -173,7 +173,7 @@ _Out of scope:_
 
 ### T-005 — kitefs init-config (Consumer Scaffold)
 
-**Status:** not started
+**Status:** done
 **Refined status:** yes
 
 **Goal:** Running `kitefs init-config` in a directory without `./kitefs.yaml` creates only the consumer `kitefs.yaml` (remote target; remote registry and online store, no offline store), exits `0` with a confirmation summary on stdout, and aborts with exit code `1` when a configuration already exists.

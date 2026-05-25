@@ -11,6 +11,26 @@ def main() -> None:
     """KiteFS command-line interface."""
 
 
+@main.command()
+def init() -> None:
+    """Scaffold a new KiteFS producer project in the current directory."""
+    from pathlib import Path
+
+    from kitefs.cli import scaffold
+
+    click.echo(scaffold.init_producer(Path.cwd()))
+
+
+@main.command(name="init-config")
+def init_config() -> None:
+    """Create a consumer-only KiteFS configuration in the current directory."""
+    from pathlib import Path
+
+    from kitefs.cli import scaffold
+
+    click.echo(scaffold.init_config(Path.cwd()))
+
+
 def cli() -> None:
     """Console-script entry point; outermost CLI error boundary."""
     try:
