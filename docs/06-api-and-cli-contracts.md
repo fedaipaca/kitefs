@@ -233,7 +233,7 @@ class FeatureStore:
 | `ingest`                  | `IngestResult`              | [FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion)                                                                                               |
 | `get_historical_features` | `pandas.DataFrame`          | [FR-OFF-002](02-product-requirements.md#fr-off-002--historical-feature-retrieval) + [FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins) |
 | `materialize`             | `MaterializeResult`         | [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups)                                                                              |
-| `get_online_features`     | `dict[str, Any]`            | [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online-retrieval)                                                                                 |
+| `get_online_features`     | `dict[str, Any]`            | [FR-ONL-002](02-product-requirements.md#fr-onl-002--single-entity-online-retrieval)                                                                                  |
 
 ### `apply`
 
@@ -939,8 +939,8 @@ Any other value — including an interpolation expression such as `${SOME_VAR:-a
 version: 1
 
 project:
-  # Project name generated from the current directory name.
-  name: "<current_directory_name>"
+  # Project name. Generated as 'kitefs_featurestore_project'. You can change this manually.
+  name: "kitefs_featurestore_project"
 
 runtime:
   # Supported values: local, remote
@@ -1021,8 +1021,8 @@ remote:
 version: 1
 
 project:
-  # Project name generated from the current directory name.
-  name: "<current_directory_name>"
+  # Project name. Generated as 'kitefs_featurestore_project'. You can change this manually.
+  name: "kitefs_featurestore_project"
 
 runtime:
   # Supported values: local, remote

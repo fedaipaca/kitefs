@@ -46,7 +46,7 @@ PRODUCER_CONFIG_TEMPLATE = """\
 version: 1
 
 project:
-  # Project name generated from the current directory name.
+  # Project name. Generated as 'kitefs_featurestore_project'. You can change this manually.
   name: "kitefs_featurestore_project"
 
 runtime:
@@ -124,7 +124,7 @@ CONSUMER_CONFIG_TEMPLATE = """\
 version: 1
 
 project:
-  # Project name generated from the current directory name.
+  # Project name. Generated as 'kitefs_featurestore_project'. You can change this manually.
   name: "kitefs_featurestore_project"
 
 runtime:
