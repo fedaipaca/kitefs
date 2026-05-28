@@ -82,11 +82,14 @@ A feature group is either offline-only or offline-and-online.
 - **Priority:** Must Have
 - **Traces To:** G-5, PP-7
 
-Users attach business-level expectations to feature fields. Supported operators in MVP: `gt`, `gte`, `lt`, `lte`, `is_in` (allowed values), and `not_null`.
+Users attach business-level expectations to feature fields. Supported operators in MVP: `gt`, `gte`, `lt`, `lte`, `is_in` (allowed values), and `not_null`. Comparison expectations apply to numeric and datetime feature fields. `is_in` supports allowed string, integer, float, and datetime values.
 
 **Acceptance Criteria:**
 
 - A feature field can declare zero or more of the supported operators.
+- Numeric feature fields support `gt`, `gte`, `lt`, `lte`, `is_in` and `not_null`.
+- Datetime feature fields support `gt`, `gte`, `lt`, `lte`, `is_in` and `not_null`.
+- String feature fields support `is_in` and `not_null`; unsupported operators are rejected.
 - Structural fields do not accept expectations and are rejected if any are declared.
 
 #### FR-DEF-005 — Per-Operation Validation Modes
@@ -240,6 +243,8 @@ Users retrieve historical features from one base feature group. The caller must 
 - Retrieval supports filtering on the base group's event timestamp column with supported comparison operators.
 - Filters on any other column or with unsupported operators are rejected.
 - Row-level validation behavior is defined in [FR-VAL-001](#fr-val-001--feature-data-validation).
+- `["*"]` selects all feature fields for a group. Bare `"*"` is rejected; the wildcard must be passed inside a list.
+- A wildcard list must contain only `"*"`; mixed selections such as `["*", "feature_name"]` are rejected.
 
 #### FR-OFF-003 — Point-in-Time Correct Joins
 
@@ -259,6 +264,7 @@ Historical retrieval supports joining one additional feature group via its regis
 - Joined output columns are prefixed with the joined feature group name; base output columns are unprefixed.
 - A request to join a group with no registered join relationship from the base is rejected.
 - Joined retrieval applies request shape checks before reading offline data, then applies row-level validation independently to the base group and joined group according to each group's offline retrieval validation mode.
+- When a joined retrieval request selects fields, selection is specified per feature group; each requested group may select specific feature fields or `["*"]` for all feature fields in that group.
 
 ### Materialization
 
@@ -317,7 +323,9 @@ Users retrieve the latest stored feature values for one entity key.
 
 **Acceptance Criteria:**
 
-- A `select` specification is required and follows the same shape as offline retrieval.
+- A `select` specification is required.
+- Online `select` accepts a list of feature field names, or `["*"]` to select all online feature fields for the group. Bare `"*"` is rejected; the wildcard must be passed inside a list.
+- A wildcard list must contain only `"*"`; mixed selections such as `["*", "feature_name"]` are rejected.
 - A hit returns all structural fields plus the requested feature fields.
 - A miss returns an empty result (no rows), not an error.
 - A group with no online row for the requested entity key returns an empty result, including before the group's first successful materialization.

@@ -194,16 +194,15 @@ When `metadata` is supplied on a `FeatureGroup`, both `description` and `owner` 
 ```python
 class Expect:
     def __init__(self) -> None: ...
-
-    def not_null(self) -> "Expect": ...
-    def gt(self, value: int | float) -> "Expect": ...
-    def gte(self, value: int | float) -> "Expect": ...
-    def lt(self, value: int | float) -> "Expect": ...
-    def lte(self, value: int | float) -> "Expect": ...
-    def is_in(self, values: list[str | int | float]) -> "Expect": ...
+    def not_null(self) -> Expect: ...
+    def gt(self, value: int | float | datetime.datetime) -> Expect: ...
+    def gte(self, value: int | float | datetime.datetime) -> Expect: ...
+    def lt(self, value: int | float | datetime.datetime) -> Expect: ...
+    def lte(self, value: int | float | datetime.datetime) -> Expect: ...
+    def is_in(self, values: list[str | int | float | datetime.datetime]) -> Expect: ...
 ```
 
-Operator argument types are validated at call time. Numeric operators reject non-numeric arguments; `is_in` requires a non-empty list. Violations raise `DefinitionError`.
+Operator argument types are validated at call time. Violations raise `DefinitionError`.
 
 ---
 
@@ -310,7 +309,7 @@ def get_historical_features(
     self,
     *,
     from_: str,
-    select: list[str] | str | dict[str, list[str] | str],
+    select: list[str] | dict[str, list[str]],
     join: list[str] | None = None,
     where: dict[str, dict[str, datetime.datetime]] | None = None,
 ) -> pandas.DataFrame: ...
@@ -318,8 +317,8 @@ def get_historical_features(
 
 - `from_` is the base feature group name. (Trailing underscore avoids the Python `from` keyword.)
 - `select` is required. Its shape depends on whether a join is requested:
-  - **Without `join`:** `list[str]` for specific feature field names, or `"*"` for all feature fields.
-  - **With `join`:** `dict[str, list[str] | str]` keyed by feature group name. Each value is a list of feature field names or `"*"` for all feature fields of that group.
+  - **Without `join`:** `list[str]` for specific feature field names, or `["*"]` for all feature fields.
+  - **With `join`:** `dict[str, list[str]]` keyed by feature group name. Each value is a list of feature field names or `["*"]` for all feature fields of that group.
   - Structural fields (entity key, event timestamp, join keys) are always returned regardless of `select`.
 - `join` is a list of at most one feature group name in the MVP ([FR-OFF-003](02-product-requirements.md#fr-off-003--point-in-time-correct-joins)).
 - `where` filters the base group's event timestamp only. The shape is `{event_timestamp_name: {operator: value}}` where `operator` is one of `gt`, `gte`, `lt`, `lte`. Filters on any other column or with any other operator raise `RetrievalParameterError`.
@@ -358,13 +357,13 @@ def get_online_features(
     self,
     *,
     from_: str,
-    select: list[str] | str,
+    select: list[str],
     where: dict[str, dict[str, str | int]],
 ) -> dict[str, Any]: ...
 ```
 
 - `from_` is the target feature group name. Must be `OFFLINE_AND_ONLINE`; otherwise raises `FeatureGroupNotMaterializableError`.
-- `select` is required. A list of feature field names returns those features plus structural fields. `"*"` returns all structural and feature fields.
+- `select` is required. A list of feature field names returns those features plus structural fields. `["*"]` returns all structural and feature fields.
 - `where` filters by entity key using the same `{field_name: {operator: value}}` shape as `get_historical_features`. In the MVP the only accepted field name is the group's registered entity key, the only accepted operator is `eq`, and only a single value is allowed. Example: `where={"town_id": {"eq": 1}}`. Filters on any other field, operator, or with multiple values raise `RetrievalParameterError`.
 - Returns an empty `dict` on miss (not an error). Returns a populated `dict` on hit, keyed by registered field names.
 - Raises `FeatureGroupNotFoundError`, `FeatureGroupNotMaterializableError`, `RetrievalParameterError`, or `OnlineStoreReadError`.
@@ -867,7 +866,7 @@ class OnlineStore(abc.ABC):
     ) -> dict[str, Any]:
         """Return the row for the entity key, or an empty dict on miss.
 
-        The SDK resolves ``"*"`` to a concrete field list before calling
+        The SDK resolves `["*"]` to a concrete field list before calling
         this method. ``None`` means return all fields.
 
         Raises:

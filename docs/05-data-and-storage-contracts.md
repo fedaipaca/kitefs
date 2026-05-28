@@ -34,11 +34,11 @@ This file defines what KiteFS data looks like at rest. It owns storage formats, 
 
 ## Storage Contract Summary
 
-| Artifact      | Local Provider                                                                            | AWS Provider                                                                                    | Stores                                                          |
-| ------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Registry      | `./feature_store/registry.json`                                                           | `s3://{bucket}/{s3_prefix}/registry.json`                                                          | Registered feature group definitions and runtime metadata.      |
-| Offline store | `{storage_root}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet`   | `s3://{bucket}/{s3_prefix}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet` | Historical feature records.                                     |
-| Online store  | `{storage_root}/data/online_store/online.db` (SQLite, one table per online-capable group) | One DynamoDB table per online-capable group, named `{dynamodb_table_prefix}{group_name}`          | Active latest feature record per entity key for online-capable groups. |
+| Artifact      | Local Provider                                                                            | AWS Provider                                                                                       | Stores                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Registry      | `./feature_store/registry.json`                                                           | `s3://{bucket}/{s3_prefix}/registry.json`                                                          | Registered feature group definitions and runtime metadata.             |
+| Offline store | `{storage_root}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet`   | `s3://{bucket}/{s3_prefix}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet` | Historical feature records.                                            |
+| Online store  | `{storage_root}/data/online_store/online.db` (SQLite, one table per online-capable group) | One DynamoDB table per online-capable group, named `{dynamodb_table_prefix}{group_name}`           | Active latest feature record per entity key for online-capable groups. |
 
 Local and AWS providers store the same logical columns, types, and successful-state granularity. Differences are limited to the physical layer and provider-specific write failure behavior defined in this document.
 
@@ -71,9 +71,9 @@ The registry is a single JSON document. It is the derived artifact described in 
 
 ### Locations
 
-| Provider | Location                               |
-| -------- | -------------------------------------- |
-| Local    | `./feature_store/registry.json`        |
+| Provider | Location                                  |
+| -------- | ----------------------------------------- |
+| Local    | `./feature_store/registry.json`           |
 | AWS      | `s3://{bucket}/{s3_prefix}/registry.json` |
 
 ### Serialization Rules
@@ -121,7 +121,11 @@ These rules together guarantee that the same logical registry content produces b
     {
       "description": "<string | null>",
       "dtype": "STRING | INTEGER | FLOAT | DATETIME",
-      "expect": [{ "type": "not_null" }, { "type": "gt", "value": 0 }],
+      "expect": [
+        { "type": "not_null" },
+        { "type": "gt", "value": 0 },
+        { "type": "lte", "value": "2025-12-31T23:59:59.000000Z" }
+      ],
       "name": "<string>"
     }
   ],
@@ -155,7 +159,7 @@ Field order in serialized output is lexicographic per `sort_keys=True`; the exam
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `applied_at`                    | Set by the registry generation step. Updated on every successful `apply` for this group.                                                                                                                                                                                                                                                            |
 | `last_materialized_at`          | Runtime-managed. Updated on successful materialization per [FR-MAT-001](02-product-requirements.md#fr-mat-001--materialize-online-eligible-groups). `null` until the group's first successful materialization. Preserved across `apply` runs for groups that still exist.                                                                           |
-| `entity_key`, `event_timestamp` | Required structural objects. `event_timestamp.dtype` is always `DATETIME` in the registry, even when the Python definition omits the `dtype` argument.                                                                                                                                                                                               |
+| `entity_key`, `event_timestamp` | Required structural objects. `event_timestamp.dtype` is always `DATETIME` in the registry, even when the Python definition omits the `dtype` argument.                                                                                                                                                                                              |
 | `features`                      | Non-empty list of feature objects, sorted alphabetically by `name`.                                                                                                                                                                                                                                                                                 |
 | `features[].expect`             | List of constraint objects, or `null` if the feature has no expectations. Each constraint has a `type` field; operators that carry an argument also have a `value` field. Supported `type` values mirror the operators in [FR-DEF-004](02-product-requirements.md#fr-def-004--feature-expectations). The `is_in` constraint carries a list `value`. |
 | `join_keys`                     | List of zero or one join key objects in the MVP, per [FR-DEF-001](02-product-requirements.md#fr-def-001--feature-group-definition-as-code). Empty list when no join key is declared.                                                                                                                                                                |
@@ -189,9 +193,9 @@ data/offline_store/
 
 ### Full Paths
 
-| Provider | Path                                                                                            |
-| -------- | ----------------------------------------------------------------------------------------------- |
-| Local    | `{storage_root}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet`         |
+| Provider | Path                                                                                               |
+| -------- | -------------------------------------------------------------------------------------------------- |
+| Local    | `{storage_root}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet`            |
 | AWS      | `s3://{bucket}/{s3_prefix}/data/offline_store/{group_name}/year=YYYY/month=MM/{file_name}.parquet` |
 
 Per-group offline directories (`{storage_root}/data/offline_store/{group_name}/`) are created lazily on first successful ingestion. Reading a group with no offline files produces an empty result with the expected schema.
@@ -217,11 +221,11 @@ Readers SHOULD use `pyarrow.dataset.dataset(..., partitioning='hive')` and pass 
 {source}_{YYYYMMDDTHHMMSS}_{short_id}.parquet
 ```
 
-| Segment           | Meaning                                                                                                                                                                             |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Segment           | Meaning                                                                                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `source`          | Write-origin prefix. The MVP prefix is `ing` for ingested data. `mock` and `sample` are reserved for post-MVP use (see [FR-MOCK-001](02-product-requirements.md#fr-mock-001--mock-data-generation), [FR-SAM-001](02-product-requirements.md#fr-sam-001--smart-sampling)). |
-| `YYYYMMDDTHHMMSS` | UTC wall-clock time of the write, with second precision and no separators.                                                                                                          |
-| `short_id`        | 6-character lowercase alphanumeric string derived from `uuid.uuid4().hex[:6]`. Makes file names collision-resistant within the same second; collision probability is acceptable for MVP scale.                                                      |
+| `YYYYMMDDTHHMMSS` | UTC wall-clock time of the write, with second precision and no separators.                                                                                                                                                                                                |
+| `short_id`        | 6-character lowercase alphanumeric string derived from `uuid.uuid4().hex[:6]`. Makes file names collision-resistant within the same second; collision probability is acceptable for MVP scale.                                                                            |
 
 The file name carries no semantic meaning beyond observability. Retrieval logic must not parse it; the partition path is the only authoritative time signal for filtering.
 
@@ -321,14 +325,14 @@ Every SQLite connection enables WAL mode (`PRAGMA journal_mode=WAL`) and sets `P
 
 The AWS online store uses one DynamoDB table per online-capable feature group. Each table stores one item per entity key value. Tables are created and managed by KiteFS; users do not provision them manually.
 
-| Table Part    | Contract                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Table Part    | Contract                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Table name    | `{dynamodb_table_prefix}{group_name}`. The prefix comes from the remote online-store configuration; the default is `kitefs_`. |
-| Partition key | The entity key column, using its DynamoDB type from [Type Mapping](#type-mapping): `N` for `INTEGER`, `S` for `STRING`. |
-| Sort key      | None.                                                                                                            |
-| Granularity   | At most one item per entity key value.                                                                           |
-| Attributes    | Entity key, event timestamp, join key (when declared), and all declared feature attributes.                      |
-| Billing mode  | On-demand (`PAY_PER_REQUEST`). MVP does not configure provisioned capacity.                                      |
+| Partition key | The entity key column, using its DynamoDB type from [Type Mapping](#type-mapping): `N` for `INTEGER`, `S` for `STRING`.       |
+| Sort key      | None.                                                                                                                         |
+| Granularity   | At most one item per entity key value.                                                                                        |
+| Attributes    | Entity key, event timestamp, join key (when declared), and all declared feature attributes.                                   |
+| Billing mode  | On-demand (`PAY_PER_REQUEST`). MVP does not configure provisioned capacity.                                                   |
 
 ### Item Shape
 
@@ -336,13 +340,13 @@ Each item contains only the logical columns. There are no provider-internal attr
 
 ```json
 {
-  "<entity_key_name>":      { "N|S": "<value>" },
+  "<entity_key_name>": { "N|S": "<value>" },
   "<event_timestamp_name>": { "S": "2025-01-01T00:00:00.000000Z" },
-  "<join_key_name>":        { "N|S": "<value>" },
-  "<string_feature>":       { "S": "some_text" },
-  "<integer_feature>":      { "N": "42" },
-  "<float_feature>":        { "N": "27200.0" },
-  "<datetime_feature>":     { "S": "2024-12-01T00:00:00.000000Z" }
+  "<join_key_name>": { "N|S": "<value>" },
+  "<string_feature>": { "S": "some_text" },
+  "<integer_feature>": { "N": "42" },
+  "<float_feature>": { "N": "27200.0" },
+  "<datetime_feature>": { "S": "2024-12-01T00:00:00.000000Z" }
 }
 ```
 
@@ -419,20 +423,20 @@ Structural fields (entity key, event timestamp, join key) are never null in any 
 
 These invariants hold at all times for any valid KiteFS storage state and are testable in isolation from operation behavior.
 
-| Invariant                          | Contract                                                                                                                                       |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Registry determinism               | The same logical registry content produces byte-for-byte identical JSON output, including the trailing newline.                                |
-| Registry validity                  | The registry is always a valid JSON document with a `feature_groups` top-level field.                                                          |
-| Registry atomicity                 | A registry write either fully replaces the prior document or leaves it untouched. Partial documents are never visible to readers.              |
-| Offline partition determinism      | A record's event timestamp determines exactly one `year=YYYY/month=MM/` partition.                                                             |
-| Offline file immutability          | Existing Parquet files are immutable. New data is always represented by additional files.                                                      |
-| Offline file atomicity             | A Parquet file is exposed at its final path only after the full payload is durably written. Partial files are never visible to readers.        |
-| Offline schema consistency         | All Parquet files for one feature group share the same columns and storage types.                                                              |
-| Online logical granularity         | After a successful materialization, online reads expose at most one active record per entity key per online-capable group.                     |
-| SQLite physical granularity        | SQLite holds exactly one row per entity key per online-capable group table.                                                                    |
-| SQLite materialization atomicity   | A SQLite per-group materialization either fully replaces the prior committed table contents for that group or leaves them untouched.           |
-| DynamoDB item granularity          | DynamoDB holds at most one item per entity key value per online-capable group table.                                                            |
-| DynamoDB per-item atomicity        | Each `PutRequest` overwrite is atomic for that entity key. A failed materialization may leave a partially refreshed group table visible.        |
-| DynamoDB repairability             | A successful DynamoDB rerun overwrites items with the latest rows from offline storage and repairs a failed partial attempt.                    |
-| Datetime sort consistency          | Text-stored datetimes sort lexicographically in chronological order under the [Datetime Serialization Format](#datetime-serialization-format). |
+| Invariant                          | Contract                                                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Registry determinism               | The same logical registry content produces byte-for-byte identical JSON output, including the trailing newline.                                  |
+| Registry validity                  | The registry is always a valid JSON document with a `feature_groups` top-level field.                                                            |
+| Registry atomicity                 | A registry write either fully replaces the prior document or leaves it untouched. Partial documents are never visible to readers.                |
+| Offline partition determinism      | A record's event timestamp determines exactly one `year=YYYY/month=MM/` partition.                                                               |
+| Offline file immutability          | Existing Parquet files are immutable. New data is always represented by additional files.                                                        |
+| Offline file atomicity             | A Parquet file is exposed at its final path only after the full payload is durably written. Partial files are never visible to readers.          |
+| Offline schema consistency         | All Parquet files for one feature group share the same columns and storage types.                                                                |
+| Online logical granularity         | After a successful materialization, online reads expose at most one active record per entity key per online-capable group.                       |
+| SQLite physical granularity        | SQLite holds exactly one row per entity key per online-capable group table.                                                                      |
+| SQLite materialization atomicity   | A SQLite per-group materialization either fully replaces the prior committed table contents for that group or leaves them untouched.             |
+| DynamoDB item granularity          | DynamoDB holds at most one item per entity key value per online-capable group table.                                                             |
+| DynamoDB per-item atomicity        | Each `PutRequest` overwrite is atomic for that entity key. A failed materialization may leave a partially refreshed group table visible.         |
+| DynamoDB repairability             | A successful DynamoDB rerun overwrites items with the latest rows from offline storage and repairs a failed partial attempt.                     |
+| Datetime sort consistency          | Text-stored datetimes sort lexicographically in chronological order under the [Datetime Serialization Format](#datetime-serialization-format).   |
 | Cross-provider logical consistency | After successful writes, local and AWS providers store the same logical columns, types, and feature group granularity for the same logical data. |

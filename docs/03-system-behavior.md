@@ -64,7 +64,7 @@ Each operation checks only the stores and settings it needs ([FR-CFG-004](02-pro
 
 ### UTC Datetime Handling
 
-All datetime checks use the UTC rule in [CON-006](02-product-requirements.md#con-006--utc-only-datetimes). KiteFS does not convert between time zones. This applies to event timestamp values written to and read from any store, event timestamp filter values in `get_historical_features`, and `event_timestamp` returned by online retrieval.
+All datetime checks use the UTC rule in [CON-006](02-product-requirements.md#con-006--utc-only-datetimes). KiteFS does not convert between time zones. This applies to event timestamp values written to and read from any store, datetime feature values, datetime expectation values declared through `Expect, event timestamp filter values in `get_historical_features`, and datetime values returned by online retrieval.
 
 ### Common Failure Handling
 
@@ -395,7 +395,7 @@ Reads historical offline data. The base feature group drives output rows. An opt
 **Behavior:**
 
 1. Load configuration and the registry.
-2. Validate request shape before reading data: `select` is required and its shape must match the presence or absence of `join` (flat list or `"*"` without join; dict keyed by group name with join). Validate groups, selected fields, timestamp filters, and join shape.
+2. Validate request shape before reading data: `select` is required and its shape must match the presence or absence of join. Without join, select must be a flat list of feature field names or `["*"]`. With join, select must be a dict keyed by feature group name, where each value is a list of feature field names or `["*"]`. Validate groups, selected fields, timestamp filters, and join shape.
 3. Read base offline data; apply the event-timestamp filter.
 4. If the base result is empty, return an empty DataFrame with the expected schema.
 5. Apply base field selection. Run row-level structural checks on the base result (always; mode-independent under [FR-VAL-001](02-product-requirements.md#fr-val-001--data-validation)); structural failure aborts the operation. Then run row-level feature checks per the base group's `offline_retrieval_validation` mode.
@@ -519,7 +519,7 @@ Retrieves stored online feature values for one entity key ([FR-ONL-002](02-produ
 
 1. Load configuration and the registry.
 2. Confirm the target group exists and is configured for online serving; abort otherwise.
-3. Validate the request shape: `where` must contain exactly one entry whose field name matches the group's registered entity key, the operator must be `eq`, the value must be a single literal type-compatible with the entity key dtype, and selected fields must be registered features of the group.
+3. Validate the request shape: `select` is required and must be a list of feature field names or `["*"]`; `where` must contain exactly one entry whose field name matches the group's registered entity key, the operator must be `eq`, the value must be a single literal type-compatible with the entity key dtype, and selected fields must be registered features of the group.
 4. Extract the entity key value from the validated `where` and look it up in the online store.
 5. Return the matched record as a dictionary on hit, or an empty result on miss (an empty result is not an error).
 
@@ -549,7 +549,7 @@ flowchart TD
 | ---------------------------------------------------------------------------------------- | ----------------------- |
 | Group is missing or offline-only                                                         | Operation fails.        |
 | `where` field is not the entity key, operator is not `eq`, or value type is incompatible | Operation fails.        |
-| Selected field is not registered                                                         | Operation fails.        |
+| Selected field is not registered or invalid                                              | Operation fails.        |
 | No online row or item exists for the entity key                                          | Return an empty result. |
 
 Batch online retrieval ([FR-ONL-003](02-product-requirements.md#fr-onl-003--batch-online-retrieval), Could Have) is out of MVP scope and is not covered by this flow.
