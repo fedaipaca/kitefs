@@ -10,7 +10,8 @@ from typing import Any
 import pandas as pd
 
 from kitefs.config import RuntimeConfig, load_runtime_config
-from kitefs.errors import IngestionShapeError, RegistryReadError, RetrievalParameterError, format_actionable
+from kitefs.errors import IngestionShapeError, JoinError, RegistryReadError, RetrievalParameterError, format_actionable
+from kitefs.join_engine import point_in_time_join
 from kitefs.offline_store import build_offline_schema, prepare_ingestion_table
 from kitefs.providers import Provider, TimestampFilter, build_provider
 from kitefs.registry import (
@@ -173,19 +174,15 @@ class FeatureStore:
         """Retrieve historical feature rows from one registered feature group.
 
         Validates the request, applies event-timestamp filtering to a
-        partition-pruned read from the local offline store, runs offline
-        retrieval validation, and returns a pandas DataFrame.
-
-        This method implements the no-join path (Feature 8).  Pass join=None
-        (default).  Dict-shaped select and join= are reserved for the join path
-        (Feature 9) and will raise RetrievalParameterError if supplied here.
+        partition-pruned read from the local offline store, optionally joins one
+        additional feature group point-in-time, runs offline retrieval validation,
+        and returns a pandas DataFrame.
 
         Args:
             from_: Registered feature group name (the base group).
-            select: Required.  A list of feature field names, or ["*"] to select
-                all declared feature fields.  Dict-shaped select is not valid
-                without join=.
-            join: Not supported in this version; pass None (default).
+            select: Required.  Without join, a list of feature field names or
+                ["*"]; with join, a dict keyed by base and joined group names.
+            join: None or a list containing at most one joined feature group.
             where: Optional event-timestamp filter.  Shape:
                 {event_timestamp_name: {op: datetime}} where op is one of
                 gt, gte, lt, lte and the value is a datetime.datetime.
@@ -204,15 +201,65 @@ class FeatureStore:
             RegistryReadError: Registry missing or unreadable.
         """
         document = self._provider.registry_store().read()
+        joined_group = _resolve_join_group(join, from_)
         description = _describe_feature_group(document, from_)
 
-        if join is not None:
-            raise RetrievalParameterError(
-                format_actionable(
-                    group=from_,
-                    problem="join= is not supported in the no-join path; pass join=None",
-                    next_step="omit join= to retrieve from a single group without joining",
+        if joined_group is not None:
+            joined_description = _describe_feature_group(document, joined_group)
+            base_join_key = _find_join_key(description, joined_group)
+            selected_base_names, selected_joined_names = _resolve_join_select(select, description, joined_description)
+            timestamp_filter = _build_timestamp_filter(where, description.event_timestamp.name, from_)
+
+            base_schema = build_offline_schema(description)
+            base_table = self._provider.offline_store().read(
+                from_,
+                event_timestamp_column=description.event_timestamp.name,
+                schema=base_schema,
+                timestamp_filter=timestamp_filter,
+            )
+            base_frame = base_table.to_pandas()
+            base_columns = _structural_columns(description) + selected_base_names
+            joined_columns = _structural_columns(joined_description) + selected_joined_names
+            output_columns = base_columns + _prefixed_columns(joined_group, joined_columns)
+
+            if len(base_frame) == 0:
+                return base_frame[base_columns].reindex(columns=output_columns)
+
+            base_frame = base_frame[base_columns]
+            selected_base_desc = _selected_description(description, selected_base_names)
+            accepted_base, _ = validate_dataframe(
+                selected_base_desc,
+                base_frame,
+                description.offline_retrieval_validation,
+                operation="retrieval",
+            )
+
+            joined_schema = build_offline_schema(joined_description)
+            joined_table = self._provider.offline_store().read(
+                joined_group,
+                event_timestamp_column=joined_description.event_timestamp.name,
+                schema=joined_schema,
+                timestamp_filter=None,
+            )
+            joined_frame = joined_table.to_pandas()[joined_columns]
+            if len(joined_frame) > 0:
+                selected_joined_desc = _selected_description(joined_description, selected_joined_names)
+                joined_frame, _ = validate_dataframe(
+                    selected_joined_desc,
+                    joined_frame,
+                    joined_description.offline_retrieval_validation,
+                    operation="retrieval",
                 )
+
+            return point_in_time_join(
+                base_frame=accepted_base,
+                joined_frame=joined_frame,
+                base_join_key_column=base_join_key,
+                base_event_timestamp_column=description.event_timestamp.name,
+                joined_entity_key_column=joined_description.entity_key.name,
+                joined_event_timestamp_column=joined_description.event_timestamp.name,
+                joined_output_columns=joined_columns,
+                joined_group_name=joined_group,
             )
 
         selected_names = _resolve_no_join_select(select, description)
@@ -252,6 +299,107 @@ class FeatureStore:
 _SUPPORTED_EXTENSIONS = {".csv", ".parquet"}
 
 _ALLOWED_WHERE_OPS: frozenset[str] = frozenset({"gt", "gte", "lt", "lte"})
+
+
+def _resolve_join_group(join: list[str] | None, base_group_name: str) -> str | None:
+    """Validate the join parameter and return the requested joined group name."""
+    if join is None or join == []:
+        return None
+    if isinstance(join, str):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=base_group_name,
+                problem="join must be a list of feature group names, not a bare string",
+                next_step='pass join=["group_name"] or omit join= for no-join retrieval',
+            )
+        )
+    if not isinstance(join, list):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=base_group_name,
+                problem="join must be None or a list with at most one feature group name",
+                next_step='pass join=["group_name"] or omit join= for no-join retrieval',
+            )
+        )
+    if len(join) > 1:
+        raise JoinError(
+            format_actionable(
+                group=base_group_name,
+                problem="historical retrieval supports at most one joined feature group",
+                next_step="pass a single group name in join= or run separate retrievals",
+            )
+        )
+
+    joined_group = join[0]
+    if not isinstance(joined_group, str) or not joined_group.strip():
+        raise RetrievalParameterError(
+            format_actionable(
+                group=base_group_name,
+                problem="join item must be a non-empty feature group name string",
+                next_step='pass join=["group_name"]',
+            )
+        )
+    return joined_group
+
+
+def _resolve_join_select(
+    select: list[str] | dict[str, list[str]] | None,
+    base_description: FeatureGroupDescription,
+    joined_description: FeatureGroupDescription,
+) -> tuple[list[str], list[str]]:
+    """Validate dict-shaped select for joined historical retrieval."""
+    if select is None:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=base_description.name,
+                problem="select is required",
+                next_step="pass a dict keyed by the base and joined feature group names",
+            )
+        )
+    if not isinstance(select, dict):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=base_description.name,
+                problem="select must be a dict when join= is provided",
+                next_step=(
+                    f'pass select={{"{base_description.name}": ["feature"], "{joined_description.name}": ["feature"]}}'
+                ),
+            )
+        )
+
+    expected = {base_description.name, joined_description.name}
+    actual = set(select.keys())
+    if actual != expected:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=base_description.name,
+                problem=f"select keys for join must be exactly {sorted(expected)}, got {sorted(actual)}",
+                next_step="include one select entry for the base group and one for the joined group",
+            )
+        )
+
+    base_selected = _resolve_no_join_select(select[base_description.name], base_description)
+    joined_selected = _resolve_no_join_select(select[joined_description.name], joined_description)
+    return base_selected, joined_selected
+
+
+def _find_join_key(base_description: FeatureGroupDescription, joined_group_name: str) -> str:
+    """Return the base join-key column that references the joined group."""
+    for join_key in base_description.join_keys:
+        if join_key.referenced_group == joined_group_name:
+            return join_key.name
+    raise JoinError(
+        format_actionable(
+            group=base_description.name,
+            problem=f"no JoinKey references joined group '{joined_group_name}'",
+            next_step="declare a JoinKey on the base group that references the joined feature group",
+        )
+    )
+
+
+def _prefixed_columns(group_name: str, columns: list[str]) -> list[str]:
+    """Return joined output column names prefixed with the joined group name."""
+    return [f"{group_name}_{column}" for column in columns]
 
 
 def _resolve_no_join_select(

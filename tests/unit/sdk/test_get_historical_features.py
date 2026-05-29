@@ -8,7 +8,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 
-from kitefs.errors import FeatureGroupNotFoundError, RetrievalParameterError
+from kitefs.errors import FeatureGroupNotFoundError, JoinError, RetrievalParameterError
 from kitefs.providers.local.offline_store import LocalOfflineStore
 from kitefs.sdk.feature_store import FeatureStore
 from tests.helpers.tmp_store import make_initialized_project
@@ -35,6 +35,25 @@ town_market_features = FeatureGroup(
     ],
     ingestion_validation=ValidationMode.NONE,
     metadata=Metadata(description="Town market", owner="team", tags={}),
+)
+"""
+
+_CITY_MARKET_SRC = """\
+from kitefs import (
+    EntityKey, EventTimestamp, Feature, FeatureGroup, FeatureType,
+    Metadata, StorageTarget, ValidationMode,
+)
+
+city_market_features = FeatureGroup(
+    name="city_market_features",
+    storage_target=StorageTarget.OFFLINE_AND_ONLINE,
+    entity_key=EntityKey(name="city_id", dtype=FeatureType.INTEGER),
+    event_timestamp=EventTimestamp(name="event_timestamp"),
+    features=[
+        Feature(name="avg_price_per_sqm", dtype=FeatureType.FLOAT),
+    ],
+    ingestion_validation=ValidationMode.NONE,
+    metadata=Metadata(description="City market", owner="team", tags={}),
 )
 """
 
@@ -88,6 +107,30 @@ def _stub_empty_read(monkeypatch: pytest.MonkeyPatch) -> None:
         return schema.empty_table()
 
     monkeypatch.setattr(LocalOfflineStore, "read", _empty_read)
+
+
+def _stub_read_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Monkeypatch LocalOfflineStore.read to fail if request validation reaches storage."""
+
+    def _fail_read(
+        self: LocalOfflineStore,
+        feature_group: str,
+        *,
+        event_timestamp_column: str,
+        schema: pa.Schema,
+        timestamp_filter: object = None,
+    ) -> pa.Table:
+        raise AssertionError(f"read should not be called for {feature_group}")
+
+    monkeypatch.setattr(LocalOfflineStore, "read", _fail_read)
+
+
+def _setup_project_with_city(tmp_path: Path) -> Path:
+    """Scaffold, write three definitions, apply, and return the project root."""
+    _setup_project(tmp_path)
+    defs_dir = tmp_path / "feature_store" / "definitions"
+    (defs_dir / "city_market_features.py").write_text(_CITY_MARKET_SRC, encoding="utf-8")
+    return tmp_path
 
 
 class TestSelectValidation:
@@ -169,19 +212,158 @@ class TestSelectValidation:
         assert "city_name" in msg
         assert "feature" in msg
 
-    def test_join_provided_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Providing join= raises RetrievalParameterError (not supported in Feature 8)."""
+    def test_list_select_with_join_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Providing list-shaped select with join raises RetrievalParameterError."""
         _setup_project(tmp_path)
         monkeypatch.chdir(tmp_path)
         FeatureStore().apply()
-        _stub_empty_read(monkeypatch)
+        _stub_read_failure(monkeypatch)
 
-        with pytest.raises(RetrievalParameterError):
+        with pytest.raises(RetrievalParameterError) as exc_info:
             FeatureStore().get_historical_features(
                 from_="listing_features",
                 select=["net_area"],
                 join=["town_market_features"],
             )
+
+        msg = str(exc_info.value)
+        assert "select" in msg
+        assert "dict" in msg
+
+    def test_multiple_join_groups_raises_join_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Requesting more than one joined group raises JoinError before storage reads."""
+        _setup_project_with_city(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(JoinError) as exc_info:
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={
+                    "listing_features": ["net_area"],
+                    "town_market_features": ["avg_price_per_sqm"],
+                    "city_market_features": ["avg_price_per_sqm"],
+                },
+                join=["town_market_features", "city_market_features"],
+            )
+
+        assert "at most one" in str(exc_info.value)
+
+    def test_join_select_missing_joined_group_key_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Join select must include exactly one key for the joined group."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(RetrievalParameterError):
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={"listing_features": ["net_area"]},
+                join=["town_market_features"],
+            )
+
+    def test_join_select_raw_wildcard_value_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Each join select value must be a list; raw '*' is invalid."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(RetrievalParameterError):
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={"listing_features": "*", "town_market_features": ["*"]},  # type: ignore[dict-item]
+                join=["town_market_features"],
+            )
+
+    def test_join_unknown_selected_feature_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unknown selected fields are rejected per group before storage reads."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(RetrievalParameterError) as exc_info:
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={"listing_features": ["net_area"], "town_market_features": ["median_price"]},
+                join=["town_market_features"],
+            )
+
+        assert "median_price" in str(exc_info.value)
+
+    def test_unregistered_joined_group_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An unknown joined group raises FeatureGroupNotFoundError before storage reads."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(FeatureGroupNotFoundError):
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={"listing_features": ["net_area"], "unknown_group": ["avg_price_per_sqm"]},
+                join=["unknown_group"],
+            )
+
+    def test_missing_join_relationship_raises_join_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Joining without a base JoinKey relationship raises JoinError before storage reads."""
+        _setup_project_with_city(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(JoinError) as exc_info:
+            FeatureStore().get_historical_features(
+                from_="town_market_features",
+                select={"town_market_features": ["avg_price_per_sqm"], "city_market_features": ["avg_price_per_sqm"]},
+                join=["city_market_features"],
+            )
+
+        msg = str(exc_info.value)
+        assert "city_market_features" in msg
+        assert "JoinKey" in msg
+
+    def test_valid_join_with_empty_base_returns_joined_schema(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A valid join request with no base rows returns the full joined output schema."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        calls: list[str] = []
+
+        def _recording_empty_read(
+            self: LocalOfflineStore,
+            feature_group: str,
+            *,
+            event_timestamp_column: str,
+            schema: pa.Schema,
+            timestamp_filter: object = None,
+        ) -> pa.Table:
+            calls.append(feature_group)
+            return schema.empty_table()
+
+        monkeypatch.setattr(LocalOfflineStore, "read", _recording_empty_read)
+
+        result = FeatureStore().get_historical_features(
+            from_="listing_features",
+            select={"listing_features": ["net_area"], "town_market_features": ["avg_price_per_sqm"]},
+            join=["town_market_features"],
+        )
+
+        assert calls == ["listing_features"]
+        assert list(result.columns) == [
+            "listing_id",
+            "sold_at",
+            "town_id",
+            "net_area",
+            "town_market_features_town_id",
+            "town_market_features_event_timestamp",
+            "town_market_features_avg_price_per_sqm",
+        ]
 
     def test_unknown_group_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Retrieving from an unregistered group raises FeatureGroupNotFoundError."""
