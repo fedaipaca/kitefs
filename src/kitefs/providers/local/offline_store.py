@@ -213,11 +213,13 @@ class LocalOfflineStore(OfflineStore):
     ) -> pa.Table:
         """Read historical feature rows from the local offline store.
 
-        Uses pyarrow.dataset with Hive partitioning to scan Parquet files under
-        feature_store/data/offline_store/{group}/year=YYYY/month=MM/. When a
-        TimestampFilter is provided, row-level timestamp predicates are combined
-        with approximate year/month partition predicates so pyarrow can skip whole
-        monthly partitions before opening any files.
+        When *timestamp_filter* is None, enumerates all Parquet files sorted by
+        (st_mtime_ns, path) and concatenates them in that order. This preserves
+        ingest order so that tie-breaking in select_latest_rows() correctly
+        picks the later-ingested row when timestamps are equal.
+
+        When *timestamp_filter* is provided, uses pyarrow.dataset with Hive
+        partitioning to scan with row-level and partition-level predicates.
 
         Args:
             feature_group: Registry name of the feature group to read.
@@ -238,6 +240,27 @@ class LocalOfflineStore(OfflineStore):
         group_dir = self._offline_root / feature_group
         if not group_dir.exists() or not any(group_dir.rglob("*.parquet")):
             return schema.empty_table()
+
+        if timestamp_filter is None:
+            # Full read for materialization: enumerate files in ingest order so
+            # the later-ingested row wins ties in select_latest_rows().
+            parquet_files = sorted(
+                group_dir.rglob("*.parquet"),
+                key=lambda p: (p.stat().st_mtime_ns, str(p)),
+            )
+            if not parquet_files:
+                return schema.empty_table()
+            try:
+                tables = [pq.read_table(str(p), columns=schema.names) for p in parquet_files]
+            except Exception as exc:
+                raise OfflineStoreReadError(
+                    format_actionable(
+                        group=feature_group,
+                        problem=f"failed to read Parquet file from offline store: {exc}",
+                        next_step="check that Parquet files are not corrupted and have the expected columns",
+                    )
+                ) from exc
+            return pa.concat_tables(tables)
 
         try:
             dataset = ds.dataset(str(group_dir), format="parquet", partitioning="hive")

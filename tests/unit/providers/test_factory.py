@@ -63,7 +63,7 @@ class TestRemoteTarget:
 
 
 class TestLocalProviderStubs:
-    """LocalProvider raises NotImplementedError for online store; offline store is implemented."""
+    """LocalProvider returns implemented stores for offline, registry, and online."""
 
     def test_offline_store_returns_offline_store_instance(self, tmp_path) -> None:
         """LocalProvider.offline_store returns an OfflineStore instance."""
@@ -72,11 +72,12 @@ class TestLocalProviderStubs:
         provider = build_provider(_cfg("local"), tmp_path)
         assert isinstance(provider.offline_store(), OfflineStore)
 
-    def test_online_store_raises(self, tmp_path) -> None:
-        """LocalProvider.online_store raises NotImplementedError."""
+    def test_online_store_returns_online_store_instance(self, tmp_path) -> None:
+        """LocalProvider.online_store returns an OnlineStore instance."""
+        from kitefs.providers.base import OnlineStore
+
         provider = build_provider(_cfg("local"), tmp_path)
-        with pytest.raises(NotImplementedError):
-            provider.online_store()
+        assert isinstance(provider.online_store(), OnlineStore)
 
     def test_registry_store_returns_registry_store(self, tmp_path) -> None:
         """LocalProvider.registry_store returns a RegistryStore instance."""

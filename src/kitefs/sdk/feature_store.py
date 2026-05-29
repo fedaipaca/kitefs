@@ -23,7 +23,13 @@ from kitefs.registry import (
 from kitefs.registry import (
     describe_feature_group as _describe_feature_group,
 )
-from kitefs.sdk.results import ApplyResult, FeatureGroupDescription, FeatureGroupSummary, IngestResult
+from kitefs.sdk.results import (
+    ApplyResult,
+    FeatureGroupDescription,
+    FeatureGroupSummary,
+    IngestResult,
+    MaterializeResult,
+)
 from kitefs.validation import validate_dataframe
 
 
@@ -162,6 +168,115 @@ class FeatureStore:
             written_files=written_files,
             validation_report=report,
         )
+
+    def materialize(self, feature_group: str | None = None) -> MaterializeResult:
+        """Populate the online store from the latest offline rows.
+
+        Reads all offline rows for one named online-capable group or every
+        registered online-capable group, extracts exactly one latest row per
+        entity key by event timestamp, and atomically replaces the group's
+        SQLite table contents.
+
+        Args:
+            feature_group: Name of a single registered group to materialize.
+                When None (default), all groups with storage_target
+                OFFLINE_AND_ONLINE are materialized.
+
+        Returns:
+            MaterializeResult with succeeded, skipped, and failed groups.
+            An all-groups run with no eligible groups returns an empty result.
+
+        Raises:
+            FeatureGroupNotFoundError: Named group is not in the registry.
+            FeatureGroupNotMaterializableError: Named group has storage_target OFFLINE.
+            OfflineStoreReadError: Offline data cannot be read (before per-group tracking).
+            RegistryReadError: Registry is missing or undecodable.
+        """
+        from kitefs.enums import StorageTarget
+        from kitefs.errors import FeatureGroupNotFoundError, FeatureGroupNotMaterializableError
+        from kitefs.online_store import select_latest_rows
+        from kitefs.sdk.results import FailedGroup, MaterializeResult, SkippedGroup
+
+        _DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+        registry_store = self._provider.registry_store()
+        document = registry_store.read()
+        all_groups = document.get("feature_groups", {})
+
+        # Resolve target list.
+        if feature_group is not None:
+            if feature_group not in all_groups:
+                raise FeatureGroupNotFoundError(
+                    format_actionable(
+                        group=feature_group,
+                        problem="feature group is not registered",
+                        next_step="run store.apply() to register the group, or check the group name",
+                    )
+                )
+            entry = all_groups[feature_group]
+            if entry.get("storage_target") != StorageTarget.OFFLINE_AND_ONLINE.value:
+                raise FeatureGroupNotMaterializableError(
+                    format_actionable(
+                        group=feature_group,
+                        problem=(
+                            f"storage_target is {entry.get('storage_target')}"
+                            " — only OFFLINE_AND_ONLINE groups can be materialized"
+                        ),
+                        next_step=(
+                            "change the group's storage_target to OFFLINE_AND_ONLINE and re-apply, or omit this group"
+                        ),
+                    )
+                )
+            targets = [feature_group]
+        else:
+            targets = sorted(
+                name
+                for name, entry in all_groups.items()
+                if entry.get("storage_target") == StorageTarget.OFFLINE_AND_ONLINE.value
+            )
+
+        succeeded: list[str] = []
+        skipped: list[SkippedGroup] = []
+        failed: list[FailedGroup] = []
+
+        for name in targets:
+            description = _describe_feature_group(document, name)
+            schema = build_offline_schema(description)
+
+            # Read all offline rows — no timestamp filter.
+            offline_table = self._provider.offline_store().read(
+                name,
+                event_timestamp_column=description.event_timestamp.name,
+                schema=schema,
+                timestamp_filter=None,
+            )
+
+            if len(offline_table) == 0:
+                skipped.append(SkippedGroup(name=name, reason="no offline data"))
+                continue
+
+            latest_rows = select_latest_rows(
+                offline_table,
+                entity_key_column=description.entity_key.name,
+                event_timestamp_column=description.event_timestamp.name,
+            )
+
+            try:
+                self._provider.online_store().materialize(
+                    name,
+                    latest_rows,
+                    entity_key_column=description.entity_key.name,
+                )
+            except Exception as exc:
+                failed.append(FailedGroup(name=name, error_message=str(exc)))
+                continue
+
+            # Update last_materialized_at in the document and persist.
+            document["feature_groups"][name]["last_materialized_at"] = datetime.now(UTC).strftime(_DATETIME_FMT)
+            registry_store.write(document)
+            succeeded.append(name)
+
+        return MaterializeResult(succeeded=succeeded, skipped=skipped, failed=failed)
 
     def get_historical_features(
         self,

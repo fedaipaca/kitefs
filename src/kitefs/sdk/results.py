@@ -102,14 +102,47 @@ class IngestResult:
     validation_report: ValidationReport | None
 
 
+@dataclass(frozen=True)
+class SkippedGroup:
+    """A group excluded from materialization because it had no offline data."""
+
+    name: str
+    reason: str  # human-readable, e.g. "no offline data"
+
+
+@dataclass(frozen=True)
+class FailedGroup:
+    """A group that failed during materialization due to a provider write error."""
+
+    name: str
+    error_message: str
+
+
+@dataclass(frozen=True)
+class MaterializeResult:
+    """Per-group outcome summary returned by FeatureStore.materialize().
+
+    succeeded: names of groups whose online table was fully replaced.
+    skipped: groups excluded because they had no offline rows.
+    failed: groups that encountered a provider write error.
+    """
+
+    succeeded: list[str]
+    skipped: list[SkippedGroup]
+    failed: list[FailedGroup]
+
+
 __all__ = [
     "ApplyResult",
+    "FailedGroup",
     "FeatureGroupDescription",
     "FeatureGroupSummary",
     "FieldSpec",
     "IngestResult",
     "JoinKeySpec",
+    "MaterializeResult",
     "MetadataSpec",
+    "SkippedGroup",
     "ValidationFailure",
     "ValidationReport",
 ]

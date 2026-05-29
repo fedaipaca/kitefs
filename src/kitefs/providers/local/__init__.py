@@ -2,6 +2,7 @@ from pathlib import Path
 
 from kitefs.providers.base import OfflineStore, OnlineStore, Provider, RegistryStore
 from kitefs.providers.local.offline_store import LocalOfflineStore
+from kitefs.providers.local.online_store import LocalOnlineStore
 from kitefs.providers.local.registry import LocalRegistryStore
 
 
@@ -18,7 +19,7 @@ class LocalProvider(Provider):
         return LocalOfflineStore(self._root)
 
     def online_store(self) -> OnlineStore:
-        raise NotImplementedError("Local online store lands in Feature 5")
+        return LocalOnlineStore(self._root)
 
 
 __all__ = ["LocalProvider"]

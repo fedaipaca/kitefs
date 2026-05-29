@@ -7,23 +7,29 @@ if TYPE_CHECKING:
 
 from kitefs.sdk.results import (
     ApplyResult,
+    FailedGroup,
     FeatureGroupDescription,
     FeatureGroupSummary,
     FieldSpec,
     IngestResult,
     JoinKeySpec,
+    MaterializeResult,
     MetadataSpec,
+    SkippedGroup,
 )
 
 __all__ = [
     "ApplyResult",
+    "FailedGroup",
     "FeatureGroupDescription",
     "FeatureGroupSummary",
     "FeatureStore",
     "FieldSpec",
     "IngestResult",
     "JoinKeySpec",
+    "MaterializeResult",
     "MetadataSpec",
+    "SkippedGroup",
 ]
 
 

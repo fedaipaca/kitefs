@@ -9,12 +9,15 @@ if TYPE_CHECKING:
     from kitefs.sdk.feature_store import FeatureStore
     from kitefs.sdk.results import (
         ApplyResult,
+        FailedGroup,
         FeatureGroupDescription,
         FeatureGroupSummary,
         FieldSpec,
         IngestResult,
         JoinKeySpec,
+        MaterializeResult,
         MetadataSpec,
+        SkippedGroup,
     )
 
 __version__ = importlib.metadata.version("kitefs")
@@ -62,6 +65,7 @@ __all__ = [
     "EntityKey",
     "EventTimestamp",
     "Expect",
+    "FailedGroup",
     "Feature",
     "FeatureGroup",
     "FeatureGroupDescription",
@@ -77,6 +81,7 @@ __all__ = [
     "JoinKey",
     "JoinKeySpec",
     "KiteFSError",
+    "MaterializeResult",
     "Metadata",
     "MetadataSpec",
     "OfflineStoreError",
@@ -90,6 +95,7 @@ __all__ = [
     "RegistryReadError",
     "RegistryWriteError",
     "RetrievalParameterError",
+    "SkippedGroup",
     "StorageTarget",
     "ValidationError",
     "ValidationMode",
@@ -104,12 +110,15 @@ def __getattr__(name: str) -> object:
         return FeatureStore
     if name in {
         "ApplyResult",
+        "FailedGroup",
         "FeatureGroupDescription",
         "FeatureGroupSummary",
         "FieldSpec",
         "IngestResult",
         "JoinKeySpec",
+        "MaterializeResult",
         "MetadataSpec",
+        "SkippedGroup",
     }:
         import kitefs.sdk.results as _results
 
