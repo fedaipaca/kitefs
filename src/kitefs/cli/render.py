@@ -1,4 +1,4 @@
-"""Presentation helpers for the list and describe CLI commands.
+"""Presentation helpers for all kitefs CLI commands.
 
 All functions are pure: they receive typed result objects and return strings.
 No I/O, no SDK calls, no Click references.
@@ -10,7 +10,14 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from kitefs.sdk.results import FeatureGroupDescription, FeatureGroupSummary
+    from kitefs.sdk.results import (
+        ApplyResult,
+        FeatureGroupDescription,
+        FeatureGroupSummary,
+        IngestResult,
+        MaterializeResult,
+        ValidationReport,
+    )
 
 # Re-use the single datetime format string from the serializer.
 _DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -197,4 +204,95 @@ def _description_to_entry(desc: FeatureGroupDescription) -> dict[str, Any]:
     }
 
 
-__all__ = ["render_describe", "render_list"]
+# ---------------------------------------------------------------------------
+# apply
+# ---------------------------------------------------------------------------
+
+
+def render_apply(result: ApplyResult, *, as_json: bool) -> str:
+    """Render an ApplyResult as human-readable text or a JSON object."""
+    if as_json:
+        return json.dumps({"registered_groups": result.registered_groups, "published": result.published}, indent=2)
+    groups_str = ", ".join(result.registered_groups) if result.registered_groups else "(none)"
+    return f"Applied feature groups: {groups_str}."
+
+
+# ---------------------------------------------------------------------------
+# ingest
+# ---------------------------------------------------------------------------
+
+
+def render_ingest(result: IngestResult, *, as_json: bool) -> str:
+    """Render an IngestResult as human-readable text or a JSON object."""
+    if as_json:
+        return json.dumps(_ingest_to_dict(result), indent=2)
+    return (
+        f"Ingested {result.accepted_rows} row(s) into '{result.feature_group}'. "
+        f"Rejected {result.rejected_rows} row(s). "
+        f"Wrote {len(result.written_files)} file(s)."
+    )
+
+
+def _ingest_to_dict(result: IngestResult) -> dict[str, Any]:
+    return {
+        "feature_group": result.feature_group,
+        "accepted_rows": result.accepted_rows,
+        "rejected_rows": result.rejected_rows,
+        "written_files": result.written_files,
+        "validation_report": _validation_report_to_dict(result.validation_report),
+    }
+
+
+def _validation_report_to_dict(report: ValidationReport | None) -> dict[str, Any] | None:
+    if report is None:
+        return None
+    return {
+        "pass_count": report.pass_count,
+        "fail_count": report.fail_count,
+        "failures": [
+            {
+                "field": f.field,
+                "constraint": f.constraint,
+                "actual_value": _json_safe(f.actual_value),
+                "entity_key_value": _json_safe(f.entity_key_value),
+                "row_index": f.row_index,
+            }
+            for f in report.failures
+        ],
+    }
+
+
+def _json_safe(value: Any) -> Any:
+    """Convert value to a JSON-serializable scalar; datetime → ISO string, others → str."""
+    import datetime as _dt
+
+    if isinstance(value, _dt.datetime):
+        return value.strftime(_DATETIME_FMT)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+# ---------------------------------------------------------------------------
+# materialize
+# ---------------------------------------------------------------------------
+
+
+def render_materialize(result: MaterializeResult, *, as_json: bool) -> str:
+    """Render a MaterializeResult as human-readable text or a JSON object."""
+    if as_json:
+        return json.dumps(
+            {
+                "succeeded": result.succeeded,
+                "skipped": [{"name": s.name, "reason": s.reason} for s in result.skipped],
+                "failed": [{"name": f.name, "error_message": f.error_message} for f in result.failed],
+            },
+            indent=2,
+        )
+    succeeded_str = ", ".join(result.succeeded) if result.succeeded else "(none)"
+    skipped_str = ", ".join(f"{s.name} ({s.reason})" for s in result.skipped) if result.skipped else "(none)"
+    failed_str = ", ".join(f"{f.name} ({f.error_message})" for f in result.failed) if result.failed else "(none)"
+    return f"Succeeded: {succeeded_str}. Skipped: {skipped_str}. Failed: {failed_str}."
+
+
+__all__ = ["render_apply", "render_describe", "render_ingest", "render_list", "render_materialize"]

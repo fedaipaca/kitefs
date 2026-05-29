@@ -5,13 +5,20 @@ from __future__ import annotations
 import datetime
 import json
 
-from kitefs.cli.render import render_describe, render_list
+from kitefs.cli.render import render_apply, render_describe, render_ingest, render_list, render_materialize
 from kitefs.enums import FeatureType, StorageTarget, ValidationMode
 from kitefs.sdk.results import (
+    ApplyResult,
+    FailedGroup,
     FeatureGroupDescription,
     FeatureGroupSummary,
     FieldSpec,
+    IngestResult,
+    MaterializeResult,
     MetadataSpec,
+    SkippedGroup,
+    ValidationFailure,
+    ValidationReport,
 )
 
 # ---------------------------------------------------------------------------
@@ -224,3 +231,280 @@ class TestRenderDescribeJson:
         """last_materialized_at=None renders as JSON null."""
         data = json.loads(render_describe(_make_description(), as_json=True))
         assert data["last_materialized_at"] is None
+
+
+# ---------------------------------------------------------------------------
+# Helpers for new result types
+# ---------------------------------------------------------------------------
+
+
+def _make_apply_result(registered_groups: list[str] | None = None, published: bool = False) -> ApplyResult:
+    return ApplyResult(
+        registered_groups=(
+            registered_groups if registered_groups is not None else ["listing_features", "town_market_features"]
+        ),
+        published=published,
+    )
+
+
+def _make_ingest_result(
+    accepted: int = 6, rejected: int = 0, files: int = 1, with_report: bool = False
+) -> IngestResult:
+    report = None
+    if with_report:
+        report = ValidationReport(
+            pass_count=accepted,
+            fail_count=rejected,
+            failures=[
+                ValidationFailure(
+                    field="avg_price_per_sqm",
+                    constraint="not_null",
+                    actual_value=None,
+                    entity_key_value=1,
+                    row_index=0,
+                )
+            ]
+            if rejected > 0
+            else [],
+        )
+    return IngestResult(
+        feature_group="town_market_features",
+        accepted_rows=accepted,
+        rejected_rows=rejected,
+        written_files=[f"/tmp/store/year=2024/month=02/ing_{i}.parquet" for i in range(files)],
+        validation_report=report,
+    )
+
+
+def _make_materialize_result(
+    succeeded: list[str] | None = None,
+    skipped: list[SkippedGroup] | None = None,
+    failed: list[FailedGroup] | None = None,
+) -> MaterializeResult:
+    return MaterializeResult(
+        succeeded=succeeded if succeeded is not None else [],
+        skipped=skipped if skipped is not None else [],
+        failed=failed if failed is not None else [],
+    )
+
+
+# ---------------------------------------------------------------------------
+# render_apply — text
+# ---------------------------------------------------------------------------
+
+
+class TestRenderApplyText:
+    """render_apply(..., as_json=False) produces human-readable text."""
+
+    def test_contains_group_names(self) -> None:
+        """Group names appear in the output."""
+        result = render_apply(_make_apply_result(), as_json=False)
+        assert "listing_features" in result
+        assert "town_market_features" in result
+
+    def test_text_format(self) -> None:
+        """Output starts with 'Applied feature groups:'."""
+        result = render_apply(_make_apply_result(["town_market_features"]), as_json=False)
+        assert result.startswith("Applied feature groups:")
+        assert "town_market_features" in result
+
+    def test_empty_groups_uses_none_sentinel(self) -> None:
+        """Empty registered_groups renders as '(none)'."""
+        result = render_apply(_make_apply_result([]), as_json=False)
+        assert "(none)" in result
+
+
+# ---------------------------------------------------------------------------
+# render_apply — json
+# ---------------------------------------------------------------------------
+
+
+class TestRenderApplyJson:
+    """render_apply(..., as_json=True) produces a valid JSON object."""
+
+    def test_valid_json(self) -> None:
+        """Output is parseable JSON."""
+        result = render_apply(_make_apply_result(), as_json=True)
+        assert isinstance(json.loads(result), dict)
+
+    def test_registered_groups_field(self) -> None:
+        """JSON contains registered_groups as a list."""
+        data = json.loads(render_apply(_make_apply_result(), as_json=True))
+        assert data["registered_groups"] == ["listing_features", "town_market_features"]
+
+    def test_published_field(self) -> None:
+        """JSON contains published as a bool."""
+        data = json.loads(render_apply(_make_apply_result(published=True), as_json=True))
+        assert data["published"] is True
+
+
+# ---------------------------------------------------------------------------
+# render_ingest — text
+# ---------------------------------------------------------------------------
+
+
+class TestRenderIngestText:
+    """render_ingest(..., as_json=False) produces human-readable text."""
+
+    def test_contains_accepted_rows(self) -> None:
+        """Accepted row count appears in output."""
+        result = render_ingest(_make_ingest_result(accepted=6), as_json=False)
+        assert "6" in result
+
+    def test_contains_feature_group_name(self) -> None:
+        """Feature group name appears in output."""
+        result = render_ingest(_make_ingest_result(), as_json=False)
+        assert "town_market_features" in result
+
+    def test_contains_ingested_prefix(self) -> None:
+        """Output contains the 'Ingested' prefix."""
+        result = render_ingest(_make_ingest_result(), as_json=False)
+        assert result.startswith("Ingested")
+
+    def test_contains_written_files_count(self) -> None:
+        """Written file count appears in output."""
+        result = render_ingest(_make_ingest_result(files=3), as_json=False)
+        assert "3" in result
+
+    def test_contains_rejected_rows(self) -> None:
+        """Rejected row count appears in output."""
+        result = render_ingest(_make_ingest_result(rejected=2), as_json=False)
+        assert "Rejected 2" in result
+
+
+# ---------------------------------------------------------------------------
+# render_ingest — json
+# ---------------------------------------------------------------------------
+
+
+class TestRenderIngestJson:
+    """render_ingest(..., as_json=True) produces a valid JSON object."""
+
+    def test_valid_json(self) -> None:
+        """Output is parseable JSON."""
+        assert isinstance(json.loads(render_ingest(_make_ingest_result(), as_json=True)), dict)
+
+    def test_accepted_rows_field(self) -> None:
+        """JSON contains accepted_rows."""
+        data = json.loads(render_ingest(_make_ingest_result(accepted=6), as_json=True))
+        assert data["accepted_rows"] == 6
+
+    def test_rejected_rows_field(self) -> None:
+        """JSON contains rejected_rows."""
+        data = json.loads(render_ingest(_make_ingest_result(rejected=2), as_json=True))
+        assert data["rejected_rows"] == 2
+
+    def test_feature_group_field(self) -> None:
+        """JSON contains feature_group name."""
+        data = json.loads(render_ingest(_make_ingest_result(), as_json=True))
+        assert data["feature_group"] == "town_market_features"
+
+    def test_written_files_field(self) -> None:
+        """JSON contains written_files as a list."""
+        data = json.loads(render_ingest(_make_ingest_result(files=2), as_json=True))
+        assert isinstance(data["written_files"], list)
+        assert len(data["written_files"]) == 2
+
+    def test_validation_report_null_when_absent(self) -> None:
+        """validation_report is null when IngestResult has no report."""
+        data = json.loads(render_ingest(_make_ingest_result(), as_json=True))
+        assert data["validation_report"] is None
+
+    def test_validation_report_present_when_set(self) -> None:
+        """validation_report serializes pass_count, fail_count, failures."""
+        data = json.loads(render_ingest(_make_ingest_result(accepted=5, rejected=1, with_report=True), as_json=True))
+        rpt = data["validation_report"]
+        assert rpt is not None
+        assert "pass_count" in rpt
+        assert "fail_count" in rpt
+        assert isinstance(rpt["failures"], list)
+
+
+# ---------------------------------------------------------------------------
+# render_materialize — text
+# ---------------------------------------------------------------------------
+
+
+class TestRenderMaterializeText:
+    """render_materialize(..., as_json=False) produces human-readable text."""
+
+    def test_success_text(self) -> None:
+        """Succeeded groups appear in output."""
+        result = render_materialize(_make_materialize_result(succeeded=["town_market_features"]), as_json=False)
+        assert "Succeeded" in result
+        assert "town_market_features" in result
+
+    def test_all_sections_present(self) -> None:
+        """Succeeded, Skipped, and Failed sections always appear."""
+        result = render_materialize(_make_materialize_result(succeeded=["g"]), as_json=False)
+        assert "Succeeded:" in result
+        assert "Skipped:" in result
+        assert "Failed:" in result
+
+    def test_empty_sections_use_none_sentinel(self) -> None:
+        """Empty sections render as '(none)'."""
+        result = render_materialize(_make_materialize_result(succeeded=["g"]), as_json=False)
+        assert "(none)" in result
+
+    def test_skipped_with_reason(self) -> None:
+        """Skipped group name and reason appear in output."""
+        result = render_materialize(
+            _make_materialize_result(skipped=[SkippedGroup(name="g", reason="no offline data")]),
+            as_json=False,
+        )
+        assert "g" in result
+        assert "no offline data" in result
+
+    def test_failed_with_error_message(self) -> None:
+        """Failed group name and error message appear in output."""
+        result = render_materialize(
+            _make_materialize_result(failed=[FailedGroup(name="g", error_message="write failed")]),
+            as_json=False,
+        )
+        assert "g" in result
+        assert "write failed" in result
+
+
+# ---------------------------------------------------------------------------
+# render_materialize — json
+# ---------------------------------------------------------------------------
+
+
+class TestRenderMaterializeJson:
+    """render_materialize(..., as_json=True) produces a valid JSON object."""
+
+    def test_valid_json(self) -> None:
+        """Output is parseable JSON."""
+        assert isinstance(json.loads(render_materialize(_make_materialize_result(), as_json=True)), dict)
+
+    def test_succeeded_field(self) -> None:
+        """JSON contains succeeded as a string list."""
+        data = json.loads(
+            render_materialize(_make_materialize_result(succeeded=["town_market_features"]), as_json=True)
+        )
+        assert data["succeeded"] == ["town_market_features"]
+
+    def test_skipped_field(self) -> None:
+        """JSON contains skipped as a list of {name, reason} objects."""
+        data = json.loads(
+            render_materialize(
+                _make_materialize_result(skipped=[SkippedGroup(name="g", reason="no offline data")]),
+                as_json=True,
+            )
+        )
+        assert data["skipped"] == [{"name": "g", "reason": "no offline data"}]
+
+    def test_failed_field(self) -> None:
+        """JSON contains failed as a list of {name, error_message} objects."""
+        data = json.loads(
+            render_materialize(
+                _make_materialize_result(failed=[FailedGroup(name="g", error_message="boom")]),
+                as_json=True,
+            )
+        )
+        assert data["failed"] == [{"name": "g", "error_message": "boom"}]
+
+    def test_empty_result(self) -> None:
+        """All-empty result serializes with empty lists for all three fields."""
+        data = json.loads(render_materialize(_make_materialize_result(), as_json=True))
+        assert data == {"succeeded": [], "skipped": [], "failed": []}

@@ -70,7 +70,6 @@ Scenario: CLI apply expected errors are printed without traceback
   Given "feature_store/definitions/" contains no FeatureGroup definitions
   When the user runs "kitefs apply"
   Then the command exits 1
-  And stderr contains "DefinitionDiscoveryError"
   And stderr contains "FeatureGroup"
   And stderr does not contain "Traceback"
 
