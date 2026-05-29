@@ -1,5 +1,16 @@
-__version__ = "0.1.0"
+import importlib.metadata
 
+__version__ = importlib.metadata.version("kitefs")
+
+from kitefs.definitions import (
+    EntityKey,
+    EventTimestamp,
+    Expect,
+    Feature,
+    FeatureGroup,
+    JoinKey,
+    Metadata,
+)
 from kitefs.enums import FeatureType, StorageTarget, ValidationMode
 from kitefs.errors import (
     ConfigurationError,
@@ -30,12 +41,19 @@ __all__ = [
     "DefinitionDiscoveryError",
     "DefinitionError",
     "DefinitionValidationError",
+    "EntityKey",
+    "EventTimestamp",
+    "Expect",
+    "Feature",
+    "FeatureGroup",
     "FeatureGroupNotFoundError",
     "FeatureGroupNotMaterializableError",
     "FeatureType",
     "IngestionShapeError",
     "JoinError",
+    "JoinKey",
     "KiteFSError",
+    "Metadata",
     "OfflineStoreError",
     "OfflineStoreReadError",
     "OfflineStoreWriteError",
