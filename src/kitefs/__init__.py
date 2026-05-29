@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     # Satisfies type checkers without triggering a runtime import of kitefs.sdk,
     # which would break the CLI import-isolation contract.
     from kitefs.sdk.feature_store import FeatureStore
+    from kitefs.sdk.results import ApplyResult
 
 __version__ = importlib.metadata.version("kitefs")
 
@@ -45,6 +46,7 @@ from kitefs.errors import (
 )
 
 __all__ = [
+    "ApplyResult",
     "ConfigurationError",
     "DefinitionDiscoveryError",
     "DefinitionError",
@@ -86,4 +88,8 @@ def __getattr__(name: str) -> object:
         from kitefs.sdk import FeatureStore
 
         return FeatureStore
+    if name == "ApplyResult":
+        from kitefs.sdk.results import ApplyResult
+
+        return ApplyResult
     raise AttributeError(f"module 'kitefs' has no attribute {name!r}")
