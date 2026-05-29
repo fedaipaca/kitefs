@@ -84,11 +84,30 @@ class ValidationReport:
     failures: list[ValidationFailure]
 
 
+@dataclass(frozen=True)
+class IngestResult:
+    """Summary of a completed ingest() call.
+
+    accepted_rows: number of rows written to the offline store.
+    rejected_rows: number of rows dropped by FILTER mode or excluded before writing.
+    written_files: absolute paths of Parquet files created. Empty when accepted_rows == 0.
+    validation_report: None when ingestion_validation is NONE; otherwise the ValidationReport
+        produced by the validation engine.
+    """
+
+    feature_group: str
+    accepted_rows: int
+    rejected_rows: int
+    written_files: list[str]
+    validation_report: ValidationReport | None
+
+
 __all__ = [
     "ApplyResult",
     "FeatureGroupDescription",
     "FeatureGroupSummary",
     "FieldSpec",
+    "IngestResult",
     "JoinKeySpec",
     "MetadataSpec",
     "ValidationFailure",

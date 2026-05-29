@@ -10,6 +10,7 @@ from kitefs.sdk.results import (
     FeatureGroupDescription,
     FeatureGroupSummary,
     FieldSpec,
+    IngestResult,
     JoinKeySpec,
     MetadataSpec,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "FeatureGroupSummary",
     "FeatureStore",
     "FieldSpec",
+    "IngestResult",
     "JoinKeySpec",
     "MetadataSpec",
 ]

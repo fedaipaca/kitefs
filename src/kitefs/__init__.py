@@ -12,6 +12,7 @@ if TYPE_CHECKING:
         FeatureGroupDescription,
         FeatureGroupSummary,
         FieldSpec,
+        IngestResult,
         JoinKeySpec,
         MetadataSpec,
     )
@@ -70,6 +71,7 @@ __all__ = [
     "FeatureStore",
     "FeatureType",
     "FieldSpec",
+    "IngestResult",
     "IngestionShapeError",
     "JoinError",
     "JoinKey",
@@ -105,6 +107,7 @@ def __getattr__(name: str) -> object:
         "FeatureGroupDescription",
         "FeatureGroupSummary",
         "FieldSpec",
+        "IngestResult",
         "JoinKeySpec",
         "MetadataSpec",
     }:
