@@ -119,10 +119,53 @@ class TestMaterialize:
 
 
 class TestGet:
-    """LocalOnlineStore.get() is stubbed and raises NotImplementedError."""
+    """LocalOnlineStore.get() performs a SQLite primary-key lookup."""
 
-    def test_get_raises_not_implemented(self, tmp_path: Path) -> None:
-        """get() raises NotImplementedError (Feature 11)."""
+    def test_hit_returns_row_as_dict(self, tmp_path: Path) -> None:
+        """get() returns a dict with the matching row values on hit."""
         store = LocalOnlineStore(tmp_path)
-        with pytest.raises(NotImplementedError):
-            store.get("tmf", 1, entity_key_column="town_id", select=None)
+        t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 27800.0}])
+        store.materialize("tmf", t, entity_key_column="town_id")
+        result = store.get("tmf", 1, entity_key_column="town_id", select=["town_id", "event_timestamp", "avg_price"])
+        assert result["town_id"] == 1
+        assert result["avg_price"] == pytest.approx(27800.0)
+
+    def test_miss_returns_empty_dict(self, tmp_path: Path) -> None:
+        """get() returns {} when entity key value has no matching row."""
+        store = LocalOnlineStore(tmp_path)
+        t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
+        store.materialize("tmf", t, entity_key_column="town_id")
+        result = store.get("tmf", 999, entity_key_column="town_id", select=["town_id", "event_timestamp", "avg_price"])
+        assert result == {}
+
+    def test_missing_table_returns_empty_dict(self, tmp_path: Path) -> None:
+        """get() returns {} when the group's table has never been materialized."""
+        store = LocalOnlineStore(tmp_path)
+        result = store.get("nonexistent", 1, entity_key_column="town_id", select=None)
+        assert result == {}
+
+    def test_select_none_returns_all_columns(self, tmp_path: Path) -> None:
+        """select=None returns all columns from the table."""
+        store = LocalOnlineStore(tmp_path)
+        t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
+        store.materialize("tmf", t, entity_key_column="town_id")
+        result = store.get("tmf", 1, entity_key_column="town_id", select=None)
+        assert set(result.keys()) == {"town_id", "event_timestamp", "avg_price"}
+
+    def test_select_filters_columns(self, tmp_path: Path) -> None:
+        """select restricts the returned columns to those specified."""
+        store = LocalOnlineStore(tmp_path)
+        t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
+        store.materialize("tmf", t, entity_key_column="town_id")
+        result = store.get("tmf", 1, entity_key_column="town_id", select=["town_id", "avg_price"])
+        assert set(result.keys()) == {"town_id", "avg_price"}
+        assert "event_timestamp" not in result
+
+    def test_datetime_column_returned_as_string(self, tmp_path: Path) -> None:
+        """Datetime columns are returned as ISO-8601 strings (SDK coerces to datetime)."""
+        store = LocalOnlineStore(tmp_path)
+        t = _market_table([{"town_id": 1, "ts": "2025-06-01T00:00:00", "price": 5.0}])
+        store.materialize("tmf", t, entity_key_column="town_id")
+        result = store.get("tmf", 1, entity_key_column="town_id", select=["event_timestamp"])
+        assert isinstance(result["event_timestamp"], str)
+        assert result["event_timestamp"].startswith("2025-06-01")

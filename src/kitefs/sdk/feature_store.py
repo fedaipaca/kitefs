@@ -278,6 +278,79 @@ class FeatureStore:
 
         return MaterializeResult(succeeded=succeeded, skipped=skipped, failed=failed)
 
+    def get_online_features(
+        self,
+        *,
+        from_: str,
+        select: list[str] | None = None,
+        where: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Return the latest stored feature values for a single entity key.
+
+        Performs a point lookup against the local SQLite online store.
+        No row-level validation runs on the serving path.
+
+        Args:
+            from_: Registered feature group name.
+            select: Required.  A list of feature field names, or ["*"] to select
+                all declared feature fields.  Structural fields (entity key,
+                event timestamp, join keys) are always returned automatically.
+            where: Required.  Entity-key filter of the form
+                {entity_key_name: {"eq": value}}.  Only the group's registered
+                entity key is accepted as the filter field; only the "eq"
+                operator is supported; the value must be a single literal
+                type-compatible with the entity key dtype.
+
+        Returns:
+            A dict containing the entity key, event timestamp, any declared join
+            keys, and the selected feature fields on hit.  Returns {} on miss,
+            including when the group has never been materialized.
+
+        Raises:
+            FeatureGroupNotFoundError: Group not in the registry.
+            FeatureGroupNotMaterializableError: Group storage_target is OFFLINE.
+            RetrievalParameterError: Invalid select or where parameters.
+            OnlineStoreReadError: SQLite lookup fails.
+            RegistryReadError: Registry missing or unreadable.
+        """
+        from kitefs.enums import StorageTarget
+        from kitefs.errors import FeatureGroupNotMaterializableError
+
+        document = self._provider.registry_store().read()
+        description = _describe_feature_group(document, from_)
+
+        if description.storage_target != StorageTarget.OFFLINE_AND_ONLINE:
+            raise FeatureGroupNotMaterializableError(
+                format_actionable(
+                    group=from_,
+                    problem=(
+                        f"storage_target is {description.storage_target.value}"
+                        " — only OFFLINE_AND_ONLINE groups can be served online"
+                    ),
+                    next_step=(
+                        "change the group's storage_target to OFFLINE_AND_ONLINE and re-apply,"
+                        " or use get_historical_features for OFFLINE groups"
+                    ),
+                )
+            )
+
+        selected_names = _resolve_no_join_select(select, description)
+        entity_key_value = _build_online_entity_lookup(where, description)
+
+        output_columns = _structural_columns(description) + selected_names
+
+        raw = self._provider.online_store().get(
+            from_,
+            entity_key_value,
+            entity_key_column=description.entity_key.name,
+            select=output_columns,
+        )
+
+        if not raw:
+            return {}
+
+        return _coerce_online_result(raw, description)
+
     def get_historical_features(
         self,
         *,
@@ -774,3 +847,133 @@ def _coerce_datetime_columns(
             frame[col] = pd.to_datetime(series, utc=False, format="mixed")
 
     return frame
+
+
+_ONLINE_DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+
+def _build_online_entity_lookup(
+    where: dict[str, dict[str, Any]] | None,
+    description: FeatureGroupDescription,
+) -> str | int:
+    """Validate the online where filter and return the entity key value.
+
+    Requires:
+    - where is a non-None dict with exactly one entry.
+    - the key equals the group's registered entity key name.
+    - the operator mapping contains exactly the key "eq".
+    - the value is type-compatible with the entity key dtype.
+
+    Returns the entity key value as a Python str or int.
+
+    Raises:
+        RetrievalParameterError: Any validation failure.
+    """
+    group_name = description.name
+    ek_name = description.entity_key.name
+    ek_dtype = description.entity_key.dtype
+
+    if where is None:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                problem="where is required for online retrieval",
+                next_step=f'pass where={{"{ek_name}": {{"eq": <value>}}}}',
+            )
+        )
+    if not isinstance(where, dict) or len(where) != 1:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                problem="where must be a dict with exactly one entry keyed by the entity key field name",
+                next_step=f'pass where={{"{ek_name}": {{"eq": <value>}}}}',
+            )
+        )
+    field_name = next(iter(where))
+    if field_name != ek_name:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                field=field_name,
+                problem=(
+                    f"where filter on '{field_name}' is not supported; "
+                    f"online retrieval only accepts the entity key '{ek_name}' as the filter field"
+                ),
+                next_step=f'use where={{"{ek_name}": {{"eq": <value>}}}}',
+            )
+        )
+    ops = where[field_name]
+    if not isinstance(ops, dict):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                field=field_name,
+                problem="the operator mapping for the entity key must be a non-empty dict",
+                next_step=f'use where={{"{ek_name}": {{"eq": <value>}}}}',
+            )
+        )
+    if set(ops.keys()) != {"eq"}:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                field=field_name,
+                problem=(f"the only accepted online filter operator is 'eq'; got {sorted(ops.keys())}"),
+                next_step=f'use where={{"{ek_name}": {{"eq": <value>}}}}',
+            )
+        )
+    value = ops["eq"]
+    if not _is_entity_key_value_compatible(value, ek_dtype):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                field=field_name,
+                problem=(f"where value {value!r} is not type-compatible with entity key dtype {ek_dtype.value}"),
+                next_step=f"pass a single {ek_dtype.value.lower()} literal for '{ek_name}'",
+            )
+        )
+    return value  # type: ignore[return-value]
+
+
+def _is_entity_key_value_compatible(value: Any, dtype: Any) -> bool:
+    """Return True when value is a Python type compatible with the entity key dtype.
+
+    Entity keys may only be INTEGER or STRING (per CON-004 and FR-DEF-002).
+    bool is rejected for INTEGER because isinstance(True, int) would otherwise
+    pass silently.
+    """
+    from kitefs.enums import FeatureType
+
+    if dtype == FeatureType.INTEGER:
+        return isinstance(value, int) and not isinstance(value, bool)
+    if dtype == FeatureType.STRING:
+        return isinstance(value, str)
+    return False
+
+
+def _coerce_online_result(
+    raw: dict[str, Any],
+    description: FeatureGroupDescription,
+) -> dict[str, Any]:
+    """Convert raw SQLite values to standard Python types.
+
+    Datetime columns are serialized as ISO-8601 UTC strings in the online store.
+    This function parses those strings back to UTC-aware datetime.datetime objects.
+    All other column types pass through unchanged.
+    """
+    from kitefs.enums import FeatureType
+
+    dtype_map: dict[str, Any] = {
+        description.event_timestamp.name: description.event_timestamp.dtype,
+    }
+    for feat in description.features:
+        dtype_map[feat.name] = feat.dtype
+    for jk in description.join_keys:
+        dtype_map[jk.name] = jk.dtype
+
+    result: dict[str, Any] = {}
+    for key, value in raw.items():
+        if value is not None and dtype_map.get(key) == FeatureType.DATETIME and isinstance(value, str):
+            result[key] = datetime.strptime(value, _ONLINE_DATETIME_FMT).replace(tzinfo=UTC)
+        else:
+            result[key] = value
+    return result

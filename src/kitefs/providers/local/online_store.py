@@ -23,7 +23,7 @@ from typing import Any
 import pyarrow as pa
 
 from kitefs.enums import FeatureType
-from kitefs.errors import OnlineStoreWriteError, format_actionable
+from kitefs.errors import OnlineStoreReadError, OnlineStoreWriteError, format_actionable
 from kitefs.providers.base import OnlineStore
 
 # Mapping from KiteFS FeatureType to SQLite type affinity.
@@ -173,8 +173,53 @@ class LocalOnlineStore(OnlineStore):
         entity_key_column: str,
         select: list[str] | None,
     ) -> dict[str, Any]:
-        """Not implemented — online retrieval lands in Feature 11."""
-        raise NotImplementedError("Local online store retrieval lands in Feature 11")
+        """Return the stored online row for *entity_key_value*, or {} on miss.
+
+        Performs a single SQLite primary-key lookup on the group's table.
+        Returns a dict whose keys match the columns in *select* (or all columns
+        when *select* is None), in the same order.
+
+        Returns {} without raising when:
+        - no row matches *entity_key_value* (miss).
+        - the group's table does not exist (group never materialized).
+
+        Raises:
+            OnlineStoreReadError: Any SQLite failure other than a missing table.
+        """
+        if not self._db_path.exists():
+            return {}
+        conn = self._connect()
+        conn.row_factory = sqlite3.Row
+        try:
+            projection = "*" if select is None else ", ".join(f'"{col}"' for col in select)
+            sql = f'SELECT {projection} FROM "{feature_group}" WHERE "{entity_key_column}" = ? LIMIT 1'
+            try:
+                row = conn.execute(sql, (entity_key_value,)).fetchone()
+            except sqlite3.OperationalError as exc:
+                if "no such table" in str(exc).lower():
+                    return {}
+                raise OnlineStoreReadError(
+                    format_actionable(
+                        group=feature_group,
+                        problem=f"SQLite read failed: {exc}",
+                        next_step="check the online store database and table schema",
+                    )
+                ) from exc
+            if row is None:
+                return {}
+            return dict(row)
+        except OnlineStoreReadError:
+            raise
+        except Exception as exc:
+            raise OnlineStoreReadError(
+                format_actionable(
+                    group=feature_group,
+                    problem=f"SQLite read failed: {exc}",
+                    next_step="check the online store database and table schema",
+                )
+            ) from exc
+        finally:
+            conn.close()
 
 
 __all__ = ["LocalOnlineStore"]
