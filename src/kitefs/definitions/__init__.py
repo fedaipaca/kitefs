@@ -13,6 +13,7 @@ _NUMERIC_TYPES = (int, float, datetime.datetime)
 _ENTITY_KEY_ALLOWED = frozenset({FeatureType.STRING, FeatureType.INTEGER})
 _EVENT_TS_ALLOWED = frozenset({FeatureType.DATETIME})
 _JOIN_KEY_ALLOWED = frozenset({FeatureType.STRING, FeatureType.INTEGER})
+_FEATURE_ALLOWED = frozenset(FeatureType)
 
 
 def _require_identifier(name: str, context: str) -> None:
@@ -23,6 +24,31 @@ def _require_identifier(name: str, context: str) -> None:
                 field=name,
                 problem=f"{context} name must be a valid identifier",
                 next_step="use a name matching ^[a-zA-Z_][a-zA-Z0-9_]*$",
+            )
+        )
+
+
+def _validate_dtype(
+    *,
+    name: str,
+    context: str,
+    dtype: object,
+    allowed: frozenset[FeatureType],
+    allowed_text: str,
+    next_step: str,
+) -> None:
+    """Raise DefinitionError if dtype is not a FeatureType member in allowed.
+
+    Safely formats the invalid value without assuming .value exists, preventing
+    a raw AttributeError when callers pass non-FeatureType objects (e.g. strings, None).
+    """
+    if not isinstance(dtype, FeatureType) or dtype not in allowed:
+        dtype_label = dtype.value if isinstance(dtype, FeatureType) else repr(dtype)
+        raise DefinitionError(
+            format_actionable(
+                field=name,
+                problem=f"{context} dtype must be {allowed_text}, got {dtype_label}",
+                next_step=next_step,
             )
         )
 
@@ -87,14 +113,14 @@ class EntityKey:
         description: str | None = None,
     ) -> None:
         _require_identifier(name, "EntityKey")
-        if dtype not in _ENTITY_KEY_ALLOWED:
-            raise DefinitionError(
-                format_actionable(
-                    field=name,
-                    problem=f"EntityKey dtype must be STRING or INTEGER, got {dtype.value}",
-                    next_step="use one of STRING, INTEGER",
-                )
-            )
+        _validate_dtype(
+            name=name,
+            context="EntityKey",
+            dtype=dtype,
+            allowed=_ENTITY_KEY_ALLOWED,
+            allowed_text="STRING or INTEGER",
+            next_step="use one of STRING, INTEGER",
+        )
         self.name = name
         self.dtype = dtype
         self.description = description
@@ -109,14 +135,14 @@ class EventTimestamp:
         description: str | None = None,
     ) -> None:
         _require_identifier(name, "EventTimestamp")
-        if dtype not in _EVENT_TS_ALLOWED:
-            raise DefinitionError(
-                format_actionable(
-                    field=name,
-                    problem=f"EventTimestamp dtype must be DATETIME, got {dtype.value}",
-                    next_step="use DATETIME or omit dtype (defaults to DATETIME)",
-                )
-            )
+        _validate_dtype(
+            name=name,
+            context="EventTimestamp",
+            dtype=dtype,
+            allowed=_EVENT_TS_ALLOWED,
+            allowed_text="DATETIME",
+            next_step="use DATETIME or omit dtype (defaults to DATETIME)",
+        )
         self.name = name
         self.dtype = dtype
         self.description = description
@@ -132,6 +158,14 @@ class Feature:
         expect: Expect | None = None,
     ) -> None:
         _require_identifier(name, "Feature")
+        _validate_dtype(
+            name=name,
+            context="Feature",
+            dtype=dtype,
+            allowed=_FEATURE_ALLOWED,
+            allowed_text="STRING, INTEGER, FLOAT, or DATETIME",
+            next_step="use one of FeatureType.STRING, .INTEGER, .FLOAT, .DATETIME",
+        )
         self.name = name
         self.dtype = dtype
         self.description = description
@@ -148,14 +182,14 @@ class JoinKey:
         description: str | None = None,
     ) -> None:
         _require_identifier(name, "JoinKey")
-        if dtype not in _JOIN_KEY_ALLOWED:
-            raise DefinitionError(
-                format_actionable(
-                    field=name,
-                    problem=f"JoinKey dtype must be STRING or INTEGER, got {dtype.value}",
-                    next_step="use one of STRING, INTEGER",
-                )
-            )
+        _validate_dtype(
+            name=name,
+            context="JoinKey",
+            dtype=dtype,
+            allowed=_JOIN_KEY_ALLOWED,
+            allowed_text="STRING or INTEGER",
+            next_step="use one of STRING, INTEGER",
+        )
         if not referenced_group.strip():
             raise DefinitionError(
                 format_actionable(

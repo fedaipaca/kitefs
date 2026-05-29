@@ -1,6 +1,6 @@
 import pytest
 
-from kitefs import DefinitionError, EntityKey, EventTimestamp, Feature, FeatureType, JoinKey
+from kitefs import DefinitionError, EntityKey, EventTimestamp, Feature, FeatureType, JoinKey, StorageTarget
 
 
 class TestEntityKey:
@@ -29,6 +29,22 @@ class TestEntityKey:
         """EntityKey raises DefinitionError for FLOAT and DATETIME dtypes."""
         with pytest.raises(DefinitionError) as exc_info:
             EntityKey(name="listing_id", dtype=dtype)
+        msg = str(exc_info.value)
+        assert "listing_id" in msg
+        assert "STRING or INTEGER" in msg
+
+    @pytest.mark.parametrize(
+        "dtype",
+        [
+            pytest.param("INTEGER", id="string_value"),
+            pytest.param(None, id="none"),
+            pytest.param(StorageTarget.OFFLINE, id="wrong_enum"),
+        ],
+    )
+    def test_rejects_non_featuretype_dtype(self, dtype: object) -> None:
+        """EntityKey raises DefinitionError when dtype is not a FeatureType member."""
+        with pytest.raises(DefinitionError) as exc_info:
+            EntityKey(name="listing_id", dtype=dtype)  # type: ignore[arg-type]
         msg = str(exc_info.value)
         assert "listing_id" in msg
         assert "STRING or INTEGER" in msg
@@ -72,6 +88,19 @@ class TestEventTimestamp:
         with pytest.raises(DefinitionError):
             EventTimestamp(name="sold_at", dtype=dtype)
 
+    @pytest.mark.parametrize(
+        "dtype",
+        [
+            pytest.param("DATETIME", id="string_value"),
+            pytest.param(None, id="none"),
+            pytest.param(StorageTarget.OFFLINE, id="wrong_enum"),
+        ],
+    )
+    def test_rejects_non_featuretype_dtype(self, dtype: object) -> None:
+        """EventTimestamp raises DefinitionError when dtype is not a FeatureType member."""
+        with pytest.raises(DefinitionError):
+            EventTimestamp(name="sold_at", dtype=dtype)  # type: ignore[arg-type]
+
 
 class TestFeature:
     """Feature construction-time identifier validation."""
@@ -94,6 +123,19 @@ class TestFeature:
         """Feature expect attribute defaults to None."""
         f = Feature(name="price", dtype=FeatureType.FLOAT)
         assert f.expect is None
+
+    @pytest.mark.parametrize(
+        "dtype",
+        [
+            pytest.param("FLOAT", id="string_value"),
+            pytest.param(None, id="none"),
+            pytest.param(StorageTarget.OFFLINE, id="wrong_enum"),
+        ],
+    )
+    def test_rejects_non_featuretype_dtype(self, dtype: object) -> None:
+        """Feature raises DefinitionError when dtype is not a FeatureType member."""
+        with pytest.raises(DefinitionError):
+            Feature(name="price", dtype=dtype)  # type: ignore[arg-type]
 
 
 class TestJoinKey:
@@ -122,6 +164,19 @@ class TestJoinKey:
         """JoinKey raises DefinitionError for FLOAT and DATETIME dtypes."""
         with pytest.raises(DefinitionError):
             JoinKey(name="town_id", dtype=dtype, referenced_group="town_market_features")
+
+    @pytest.mark.parametrize(
+        "dtype",
+        [
+            pytest.param("INTEGER", id="string_value"),
+            pytest.param(None, id="none"),
+            pytest.param(StorageTarget.OFFLINE, id="wrong_enum"),
+        ],
+    )
+    def test_rejects_non_featuretype_dtype(self, dtype: object) -> None:
+        """JoinKey raises DefinitionError when dtype is not a FeatureType member."""
+        with pytest.raises(DefinitionError):
+            JoinKey(name="town_id", dtype=dtype, referenced_group="town_market_features")  # type: ignore[arg-type]
 
     def test_rejects_empty_referenced_group(self) -> None:
         """JoinKey raises DefinitionError when referenced_group is empty."""
