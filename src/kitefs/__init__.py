@@ -1,4 +1,12 @@
+from __future__ import annotations
+
 import importlib.metadata
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Satisfies type checkers without triggering a runtime import of kitefs.sdk,
+    # which would break the CLI import-isolation contract.
+    from kitefs.sdk.feature_store import FeatureStore
 
 __version__ = importlib.metadata.version("kitefs")
 
@@ -48,6 +56,7 @@ __all__ = [
     "FeatureGroup",
     "FeatureGroupNotFoundError",
     "FeatureGroupNotMaterializableError",
+    "FeatureStore",
     "FeatureType",
     "IngestionShapeError",
     "JoinError",
@@ -70,3 +79,11 @@ __all__ = [
     "ValidationMode",
     "__version__",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "FeatureStore":
+        from kitefs.sdk import FeatureStore
+
+        return FeatureStore
+    raise AttributeError(f"module 'kitefs' has no attribute {name!r}")
