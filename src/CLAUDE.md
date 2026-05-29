@@ -29,8 +29,6 @@ Avoid:
 - Make messages actionable: name the affected group, field, record, setting, path, or operation, and indicate the next step.
 - Public SDK methods and CLI-backed behavior raise from the shared KiteFS exception hierarchy.
 
-See `docs/06-api-and-cli-contracts.md`.
-
 ## CLI and SDK
 
 - Use Click 8.x patterns for CLI changes.
