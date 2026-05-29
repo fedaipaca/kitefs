@@ -5,9 +5,24 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from kitefs.sdk.feature_store import FeatureStore
 
-from kitefs.sdk.results import ApplyResult
+from kitefs.sdk.results import (
+    ApplyResult,
+    FeatureGroupDescription,
+    FeatureGroupSummary,
+    FieldSpec,
+    JoinKeySpec,
+    MetadataSpec,
+)
 
-__all__ = ["ApplyResult", "FeatureStore"]
+__all__ = [
+    "ApplyResult",
+    "FeatureGroupDescription",
+    "FeatureGroupSummary",
+    "FeatureStore",
+    "FieldSpec",
+    "JoinKeySpec",
+    "MetadataSpec",
+]
 
 
 def __getattr__(name: str) -> object:

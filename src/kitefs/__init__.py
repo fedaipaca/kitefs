@@ -7,7 +7,14 @@ if TYPE_CHECKING:
     # Satisfies type checkers without triggering a runtime import of kitefs.sdk,
     # which would break the CLI import-isolation contract.
     from kitefs.sdk.feature_store import FeatureStore
-    from kitefs.sdk.results import ApplyResult
+    from kitefs.sdk.results import (
+        ApplyResult,
+        FeatureGroupDescription,
+        FeatureGroupSummary,
+        FieldSpec,
+        JoinKeySpec,
+        MetadataSpec,
+    )
 
 __version__ = importlib.metadata.version("kitefs")
 
@@ -56,15 +63,20 @@ __all__ = [
     "Expect",
     "Feature",
     "FeatureGroup",
+    "FeatureGroupDescription",
     "FeatureGroupNotFoundError",
     "FeatureGroupNotMaterializableError",
+    "FeatureGroupSummary",
     "FeatureStore",
     "FeatureType",
+    "FieldSpec",
     "IngestionShapeError",
     "JoinError",
     "JoinKey",
+    "JoinKeySpec",
     "KiteFSError",
     "Metadata",
+    "MetadataSpec",
     "OfflineStoreError",
     "OfflineStoreReadError",
     "OfflineStoreWriteError",
@@ -88,8 +100,15 @@ def __getattr__(name: str) -> object:
         from kitefs.sdk import FeatureStore
 
         return FeatureStore
-    if name == "ApplyResult":
-        from kitefs.sdk.results import ApplyResult
+    if name in {
+        "ApplyResult",
+        "FeatureGroupDescription",
+        "FeatureGroupSummary",
+        "FieldSpec",
+        "JoinKeySpec",
+        "MetadataSpec",
+    }:
+        import kitefs.sdk.results as _results
 
-        return ApplyResult
+        return getattr(_results, name)
     raise AttributeError(f"module 'kitefs' has no attribute {name!r}")

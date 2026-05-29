@@ -6,8 +6,16 @@ from pathlib import Path
 from kitefs.config import RuntimeConfig, load_runtime_config
 from kitefs.errors import RegistryReadError
 from kitefs.providers import Provider, build_provider
-from kitefs.registry import build_registry_document, discover_feature_groups, validate_cross_definition
-from kitefs.sdk.results import ApplyResult
+from kitefs.registry import (
+    build_registry_document,
+    discover_feature_groups,
+    summarize_registry,
+    validate_cross_definition,
+)
+from kitefs.registry import (
+    describe_feature_group as _describe_feature_group,
+)
+from kitefs.sdk.results import ApplyResult, FeatureGroupDescription, FeatureGroupSummary
 
 
 class FeatureStore:
@@ -61,3 +69,21 @@ class FeatureStore:
             registered_groups=sorted(g.name for g in groups),
             published=False,
         )
+
+    def list_feature_groups(self) -> list[FeatureGroupSummary]:
+        """Return a summary for each registered feature group, sorted alphabetically by name.
+
+        Returns an empty list when the registry contains no groups.
+        Raises RegistryReadError if the registry is missing or undecodable.
+        """
+        document = self._provider.registry_store().read()
+        return summarize_registry(document)
+
+    def describe_feature_group(self, name: str) -> FeatureGroupDescription:
+        """Return the full description for the named feature group.
+
+        Raises FeatureGroupNotFoundError if name is not in the registry.
+        Raises RegistryReadError if the registry is missing or undecodable.
+        """
+        document = self._provider.registry_store().read()
+        return _describe_feature_group(document, name)
