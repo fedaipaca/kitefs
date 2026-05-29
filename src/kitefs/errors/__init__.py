@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from kitefs.sdk.results import ValidationReport  # type: ignore[import]
+    from kitefs.sdk.results import ValidationReport
 
 
 class KiteFSError(Exception):

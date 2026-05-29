@@ -60,6 +60,30 @@ class FeatureGroupDescription:
     last_materialized_at: datetime.datetime | None
 
 
+@dataclass(frozen=True)
+class ValidationFailure:
+    """A single validation failure for one row and one check."""
+
+    field: str
+    constraint: str
+    actual_value: Any
+    entity_key_value: Any | None
+    row_index: int | None
+
+
+@dataclass(frozen=True)
+class ValidationReport:
+    """Summary of all validation results for a DataFrame.
+
+    pass_count and fail_count count distinct rows, not individual failures.
+    A row failing multiple checks is counted once in fail_count.
+    """
+
+    pass_count: int
+    fail_count: int
+    failures: list[ValidationFailure]
+
+
 __all__ = [
     "ApplyResult",
     "FeatureGroupDescription",
@@ -67,4 +91,6 @@ __all__ = [
     "FieldSpec",
     "JoinKeySpec",
     "MetadataSpec",
+    "ValidationFailure",
+    "ValidationReport",
 ]
