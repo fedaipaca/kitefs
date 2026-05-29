@@ -31,6 +31,41 @@ _FEATURE_TYPE_TO_PA: dict[FeatureType, pa.DataType] = {
 }
 
 
+def _ordered_field_types(description: FeatureGroupDescription) -> list[tuple[str, FeatureType]]:
+    """Return (column_name, FeatureType) pairs in stable offline storage order.
+
+    Order: entity key → event timestamp → join keys (registry order) → features (registry order).
+    The registry serializer stores join_keys and features sorted alphabetically, so
+    the returned order is deterministic across calls for the same group.
+    """
+    ordered: list[tuple[str, FeatureType]] = [
+        (description.entity_key.name, description.entity_key.dtype),
+        (description.event_timestamp.name, description.event_timestamp.dtype),
+    ]
+    for jk in description.join_keys:
+        ordered.append((jk.name, jk.dtype))
+    for feat in description.features:
+        ordered.append((feat.name, feat.dtype))
+    return ordered
+
+
+def build_offline_schema(description: FeatureGroupDescription) -> pa.Schema:
+    """Build the PyArrow schema for all declared columns of a feature group.
+
+    Uses the same column order and type mapping as prepare_ingestion_table so
+    reads and writes share a consistent schema:
+        entity key → event timestamp → join keys (registry order) → features (registry order).
+
+    Args:
+        description: The registered feature group description.
+
+    Returns:
+        A PyArrow schema with all declared columns typed per the storage contracts.
+    """
+    fields = [pa.field(name, _FEATURE_TYPE_TO_PA[dtype]) for name, dtype in _ordered_field_types(description)]
+    return pa.schema(fields)
+
+
 def prepare_ingestion_table(
     description: FeatureGroupDescription,
     frame: pd.DataFrame,
@@ -54,14 +89,7 @@ def prepare_ingestion_table(
         typed per the storage contracts.
     """
     # Build the ordered list of (column_name, FeatureType) pairs.
-    ordered_cols: list[tuple[str, FeatureType]] = [
-        (description.entity_key.name, description.entity_key.dtype),
-        (description.event_timestamp.name, description.event_timestamp.dtype),
-    ]
-    for jk in description.join_keys:
-        ordered_cols.append((jk.name, jk.dtype))
-    for feat in description.features:
-        ordered_cols.append((feat.name, feat.dtype))
+    ordered_cols = _ordered_field_types(description)
 
     # Select and convert columns.
     arrays: list[pa.Array] = []
@@ -116,4 +144,4 @@ def _to_utc_microsecond(series: pd.Series) -> pd.Series:
     return pd.to_datetime(normalized, utc=False).astype("datetime64[us]")
 
 
-__all__ = ["prepare_ingestion_table"]
+__all__ = ["build_offline_schema", "prepare_ingestion_table"]

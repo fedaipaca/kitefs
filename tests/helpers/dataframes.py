@@ -27,3 +27,12 @@ def town_market_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
 def utc_ts(dt_str: str) -> datetime.datetime:
     """Parse an ISO datetime string and return a UTC-aware datetime."""
     return datetime.datetime.fromisoformat(dt_str).replace(tzinfo=datetime.UTC)
+
+
+def listing_features_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    """Build a DataFrame in the listing_features schema.
+
+    Expected keys: "listing_id", "sold_at", "town_id",
+    "net_area", "number_of_rooms", "build_year", "sold_price".
+    """
+    return pd.DataFrame(rows)

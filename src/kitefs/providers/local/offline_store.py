@@ -23,10 +23,82 @@ from pathlib import Path
 from uuid import uuid4
 
 import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
-from kitefs.errors import OfflineStoreWriteError, format_actionable
+from kitefs.errors import OfflineStoreReadError, OfflineStoreWriteError, format_actionable
 from kitefs.providers.base import OfflineStore, TimestampFilter
+
+
+def _build_filter_expr(
+    timestamp_filter: TimestampFilter | None,
+    event_timestamp_column: str,
+) -> object:
+    """Build a PyArrow dataset filter expression from a TimestampFilter.
+
+    Combines row-level event-timestamp predicates with approximate year/month
+    partition predicates so pyarrow can prune whole monthly partitions before
+    opening any files.  All supplied bounds are AND-ed together.
+
+    Datetime bounds are normalized to UTC-naive before comparison because the
+    offline store writes timestamps as pa.timestamp('us') without timezone info
+    (UTC semantics per CON-006).
+
+    Returns None when no bounds are supplied.
+    """
+    if timestamp_filter is None:
+        return None
+
+    def _naive(dt: datetime) -> datetime:
+        """Strip timezone; both naive (UTC) and UTC-aware are treated as UTC."""
+        return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
+
+    ts_col = pc.field(event_timestamp_column)
+    year_col = pc.field("year")
+    month_col = pc.field("month")
+
+    parts: list[object] = []
+
+    if timestamp_filter.gte is not None:
+        val = _naive(timestamp_filter.gte)
+        ts_scalar = pa.scalar(val, type=pa.timestamp("us"))
+        y, m = val.year, val.month
+        parts.append(ts_col >= ts_scalar)
+        # Partition pruning: keep any year after y, or same year with month >= m
+        parts.append((year_col > y) | ((year_col == y) & (month_col >= m)))
+
+    if timestamp_filter.gt is not None:
+        val = _naive(timestamp_filter.gt)
+        ts_scalar = pa.scalar(val, type=pa.timestamp("us"))
+        y, m = val.year, val.month
+        parts.append(ts_col > ts_scalar)
+        # Can't prune the boundary month for strict gt; same lower-bound pruning
+        parts.append((year_col > y) | ((year_col == y) & (month_col >= m)))
+
+    if timestamp_filter.lte is not None:
+        val = _naive(timestamp_filter.lte)
+        ts_scalar = pa.scalar(val, type=pa.timestamp("us"))
+        y, m = val.year, val.month
+        parts.append(ts_col <= ts_scalar)
+        # Partition pruning: keep any year before y, or same year with month <= m
+        parts.append((year_col < y) | ((year_col == y) & (month_col <= m)))
+
+    if timestamp_filter.lt is not None:
+        val = _naive(timestamp_filter.lt)
+        ts_scalar = pa.scalar(val, type=pa.timestamp("us"))
+        y, m = val.year, val.month
+        parts.append(ts_col < ts_scalar)
+        # Can't prune boundary month for strict lt; same upper-bound pruning
+        parts.append((year_col < y) | ((year_col == y) & (month_col <= m)))
+
+    if not parts:
+        return None
+
+    result = parts[0]
+    for part in parts[1:]:
+        result = result & part  # type: ignore[operator]
+    return result
 
 
 class LocalOfflineStore(OfflineStore):
@@ -139,10 +211,59 @@ class LocalOfflineStore(OfflineStore):
         schema: pa.Schema,
         timestamp_filter: TimestampFilter | None = None,
     ) -> pa.Table:
-        """Not yet implemented — lands in the historical retrieval feature."""
-        raise NotImplementedError(
-            "LocalOfflineStore.read() is not implemented in Feature 7. Historical retrieval lands in a later feature."
-        )
+        """Read historical feature rows from the local offline store.
+
+        Uses pyarrow.dataset with Hive partitioning to scan Parquet files under
+        feature_store/data/offline_store/{group}/year=YYYY/month=MM/. When a
+        TimestampFilter is provided, row-level timestamp predicates are combined
+        with approximate year/month partition predicates so pyarrow can skip whole
+        monthly partitions before opening any files.
+
+        Args:
+            feature_group: Registry name of the feature group to read.
+            event_timestamp_column: Column name of the event timestamp field.
+            schema: Expected PyArrow schema; defines the output columns and is
+                used to construct the empty return value when no data is found.
+            timestamp_filter: Optional bounds for the event timestamp. All
+                supplied bounds (gt, gte, lt, lte) are combined with AND.
+
+        Returns:
+            A PyArrow Table with columns matching schema.names, filtered to rows
+            satisfying the timestamp bounds. Returns an empty table with the
+            provided schema when no data exists or no rows match.
+
+        Raises:
+            OfflineStoreReadError: Any filesystem or Parquet read failure.
+        """
+        group_dir = self._offline_root / feature_group
+        if not group_dir.exists() or not any(group_dir.rglob("*.parquet")):
+            return schema.empty_table()
+
+        try:
+            dataset = ds.dataset(str(group_dir), format="parquet", partitioning="hive")
+        except Exception as exc:
+            raise OfflineStoreReadError(
+                format_actionable(
+                    group=feature_group,
+                    problem=f"failed to open offline store dataset at {group_dir}: {exc}",
+                    next_step="check that the offline store directory and files are readable",
+                )
+            ) from exc
+
+        filter_expr = _build_filter_expr(timestamp_filter, event_timestamp_column)
+
+        try:
+            table = dataset.to_table(columns=schema.names, filter=filter_expr)
+        except Exception as exc:
+            raise OfflineStoreReadError(
+                format_actionable(
+                    group=feature_group,
+                    problem=f"failed to read offline store data: {exc}",
+                    next_step="check that Parquet files are not corrupted and have the expected columns",
+                )
+            ) from exc
+
+        return table
 
 
 __all__ = ["LocalOfflineStore"]

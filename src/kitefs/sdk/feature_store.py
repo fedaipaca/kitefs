@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import contextlib
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from kitefs.config import RuntimeConfig, load_runtime_config
-from kitefs.errors import IngestionShapeError, RegistryReadError, format_actionable
-from kitefs.offline_store import prepare_ingestion_table
-from kitefs.providers import Provider, build_provider
+from kitefs.errors import IngestionShapeError, RegistryReadError, RetrievalParameterError, format_actionable
+from kitefs.offline_store import build_offline_schema, prepare_ingestion_table
+from kitefs.providers import Provider, TimestampFilter, build_provider
 from kitefs.registry import (
     build_registry_document,
     discover_feature_groups,
@@ -160,12 +162,289 @@ class FeatureStore:
             validation_report=report,
         )
 
+    def get_historical_features(
+        self,
+        *,
+        from_: str,
+        select: list[str] | dict[str, list[str]] | None = None,
+        join: list[str] | None = None,
+        where: dict[str, dict[str, Any]] | None = None,
+    ) -> pd.DataFrame:
+        """Retrieve historical feature rows from one registered feature group.
+
+        Validates the request, applies event-timestamp filtering to a
+        partition-pruned read from the local offline store, runs offline
+        retrieval validation, and returns a pandas DataFrame.
+
+        This method implements the no-join path (Feature 8).  Pass join=None
+        (default).  Dict-shaped select and join= are reserved for the join path
+        (Feature 9) and will raise RetrievalParameterError if supplied here.
+
+        Args:
+            from_: Registered feature group name (the base group).
+            select: Required.  A list of feature field names, or ["*"] to select
+                all declared feature fields.  Dict-shaped select is not valid
+                without join=.
+            join: Not supported in this version; pass None (default).
+            where: Optional event-timestamp filter.  Shape:
+                {event_timestamp_name: {op: datetime}} where op is one of
+                gt, gte, lt, lte and the value is a datetime.datetime.
+                Pass None (default) to return all rows.
+
+        Returns:
+            A pandas DataFrame with the group's structural columns (entity key,
+            event timestamp, join keys) plus the selected feature columns.
+            Returns an empty DataFrame when no rows match the filter.
+
+        Raises:
+            FeatureGroupNotFoundError: Group not in the registry.
+            RetrievalParameterError: Invalid select or where parameters.
+            OfflineStoreReadError: Physical read failure.
+            ValidationError: Retrieval validation rejects rows in ERROR mode.
+            RegistryReadError: Registry missing or unreadable.
+        """
+        document = self._provider.registry_store().read()
+        description = _describe_feature_group(document, from_)
+
+        if join is not None:
+            raise RetrievalParameterError(
+                format_actionable(
+                    group=from_,
+                    problem="join= is not supported in the no-join path; pass join=None",
+                    next_step="omit join= to retrieve from a single group without joining",
+                )
+            )
+
+        selected_names = _resolve_no_join_select(select, description)
+        timestamp_filter = _build_timestamp_filter(where, description.event_timestamp.name, from_)
+
+        schema = build_offline_schema(description)
+        table = self._provider.offline_store().read(
+            from_,
+            event_timestamp_column=description.event_timestamp.name,
+            schema=schema,
+            timestamp_filter=timestamp_filter,
+        )
+
+        frame = table.to_pandas()
+
+        structural = _structural_columns(description)
+        output_columns = structural + selected_names
+
+        # Return early for empty results — no validation needed.
+        if len(frame) == 0:
+            return frame[output_columns]
+
+        frame = frame[output_columns]
+
+        # Run retrieval validation only on selected feature columns.
+        selected_desc = _selected_description(description, selected_names)
+        accepted_frame, _ = validate_dataframe(
+            selected_desc, frame, description.offline_retrieval_validation, operation="retrieval"
+        )
+        return accepted_frame
+
 
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
 _SUPPORTED_EXTENSIONS = {".csv", ".parquet"}
+
+_ALLOWED_WHERE_OPS: frozenset[str] = frozenset({"gt", "gte", "lt", "lte"})
+
+
+def _resolve_no_join_select(
+    select: list[str] | dict[str, list[str]] | None,
+    description: FeatureGroupDescription,
+) -> list[str]:
+    """Validate and resolve the select parameter for the no-join retrieval path.
+
+    Accepts a list of feature field names or ["*"] for all features.
+    Rejects None, dict-shaped select, bare "*", empty lists, mixed wildcard
+    lists, and names that are not declared feature fields.
+
+    Returns a list of resolved feature field names in the caller's order, or
+    in registry (alphabetical) order for the wildcard form.
+    """
+    if select is None:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=description.name,
+                problem="select is required",
+                next_step='pass a list of feature field names or ["*"] to select all features',
+            )
+        )
+    if isinstance(select, dict):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=description.name,
+                problem='dict-shaped select requires join=; use list[str] or ["*"] for no-join retrieval',
+                next_step='use select=["feature1", "feature2"] or select=["*"]',
+            )
+        )
+    if isinstance(select, str):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=description.name,
+                problem="select must be a list, not a bare string",
+                next_step='wrap it in a list: select=["*"] to select all features',
+            )
+        )
+    if not isinstance(select, list):
+        raise RetrievalParameterError(
+            format_actionable(
+                group=description.name,
+                problem='select must be a list of feature field names or ["*"]',
+                next_step='pass select=["feature1", "feature2"] or select=["*"]',
+            )
+        )
+    if len(select) == 0:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=description.name,
+                problem="select must not be empty",
+                next_step='pass at least one feature field name or use select=["*"]',
+            )
+        )
+    # Wildcard form: ["*"] only; ["*", "other"] is rejected.
+    if "*" in select:
+        if len(select) > 1:
+            raise RetrievalParameterError(
+                format_actionable(
+                    group=description.name,
+                    problem=(
+                        '["*"] is the only valid wildcard form; '
+                        'mixed selections such as ["*", "feature_name"] are rejected'
+                    ),
+                    next_step='use select=["*"] to select all features or name specific features',
+                )
+            )
+        return [f.name for f in description.features]
+
+    # Explicit name list: each name must be a declared feature field.
+    declared = {f.name for f in description.features}
+    for name in select:
+        if not isinstance(name, str):
+            raise RetrievalParameterError(
+                format_actionable(
+                    group=description.name,
+                    problem=f"select item {name!r} is not a string; all items must be feature field names",
+                    next_step="pass a list of string feature field names",
+                )
+            )
+        if name not in declared:
+            raise RetrievalParameterError(
+                format_actionable(
+                    group=description.name,
+                    field=name,
+                    problem=f"'{name}' is not a declared feature field of group '{description.name}'",
+                    next_step=f"valid feature fields are: {sorted(declared)}",
+                )
+            )
+    return list(select)
+
+
+def _build_timestamp_filter(
+    where: dict[str, dict[str, Any]] | None,
+    event_timestamp_name: str,
+    group_name: str,
+) -> TimestampFilter | None:
+    """Validate and convert the where parameter to a TimestampFilter.
+
+    Accepts None (no filter) or {event_timestamp_name: {op: datetime}}.
+    Rejects filters on other fields, unsupported operators, and non-datetime
+    values.  Returns None when where is None.
+    """
+    if where is None:
+        return None
+
+    if not isinstance(where, dict) or len(where) != 1:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                problem="where must be a dict with exactly one key (the event timestamp column name)",
+                next_step=f"use where={{'{event_timestamp_name}': {{'gte': ..., 'lte': ...}}}}",
+            )
+        )
+
+    field_name = next(iter(where))
+    if field_name != event_timestamp_name:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                field=field_name,
+                problem=(
+                    f"where filter on '{field_name}' is not supported; "
+                    f"only the event timestamp column '{event_timestamp_name}' can be filtered"
+                ),
+                next_step=f"use where={{'{event_timestamp_name}': {{'gte': ..., 'lte': ...}}}}",
+            )
+        )
+
+    ops = where[field_name]
+    if not isinstance(ops, dict) or not ops:
+        raise RetrievalParameterError(
+            format_actionable(
+                group=group_name,
+                field=field_name,
+                problem="where operators must be a non-empty dict with keys in {gt, gte, lt, lte}",
+                next_step=f"use where={{'{event_timestamp_name}': {{'gte': datetime_value, 'lte': datetime_value}}}}",
+            )
+        )
+
+    for op, val in ops.items():
+        if op not in _ALLOWED_WHERE_OPS:
+            raise RetrievalParameterError(
+                format_actionable(
+                    group=group_name,
+                    field=field_name,
+                    problem=f"unsupported operator '{op}'; supported operators are {sorted(_ALLOWED_WHERE_OPS)}",
+                    next_step="use 'gt', 'gte', 'lt', or 'lte' as the operator",
+                )
+            )
+        if not isinstance(val, datetime):
+            raise RetrievalParameterError(
+                format_actionable(
+                    group=group_name,
+                    field=field_name,
+                    problem=f"where value for operator '{op}' must be a datetime.datetime, got {type(val).__name__}",
+                    next_step="pass datetime.datetime values in where filters",
+                )
+            )
+
+    return TimestampFilter(
+        gt=ops.get("gt"),
+        gte=ops.get("gte"),
+        lt=ops.get("lt"),
+        lte=ops.get("lte"),
+    )
+
+
+def _structural_columns(description: FeatureGroupDescription) -> list[str]:
+    """Return the names of structural columns in output order.
+
+    Order: entity key, event timestamp, then join keys in registry order.
+    Structural columns are always included in historical retrieval output.
+    """
+    cols = [description.entity_key.name, description.event_timestamp.name]
+    for jk in description.join_keys:
+        cols.append(jk.name)
+    return cols
+
+
+def _selected_description(
+    description: FeatureGroupDescription,
+    selected_feature_names: list[str],
+) -> FeatureGroupDescription:
+    """Return a description containing only the selected feature fields.
+
+    Used so validate_dataframe checks only the feature columns that are
+    actually present in the projected retrieval result, not the full set.
+    """
+    selected_set = set(selected_feature_names)
+    selected_features = [f for f in description.features if f.name in selected_set]
+    return replace(description, features=selected_features)
 
 
 def _normalize_input(data: pd.DataFrame | str | os.PathLike[str]) -> pd.DataFrame:

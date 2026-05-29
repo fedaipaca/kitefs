@@ -9,6 +9,7 @@ import pyarrow as pa
 import pytest
 
 from kitefs.errors import OfflineStoreWriteError
+from kitefs.providers.base import TimestampFilter
 from kitefs.providers.local.offline_store import LocalOfflineStore
 
 _UTC = datetime.UTC
@@ -175,12 +176,117 @@ class TestWrite:
         assert parquet_files == []
 
 
-class TestRead:
-    """LocalOfflineStore.read() raises NotImplementedError in Feature 7."""
+# Schema used for all read tests: matches _small_table() columns.
+_READ_SCHEMA = pa.schema(
+    [
+        pa.field("town_id", pa.int64()),
+        pa.field("event_timestamp", pa.timestamp("us")),
+        pa.field("avg_price_per_sqm", pa.float64()),
+    ]
+)
 
-    def test_raises_not_implemented(self, tmp_path: Path) -> None:
-        """read() is not yet implemented and raises NotImplementedError."""
+
+class TestRead:
+    """LocalOfflineStore.read() returns feature rows from Hive-partitioned Parquet."""
+
+    def test_missing_group_dir_returns_empty_table(self, tmp_path: Path) -> None:
+        """read() returns an empty schema-conforming table when the group has never been ingested."""
         store = LocalOfflineStore(tmp_path)
 
-        with pytest.raises(NotImplementedError):
-            store.read("town_market_features", event_timestamp_column="event_timestamp", schema=pa.schema([]))
+        result = store.read(
+            "town_market_features",
+            event_timestamp_column="event_timestamp",
+            schema=_READ_SCHEMA,
+        )
+
+        assert len(result) == 0
+        assert result.schema.equals(_READ_SCHEMA)
+
+    def test_read_returns_written_rows(self, tmp_path: Path) -> None:
+        """read() returns all ingested rows without the Hive partition columns."""
+        store = LocalOfflineStore(tmp_path)
+        table = _small_table([_TS_FEB, _TS_MAR])
+        store.write(
+            "town_market_features",
+            table,
+            event_timestamp_column="event_timestamp",
+            source_prefix="ing",
+        )
+
+        result = store.read(
+            "town_market_features",
+            event_timestamp_column="event_timestamp",
+            schema=_READ_SCHEMA,
+        )
+
+        assert len(result) == 2
+        assert set(result.schema.names) == {"town_id", "event_timestamp", "avg_price_per_sqm"}
+        # Partition columns (year, month) must not appear in the output.
+        assert "year" not in result.schema.names
+        assert "month" not in result.schema.names
+
+    def test_gte_filter_excludes_earlier_rows(self, tmp_path: Path) -> None:
+        """A gte timestamp filter returns only rows on or after the bound."""
+        store = LocalOfflineStore(tmp_path)
+        table = _small_table([_TS_FEB, _TS_MAR])
+        store.write(
+            "town_market_features",
+            table,
+            event_timestamp_column="event_timestamp",
+            source_prefix="ing",
+        )
+
+        result = store.read(
+            "town_market_features",
+            event_timestamp_column="event_timestamp",
+            schema=_READ_SCHEMA,
+            timestamp_filter=TimestampFilter(gte=_TS_MAR),
+        )
+
+        assert len(result) == 1
+        row_ts = result.column("event_timestamp")[0].as_py()
+        assert row_ts == _TS_MAR.replace(tzinfo=None)
+
+    def test_lte_filter_excludes_later_rows(self, tmp_path: Path) -> None:
+        """A lte timestamp filter returns only rows on or before the bound."""
+        store = LocalOfflineStore(tmp_path)
+        table = _small_table([_TS_FEB, _TS_MAR])
+        store.write(
+            "town_market_features",
+            table,
+            event_timestamp_column="event_timestamp",
+            source_prefix="ing",
+        )
+
+        result = store.read(
+            "town_market_features",
+            event_timestamp_column="event_timestamp",
+            schema=_READ_SCHEMA,
+            timestamp_filter=TimestampFilter(lte=_TS_FEB),
+        )
+
+        assert len(result) == 1
+        row_ts = result.column("event_timestamp")[0].as_py()
+        assert row_ts == _TS_FEB.replace(tzinfo=None)
+
+    def test_filter_matching_no_rows_returns_empty_table(self, tmp_path: Path) -> None:
+        """A filter range with no matching rows returns an empty schema-conforming table."""
+        store = LocalOfflineStore(tmp_path)
+        table = _small_table([_TS_FEB, _TS_MAR])
+        store.write(
+            "town_market_features",
+            table,
+            event_timestamp_column="event_timestamp",
+            source_prefix="ing",
+        )
+        far_future = datetime.datetime(2099, 1, 1, tzinfo=_UTC)
+
+        result = store.read(
+            "town_market_features",
+            event_timestamp_column="event_timestamp",
+            schema=_READ_SCHEMA,
+            timestamp_filter=TimestampFilter(gte=far_future),
+        )
+
+        assert len(result) == 0
+        assert result.schema.equals(_READ_SCHEMA)
