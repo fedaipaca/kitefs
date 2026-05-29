@@ -22,7 +22,6 @@ This file explains how to read `docs`. It provides the document map, reading ord
 - [04-architecture.md](04-architecture.md) - Architectural design principles, system boundaries, building blocks, dependency direction, provider abstraction boundary, and packaging model.
 - [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md) - Registry schema, storage layouts, file naming, online store schemas, type mapping, and partition strategy.
 - [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md) - Public Python API, SDK and CLI contracts, exceptions, and internal provider interfaces.
-- [07-implementation-plan/](07-implementation-plan/) - Implementation planning directory. Contains `high-level-tasks.md` (high-level task backlog awaiting refinement; removed once all tasks are refined) and one `phase-N.md` per phase (refined, canonical task specs with full scope, acceptance criteria, and status).
 - [Glossary.md](Glossary.md) - Domain terms, abbreviations, and short definitions used across `docs`.
 
 ## Reading Order
@@ -31,8 +30,7 @@ This file explains how to read `docs`. It provides the document map, reading ord
 2. Read [00-project-context.md](00-project-context.md) for project context.
 3. Read [01-reference-use-case.md](01-reference-use-case.md) for the concrete reference example.
 4. Read [02-product-requirements.md](02-product-requirements.md) through [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md) in order for requirements, behavior, architecture, storage contracts, and API contracts.
-5. Use the relevant [07-implementation-plan/phase-N.md](07-implementation-plan/) for refined tasks, current status, and scope. Consult [07-implementation-plan/high-level-tasks.md](07-implementation-plan/high-level-tasks.md) only when refining or placing unrefined work into a phase.
-6. Use [Glossary.md](Glossary.md) whenever a term or abbreviation needs definition.
+5. Use [Glossary.md](Glossary.md) whenever a term or abbreviation needs definition.
 
 ## Authority Rules
 
@@ -47,5 +45,4 @@ When two files mention the same topic, the authoritative file wins. Other files 
 | System structure, components, and boundaries        | [04-architecture.md](04-architecture.md)                             |
 | Storage formats, schemas, and layouts               | [05-data-and-storage-contracts.md](05-data-and-storage-contracts.md) |
 | Public SDK signatures, CLI commands, and exceptions | [06-api-and-cli-contracts.md](06-api-and-cli-contracts.md)           |
-| Implementation sequencing and task scope            | `docs/07-implementation-plan/phase-N.md` (the relevant phase file)   |
 | Domain terms and definitions                        | [Glossary.md](Glossary.md)                                           |

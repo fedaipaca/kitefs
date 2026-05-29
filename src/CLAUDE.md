@@ -33,6 +33,5 @@ See `docs/06-api-and-cli-contracts.md`.
 
 ## CLI and SDK
 
-- Keep SDK and CLI behavior aligned with `docs/06-api-and-cli-contracts.md`.
 - Use Click 8.x patterns for CLI changes.
 - Business logic lives in SDK/core modules; CLI handlers hold presentation only.

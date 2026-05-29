@@ -2,17 +2,6 @@
 
 KiteFS is a Python 3.12+ feature store **library** for storing, validating, retrieving, materializing, discovering, and serving precomputed ML feature values via an SDK and CLI. Library-first, store-first.
 
-Treat these as guardrails. For behavior, contracts, and shapes, follow `docs/`.
-
----
-
-## Source of Truth
-
-- Start at `docs/README.md` for the doc map and authority rules.
-- `docs/02-product-requirements.md` … `docs/06-api-and-cli-contracts.md` are authoritative for requirements, behavior, architecture, storage, SDK, CLI, and exceptions.
-- Do not invent APIs, flags, formats, workflows, or behavior — verify in docs or code.
-- On conflict between docs / code / these instructions: surface the conflict, do not silently pick one.
-
 ---
 
 ## Working Principles
@@ -110,7 +99,7 @@ Core stays storage-agnostic. Backend libraries are allowed **only** under `src/k
 
 ### Top-level
 
-- `docs/` — authoritative documentation and contracts.
+- `docs/` — feature definitions and contracts.
 - `src/kitefs/` — library code.
 - `tests/` — unit, integration, BDD, fixtures, helpers.
 - `helpers/` — shared test support utilities.
@@ -139,33 +128,26 @@ Core stays storage-agnostic. Backend libraries are allowed **only** under `src/k
 
 ---
 
-## Product Boundary
+## Implementation Workflow
 
-**DO**:
-
-- Implement documented SDK, CLI, storage, registry, validation, retrieval, materialization, discovery, and serving behavior.
-
-**DO NOT** (unless explicitly required by docs or user request):
-
-- Add servers, daemons, workers, background services, containers, or network service layers.
-- Add feature computation engines, DAG schedulers, SQL orchestrators, model training, or model serving systems.
-- Design around manual registry edits.
-
-See `docs/00-project-context.md` and `docs/04-architecture.md`.
+- One refined, single-purpose feature at a time. Feature definitions live in the relevant `docs/implementation_plan/feature-N.md` file.
+- Contracts and structures used throughout the library live in `docs/implementation_plan/contracts.md`.
+- If the feature is not clear or is ambiguous or conflicting with existing behavior, stop and surface the gap.
+- Restate the task as a verifiable goal (see _Goal-driven execution_ section in this document) before writing code.
+- Ship the smallest implementation that satisfies the feature. No speculative abstractions or unrelated cleanup.
+- Update or add matching tests in the same change.
+- Prefer `just` recipes; check `justfile` or run `just`.
+- Fall back to `uv` if no recipe exists.
+- Use `just format` and `just lint-fix` instead of manual formatting edits.
+- Validate narrowly first; finish with `just clean-build` before declaring done.
 
 ---
 
-## Architecture Guardrails
+## When to Read Specs
 
-- Core logic is storage-agnostic and depends on provider interfaces only.
-- Provider-specific imports and behavior stay in provider layers.
-- Validation and point-in-time join logic are stateless and perform no storage I/O unless docs require it.
-- Treat feature definitions as source code; the registry is a deterministic derived artifact.
-- Preserve point-in-time correctness. Event timestamps are the temporal anchor; future values must never leak into training data.
-- All datetimes are UTC: treat naive as UTC, accept aware UTC, reject non-UTC aware datetimes, never convert zones.
-- Keep local and AWS providers logically aligned; physical differences live inside their provider layers.
-
-See `docs/03-system-behavior.md`, `docs/04-architecture.md`, `docs/05-data-and-storage-contracts.md`.
+- **Do not** blindly read all specs.
+- **Do** read the relevant sections when the feature definition is pointing for a reason.
+- If the feature definition or contract is unclear, ambiguous, or conflicting with existing behavior, read the relevant spec sections to clarify before implementation. Then ask the user to clarify and verify your approach before implementation.
 
 ---
 
@@ -176,57 +158,45 @@ See `docs/03-system-behavior.md`, `docs/04-architecture.md`, `docs/05-data-and-s
   - `tests/unit/` — one module/class/function.
   - `tests/integration/` — cross-module flows (config, providers, stores, registry, SDK, CLI).
   - `tests/bdd/` — documented, user-visible SDK/CLI behavior and observable outcomes only.
-- Add integration tests only when a unit test cannot verify the contract. Add BDD only for user-visible behavior or when the task is BDD-scoped.
+- Add integration tests only when a unit test cannot verify the contract.
+- Add BDD only for user-visible behavior or when the task is BDD-scoped.
 - Reuse `tests/fixtures/` and `helpers/` before adding new utilities.
 - Keep coverage proportional to the change. No speculative or ceremonial tests.
-- Run narrowly first: `just test-unit`, `just test-integration`, `just test-bdd`, or `just test-file <path>`.
 
----
+### BDD Tests
 
-## Implementation Workflow
-
-- One refined, single-purpose task at a time. Task scope and status live in the relevant `docs/07-implementation-plan/phase-N.md` file.
-- Read only the authoritative docs needed for the task before coding.
-- Restate the task as a verifiable goal (see _Goal-driven execution_) before writing code.
-- Ship the smallest vertical slice that satisfies the task. No speculative abstractions or unrelated cleanup.
-- Update or add matching tests in the same change (except BDD-only tasks, which use a dedicated prompt).
+- BDD scenarios are defined in the feature definitions.
+- Write feature scenarios and step definitions.
+- Do not add speculative scenarios.
+- Use concrete example data.
+- Prefer existing fixtures and helpers before adding new support code.
+- Keep step definitions deterministic, minimal, and readable.
+- Use strong assertions; do not weaken tests to match current implementation.
+- Run the narrowest relevant BDD validation command.
+- If tests fail and tests correctly match the feature definition; then stop and report the failure. Do not edit the tests to force a pass.
 - If a BDD scenario fails against current code, treat it as an implementation gap — never weaken the scenario.
-- Validate narrowly first; finish with `just clean-build` before declaring done.
-- If docs are missing, ambiguous, or conflicting, stop and surface the gap.
-- **Important**: Do not update tasks status by yourself. User will do that.
-
----
-
-## Tooling
-
-- Prefer `just` recipes; check `justfile` or run `just`.
-- Fall back to `uv` if no recipe exists.
-- Use `just format` and `just lint-fix` instead of manual formatting edits.
-- Completion gate: `just clean-build` passes.
 
 ---
 
 ## Change Boundaries
 
-Unless the task explicitly requires otherwise, do not:
+Unless the feature definition explicitly requires otherwise, do not:
 
 - broaden the public API,
 - introduce runtime services,
 - move business logic into the CLI,
 - couple core logic to a specific storage backend,
-- change storage contracts or serialization formats without matching docs and tests,
-- silently resolve doc/code conflicts.
+- change storage contracts or serialization formats without a reason,
+- silently resolve conflicts.
 
 ---
 
-## When Unsure
+## Architecture Guardrails
 
-- Check docs.
-- Check code.
-- Preserve contracts.
-- Keep the change small and explicit.
-- Surface uncertainty instead of guessing.
-
----
-
-**These guidelines are working when:** diffs contain fewer unrelated changes, fewer rewrites happen due to overcomplication, and clarifying questions arrive before implementation rather than after mistakes.
+- Core logic is storage-agnostic and depends on provider interfaces only.
+- Provider-specific imports and behavior stay in provider layers.
+- Validation and point-in-time join logic are stateless and perform no storage I/O.
+- Treat feature group definitions as source code; the registry is a deterministic derived artifact.
+- Preserve point-in-time correctness. Event timestamps are the temporal anchor; future values must never leak into training data.
+- All datetimes are UTC: treat naive as UTC, accept aware UTC, reject non-UTC aware datetimes, never convert zones.
+- Keep local and AWS providers logically aligned; physical differences live inside their provider layers.
