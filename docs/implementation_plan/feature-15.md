@@ -38,6 +38,8 @@ Feature 7, Feature 8, Feature 9, Feature 13.
 9. Keep SDK-visible behavior — shape checks, validation, join semantics, output column order, prefixed joined columns — identical to the local provider.
 10. Do not import `boto3` or `botocore` outside `src/kitefs/providers/aws/`.
 
+MVP warning: Remote S3 reads use object `LastModified` plus key as a deterministic best-effort ingest-order proxy. Because S3 `LastModified` has second precision, same-second correction ingests for the same entity and event timestamp may not preserve strict later-write-wins tie behavior. Demo data does not exercise this edge case; a robust append-order marker is deferred until after MVP alpha.
+
 ## Error Handling
 
 | Error                    | When                                                          | Behavior                                                             |

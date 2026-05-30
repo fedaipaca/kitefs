@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import io
 import re
-import time
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -211,8 +210,6 @@ class AWSOfflineStore(OfflineStore):
 
         write_ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         written: list[str] = []
-        prev_ingest_order: int = 0
-
         for (year, month), row_indices in sorted(partition_indices.items()):
             partition_table = data.take(row_indices)
             short_id = uuid4().hex[:6]
@@ -231,17 +228,11 @@ class AWSOfflineStore(OfflineStore):
                     )
                 ) from exc
 
-            ingest_order = time.time_ns()
-            while ingest_order <= prev_ingest_order:
-                ingest_order = time.time_ns()
-            prev_ingest_order = ingest_order
-
             try:
                 self._client.put_object(
                     Bucket=self._bucket,
                     Key=key,
                     Body=buf.getvalue(),
-                    Metadata={"kitefs-ingest-order": str(ingest_order)},
                 )
             except (NoCredentialsError, PartialCredentialsError) as exc:
                 raise ProviderError(
@@ -290,13 +281,12 @@ class AWSOfflineStore(OfflineStore):
 
         Lists all Parquet objects under the group's S3 prefix with boto3, prunes
         partitions using key-path analysis when a timestamp filter is provided,
-        downloads each remaining object in (LastModified, Key) order, and applies
-        row-level filtering after concatenation.
+        downloads each remaining object in deterministic (LastModified, Key)
+        order, and applies row-level filtering after concatenation.
 
-        The (LastModified, Key) sort order preserves ingest-order semantics for
-        point-in-time join tie-breaking: rows from a later ingest call appear
-        after earlier ones, so ``select_latest_rows()`` correctly picks the
-        later-ingested value when event timestamps are equal.
+        WARNING: S3 LastModified has second precision and is only a best-effort
+        ingest-order proxy for the MVP. Same-second correction ingests for the
+        same entity and event timestamp can tie-break differently from local.
 
         Args:
             feature_group: Registry name of the feature group to read.
@@ -360,11 +350,10 @@ class AWSOfflineStore(OfflineStore):
         if not objects:
             return schema.empty_table()
 
-        # Sort by (IngestOrder, LastModified, Key) to preserve ingest-order semantics
-        # so that point-in-time join tie-breaking works correctly.  IngestOrder is a
-        # nanosecond wall-clock value written as S3 object metadata on every new write;
-        # legacy objects without the metadata field get 0 and sort before any modern object.
-        objects.sort(key=lambda o: (o.get("IngestOrder") or 0, o["LastModified"], o["Key"]))
+        # WARNING: This is a deterministic MVP ordering, not a strict append log.
+        # S3 LastModified is second-precision, so same-second equal-timestamp
+        # corrections are documented as a post-MVP limitation.
+        objects.sort(key=lambda o: (o["LastModified"], o["Key"]))
 
         tables: list[pa.Table] = []
         for obj in objects:
@@ -425,12 +414,8 @@ class AWSOfflineStore(OfflineStore):
     def _list_parquet_objects(self, prefix: str) -> list[dict[str, Any]]:
         """List all Parquet objects under *prefix* using paginated list_objects_v2.
 
-        Returns a list of dicts with ``'Key'`` (str), ``'LastModified'``
-        (datetime), and ``'IngestOrder'`` (int | None) for every object whose
-        key ends with ``.parquet``.  IngestOrder is the nanosecond monotonic
-        clock value stored as S3 user metadata (``kitefs-ingest-order``) on
-        each PutObject call.  Legacy objects written before this field was
-        introduced have ``IngestOrder=None``.
+        Returns a list of dicts with ``'Key'`` (str) and ``'LastModified'``
+        (datetime) for every object whose key ends with ``.parquet``.
 
         Raises ``ClientError`` or ``BotoCoreError`` — callers wrap those into
         the appropriate domain errors.
@@ -440,14 +425,7 @@ class AWSOfflineStore(OfflineStore):
         for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
                 if obj["Key"].endswith(".parquet"):
-                    objects.append({"Key": obj["Key"], "LastModified": obj["LastModified"], "IngestOrder": None})
-        for obj in objects:
-            try:
-                head = self._client.head_object(Bucket=self._bucket, Key=obj["Key"])
-                raw = head.get("Metadata", {}).get("kitefs-ingest-order")
-                obj["IngestOrder"] = int(raw) if raw is not None else None
-            except (ClientError, BotoCoreError):
-                obj["IngestOrder"] = None
+                    objects.append({"Key": obj["Key"], "LastModified": obj["LastModified"]})
         return objects
 
 

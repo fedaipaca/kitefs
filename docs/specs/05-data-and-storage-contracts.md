@@ -229,6 +229,8 @@ Readers SHOULD use `pyarrow.dataset.dataset(..., partitioning='hive')` and pass 
 
 The file name carries no semantic meaning beyond observability. Retrieval logic must not parse it; the partition path is the only authoritative time signal for filtering.
 
+WARNING: For the MVP, remote S3 reads use object `LastModified` plus key as a deterministic best-effort ingest-order proxy. S3 `LastModified` has second precision, so two correction ingests for the same entity and same event timestamp that land in the same second may not preserve strict later-write-wins tie behavior. Demo data does not rely on this edge case; a robust append-order marker is deferred until after MVP alpha.
+
 ### Parquet Schema
 
 Each Parquet file contains the structural columns and declared feature columns from the registry — and nothing else. Input columns not declared in the feature group are dropped during ingestion ([FR-ING-001](02-product-requirements.md#fr-ing-001--offline-ingestion)).
