@@ -1,4 +1,4 @@
-"""Provider factory and remote stub.
+"""Provider factory.
 
 Re-exports the provider boundary ABCs from kitefs.providers.base so callers
 can import them from either location.
@@ -16,26 +16,17 @@ from kitefs.providers.base import (
 )
 
 
-class _RemoteStubProvider(Provider):
-    """Placeholder that satisfies the remote runtime target until Feature 13."""
-
-    def registry_store(self) -> RegistryStore:
-        raise NotImplementedError("AWS provider lands in Feature 13")
-
-    def offline_store(self) -> OfflineStore:
-        raise NotImplementedError("AWS provider lands in Feature 13")
-
-    def online_store(self) -> OnlineStore:
-        raise NotImplementedError("AWS provider lands in Feature 13")
-
-
 def build_provider(config: RuntimeConfig, root: Path) -> Provider:
     """Construct and return the provider for the resolved runtime target."""
     if config.target == "local":
         from kitefs.providers.local import LocalProvider
 
         return LocalProvider(root)
-    return _RemoteStubProvider()
+
+    # Lazy import keeps boto3 out of the base kitefs import path.
+    from kitefs.providers.aws import AWSProvider
+
+    return AWSProvider(config.remote or {})
 
 
 def build_local_provider(root: Path) -> Provider:

@@ -95,7 +95,7 @@ def _check_fixed_literal(value: Any, setting: str, allowed: frozenset[str]) -> N
         raise ConfigurationError(
             format_actionable(
                 setting=setting,
-                problem=f"interpolation expressions are not allowed in fixed-type fields (got {value!r})",
+                problem=f"must be a literal value; interpolation expressions are not allowed (got {value!r})",
                 next_step=f"set it to one of: {', '.join(sorted(allowed))}",
             )
         )

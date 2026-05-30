@@ -139,7 +139,12 @@ class FeatureStore:
             OfflineStoreWriteError: Physical write failure.
             RegistryReadError: Registry missing or undecodable.
         """
-        document = self._provider.registry_store().read()
+        # Acquire both store handles up front so ConfigurationError fires before
+        # any registry or offline-store I/O — including for the local-only early-return path.
+        registry_store = self._provider.registry_store()
+        offline_store = self._provider.offline_store()
+
+        document = registry_store.read()
         description = _describe_feature_group(document, feature_group)
 
         frame = _normalize_input(data, group=feature_group)
@@ -163,7 +168,7 @@ class FeatureStore:
             )
 
         table = prepare_ingestion_table(description, accepted_frame)
-        written_files = self._provider.offline_store().write(
+        written_files = offline_store.write(
             feature_group,
             table,
             event_timestamp_column=description.event_timestamp.name,
@@ -208,7 +213,12 @@ class FeatureStore:
 
         _DATETIME_FMT = DATETIME_FMT
 
+        # Acquire all three store handles before any I/O so ConfigurationError
+        # surfaces for every missing remote store before the registry read.
         registry_store = self._provider.registry_store()
+        offline_store = self._provider.offline_store()
+        online_store = self._provider.online_store()
+
         document = registry_store.read()
         all_groups = document.get("feature_groups", {})
 
@@ -253,7 +263,7 @@ class FeatureStore:
             schema = build_offline_schema(description)
 
             # Read all offline rows — no timestamp filter.
-            offline_table = self._provider.offline_store().read(
+            offline_table = offline_store.read(
                 name,
                 event_timestamp_column=description.event_timestamp.name,
                 schema=schema,
@@ -271,7 +281,7 @@ class FeatureStore:
             )
 
             try:
-                self._provider.online_store().materialize(
+                online_store.materialize(
                     name,
                     latest_rows,
                     entity_key_column=description.entity_key.name,
@@ -334,7 +344,12 @@ class FeatureStore:
         from kitefs.enums import StorageTarget
         from kitefs.errors import FeatureGroupNotMaterializableError
 
-        document = self._provider.registry_store().read()
+        # Acquire both store handles up front: validates registry and online config
+        # before any I/O so ConfigurationError surfaces before the registry read.
+        registry_store = self._provider.registry_store()
+        online_store = self._provider.online_store()
+
+        document = registry_store.read()
         description = _describe_feature_group(document, from_)
 
         if description.storage_target != StorageTarget.OFFLINE_AND_ONLINE:
@@ -357,7 +372,7 @@ class FeatureStore:
 
         output_columns = _structural_columns(description) + selected_names
 
-        raw = self._provider.online_store().get(
+        raw = online_store.get(
             from_,
             entity_key_value,
             entity_key_column=description.entity_key.name,
@@ -406,7 +421,12 @@ class FeatureStore:
             ValidationError: Retrieval validation rejects rows in ERROR mode.
             RegistryReadError: Registry missing or unreadable.
         """
-        document = self._provider.registry_store().read()
+        # Acquire both store handles up front: validates registry and offline config
+        # before any I/O so ConfigurationError surfaces before the registry read.
+        registry_store = self._provider.registry_store()
+        offline_store = self._provider.offline_store()
+
+        document = registry_store.read()
         joined_group = _resolve_join_group(join, from_)
         description = _describe_feature_group(document, from_)
 
@@ -417,7 +437,7 @@ class FeatureStore:
             timestamp_filter = _build_timestamp_filter(where, description.event_timestamp.name, from_)
 
             base_schema = build_offline_schema(description)
-            base_table = self._provider.offline_store().read(
+            base_table = offline_store.read(
                 from_,
                 event_timestamp_column=description.event_timestamp.name,
                 schema=base_schema,
@@ -441,7 +461,7 @@ class FeatureStore:
             )
 
             joined_schema = build_offline_schema(joined_description)
-            joined_table = self._provider.offline_store().read(
+            joined_table = offline_store.read(
                 joined_group,
                 event_timestamp_column=joined_description.event_timestamp.name,
                 schema=joined_schema,
@@ -472,7 +492,7 @@ class FeatureStore:
         timestamp_filter = _build_timestamp_filter(where, description.event_timestamp.name, from_)
 
         schema = build_offline_schema(description)
-        table = self._provider.offline_store().read(
+        table = offline_store.read(
             from_,
             event_timestamp_column=description.event_timestamp.name,
             schema=schema,
