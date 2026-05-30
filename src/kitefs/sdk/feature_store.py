@@ -216,7 +216,7 @@ class FeatureStore:
             RegistryReadError: Registry is missing or undecodable.
         """
         from kitefs.enums import StorageTarget
-        from kitefs.errors import FeatureGroupNotFoundError, FeatureGroupNotMaterializableError
+        from kitefs.errors import FeatureGroupNotFoundError, FeatureGroupNotMaterializableError, ProviderError
         from kitefs.online_store import select_latest_rows
         from kitefs.sdk.results import FailedGroup, MaterializeResult, SkippedGroup
 
@@ -227,6 +227,11 @@ class FeatureStore:
         registry_store = self._provider.registry_store()
         offline_store = self._provider.offline_store()
         online_store = self._provider.online_store()
+        # last_materialized_at is always written to the local working registry,
+        # regardless of runtime target (spec FR-MAT-001, system-behavior #464).
+        # For local target this is the same store as registry_store; for remote
+        # target this correctly targets feature_store/registry.json rather than S3.
+        local_registry_store = build_local_provider(self._root).registry_store()
 
         document = registry_store.read()
         all_groups = document.get("feature_groups", {})
@@ -267,6 +272,11 @@ class FeatureStore:
         skipped: list[SkippedGroup] = []
         failed: list[FailedGroup] = []
 
+        # Read the local registry once for last_materialized_at updates.
+        # This is a separate read from document (which may come from S3 under
+        # remote target) so that timestamp writes always land locally.
+        local_document = local_registry_store.read()
+
         for name in targets:
             description = _describe_feature_group(document, name)
             schema = build_offline_schema(description)
@@ -296,19 +306,39 @@ class FeatureStore:
                     entity_key_column=description.entity_key.name,
                     event_timestamp_column=description.event_timestamp.name,
                 )
+            except ProviderError:
+                # Credential/provider errors are environment failures, not per-group
+                # data issues.  Let them propagate so callers know no write is trusted.
+                raise
             except Exception as exc:
                 failed.append(FailedGroup(name=name, error_message=str(exc)))
                 continue
 
-            # Update last_materialized_at and persist.  If the registry write
-            # fails, revert the in-memory timestamp and report the group as
-            # failed — the online data is already refreshed so a retry is safe.
-            prior_lm = document["feature_groups"][name].get("last_materialized_at")
-            document["feature_groups"][name]["last_materialized_at"] = datetime.now(UTC).strftime(_DATETIME_FMT)
+            # Update last_materialized_at in the local working registry.  If
+            # the write fails, revert the in-memory timestamp and report the
+            # group as failed — the online data is already refreshed so a
+            # retry is safe.
+            local_groups = local_document.get("feature_groups", {})
+            if name not in local_groups:
+                failed.append(
+                    FailedGroup(
+                        name=name,
+                        error_message=format_actionable(
+                            group=name,
+                            problem="local working registry does not contain this feature group",
+                            next_step="run store.apply() before materialize, or refresh the local registry",
+                        ),
+                    )
+                )
+                continue
+
+            local_entry = local_groups[name]
+            prior_lm = local_entry.get("last_materialized_at")
+            local_entry["last_materialized_at"] = datetime.now(UTC).strftime(_DATETIME_FMT)
             try:
-                registry_store.write(document)
+                local_registry_store.write(local_document)
             except Exception as exc:
-                document["feature_groups"][name]["last_materialized_at"] = prior_lm
+                local_entry["last_materialized_at"] = prior_lm
                 failed.append(FailedGroup(name=name, error_message=str(exc)))
                 continue
             succeeded.append(name)
@@ -1034,15 +1064,20 @@ def _coerce_online_result(
     raw: dict[str, Any],
     description: FeatureGroupDescription,
 ) -> dict[str, Any]:
-    """Convert raw SQLite values to standard Python types.
+    """Convert raw online store values to declared Python types.
 
-    Datetime columns are serialized as ISO-8601 UTC strings in the online store.
-    This function parses those strings back to UTC-aware datetime.datetime objects.
-    All other column types pass through unchanged.
+    Applies three dtype-driven transformations so local (SQLite) and remote
+    (DynamoDB) results are type-equivalent:
+    - DATETIME strings → UTC-aware datetime.datetime objects.
+    - FLOAT values → float (DynamoDB N stores integral FLOATs as int after
+      _deserialize_attr; this restores the declared type).
+    - INTEGER values → int (defensive; SQLite already returns int).
+    None values pass through unchanged regardless of dtype.
     """
     from kitefs.enums import FeatureType
 
     dtype_map: dict[str, Any] = {
+        description.entity_key.name: description.entity_key.dtype,
         description.event_timestamp.name: description.event_timestamp.dtype,
     }
     for feat in description.features:
@@ -1052,7 +1087,10 @@ def _coerce_online_result(
 
     result: dict[str, Any] = {}
     for key, value in raw.items():
-        if value is not None and dtype_map.get(key) == FeatureType.DATETIME and isinstance(value, str):
+        dtype = dtype_map.get(key)
+        if value is None:
+            result[key] = None
+        elif dtype == FeatureType.DATETIME and isinstance(value, str):
             try:
                 result[key] = datetime.strptime(value, _ONLINE_DATETIME_FMT).replace(tzinfo=UTC)
             except ValueError as exc:
@@ -1064,6 +1102,10 @@ def _coerce_online_result(
                         next_step="re-run materialize for the feature group to rebuild the online store",
                     )
                 ) from exc
+        elif dtype == FeatureType.FLOAT:
+            result[key] = float(value)
+        elif dtype == FeatureType.INTEGER:
+            result[key] = int(value)
         else:
             result[key] = value
     return result

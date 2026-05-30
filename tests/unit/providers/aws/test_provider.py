@@ -1,11 +1,10 @@
-"""Unit tests for kitefs.providers.aws AWSProvider and store stubs."""
+"""Unit tests for kitefs.providers.aws AWSProvider configuration and construction."""
 
 from __future__ import annotations
 
 import sys
 from typing import Any
 
-import pyarrow as pa
 import pytest
 
 from kitefs.errors import ConfigurationError, ProviderError
@@ -182,19 +181,3 @@ class TestAWSProviderBoto3Missing:
         msg = str(exc_info.value)
         assert "boto3" in msg
         assert "kitefs[aws]" in msg
-
-
-class TestAWSStoreStubs:
-    """AWS store methods that are not yet implemented raise NotImplementedError."""
-
-    def test_online_materialize_raises(self) -> None:
-        """AWSOnlineStore.materialize raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            AWSProvider(_VALID_REMOTE).online_store().materialize(
-                "group", pa.table({}), entity_key_column="id", event_timestamp_column="ts"
-            )
-
-    def test_online_get_raises(self) -> None:
-        """AWSOnlineStore.get raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            AWSProvider(_VALID_REMOTE).online_store().get("group", 1, entity_key_column="id", select=None)
