@@ -158,6 +158,42 @@ class TestCliApply:
         assert result.exit_code == 0, result.output
         assert "Applied" in result.output
 
+    def test_apply_publish_yes_calls_sdk_with_publish_true(
+        self, applied_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """apply --publish with exact 'yes' confirmation calls apply(publish=True)."""
+        from kitefs.sdk.results import ApplyResult
+
+        publish_calls: list[bool] = []
+
+        class _FakeStore:
+            def __init__(self) -> None:
+                pass
+
+            def apply(self, *, publish: bool = False) -> ApplyResult:
+                publish_calls.append(publish)
+                return ApplyResult(registered_groups=["town_market_features"], published=publish)
+
+        monkeypatch.setattr("kitefs.sdk.feature_store.FeatureStore", _FakeStore)
+        runner = CliRunner()
+        result = runner.invoke(main, ["apply", "--publish"], input="yes\n")
+
+        assert result.exit_code == 0, result.output
+        assert publish_calls == [True], f"Expected apply(publish=True), got publish_calls={publish_calls}"
+        assert "Published to remote registry." in result.output
+
+    @pytest.mark.parametrize("bad_input", ["Yes\n", "YES\n", "y\n", " yes\n"], ids=["Yes", "YES", "y", "space_yes"])
+    def test_apply_publish_case_sensitive_rejection(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_input: str
+    ) -> None:
+        """Confirmation inputs that are not exact 'yes' abort before config loading."""
+        monkeypatch.chdir(tmp_path)  # no kitefs.yaml — aborts before config load
+        runner = CliRunner()
+        result = runner.invoke(main, ["apply", "--publish"], input=bad_input)
+        assert result.exit_code != 0
+        assert "aborted" in result.output.lower()
+        assert "kitefs.yaml" not in result.output.lower()
+
 
 # ---------------------------------------------------------------------------
 # TestCliIngest

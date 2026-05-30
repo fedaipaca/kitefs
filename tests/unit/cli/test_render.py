@@ -313,6 +313,16 @@ class TestRenderApplyText:
         result = render_apply(_make_apply_result([]), as_json=False)
         assert "(none)" in result
 
+    def test_published_true_appends_published_line(self) -> None:
+        """published=True appends 'Published to remote registry.' on a new line."""
+        result = render_apply(_make_apply_result(published=True), as_json=False)
+        assert "Published to remote registry." in result
+
+    def test_published_false_omits_published_line(self) -> None:
+        """published=False does not include the published confirmation line."""
+        result = render_apply(_make_apply_result(published=False), as_json=False)
+        assert "Published to remote registry." not in result
+
 
 # ---------------------------------------------------------------------------
 # render_apply — json
@@ -370,6 +380,18 @@ class TestRenderIngestText:
         """Rejected row count appears in output."""
         result = render_ingest(_make_ingest_result(rejected=2), as_json=False)
         assert "Rejected 2" in result
+
+    def test_validation_summary_present_when_report_set(self) -> None:
+        """A non-None validation_report appends a Validation: summary line."""
+        result = render_ingest(_make_ingest_result(accepted=5, rejected=1, with_report=True), as_json=False)
+        assert "Validation:" in result
+        assert "passed" in result
+        assert "failed" in result
+
+    def test_validation_summary_absent_when_report_none(self) -> None:
+        """A None validation_report (NONE mode) omits the Validation: line."""
+        result = render_ingest(_make_ingest_result(), as_json=False)
+        assert "Validation:" not in result
 
 
 # ---------------------------------------------------------------------------

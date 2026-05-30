@@ -212,7 +212,10 @@ def render_apply(result: ApplyResult, *, as_json: bool) -> str:
     if as_json:
         return json.dumps({"registered_groups": result.registered_groups, "published": result.published}, indent=2)
     groups_str = ", ".join(result.registered_groups) if result.registered_groups else "(none)"
-    return f"Applied feature groups: {groups_str}."
+    text = f"Applied feature groups: {groups_str}."
+    if result.published:
+        text += "\nPublished to remote registry."
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -224,11 +227,15 @@ def render_ingest(result: IngestResult, *, as_json: bool) -> str:
     """Render an IngestResult as human-readable text or a JSON object."""
     if as_json:
         return json.dumps(_ingest_to_dict(result), indent=2)
-    return (
+    text = (
         f"Ingested {result.accepted_rows} row(s) into '{result.feature_group}'. "
         f"Rejected {result.rejected_rows} row(s). "
         f"Wrote {len(result.written_files)} file(s)."
     )
+    if result.validation_report is not None:
+        rpt = result.validation_report
+        text += f"\n  Validation: {rpt.pass_count} passed, {rpt.fail_count} failed."
+    return text
 
 
 def _ingest_to_dict(result: IngestResult) -> dict[str, Any]:
