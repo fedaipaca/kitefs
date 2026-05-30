@@ -244,14 +244,24 @@ class LocalOfflineStore(OfflineStore):
         if timestamp_filter is None:
             # Full read for materialization: enumerate files in ingest order so
             # the later-ingested row wins ties in select_latest_rows().
-            parquet_files = sorted(
-                group_dir.rglob("*.parquet"),
-                key=lambda p: (p.stat().st_mtime_ns, str(p)),
-            )
+            try:
+                parquet_files = sorted(
+                    group_dir.rglob("*.parquet"),
+                    key=lambda p: (p.stat().st_mtime_ns, str(p)),
+                )
+            except OSError as exc:
+                raise OfflineStoreReadError(
+                    format_actionable(
+                        group=feature_group,
+                        problem=f"failed to enumerate offline store files: {exc}",
+                        next_step="check filesystem permissions for the offline store root",
+                    )
+                ) from exc
             if not parquet_files:
                 return schema.empty_table()
             try:
                 tables = [pq.read_table(str(p), columns=schema.names) for p in parquet_files]
+                return pa.concat_tables(tables)
             except Exception as exc:
                 raise OfflineStoreReadError(
                     format_actionable(
@@ -260,7 +270,6 @@ class LocalOfflineStore(OfflineStore):
                         next_step="check that Parquet files are not corrupted and have the expected columns",
                     )
                 ) from exc
-            return pa.concat_tables(tables)
 
         try:
             dataset = ds.dataset(str(group_dir), format="parquet", partitioning="hive")

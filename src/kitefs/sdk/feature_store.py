@@ -750,6 +750,22 @@ def _build_timestamp_filter(
                     next_step="pass datetime.datetime values in where filters",
                 )
             )
+        if val.tzinfo is not None:
+            offset = val.utcoffset()
+            if offset is None or offset.total_seconds() != 0:
+                raise RetrievalParameterError(
+                    format_actionable(
+                        group=group_name,
+                        field=field_name,
+                        problem=(
+                            f"where value for operator '{op}' is a non-UTC timezone-aware datetime; "
+                            "KiteFS does not convert time zones"
+                        ),
+                        next_step=(
+                            "pass a timezone-naive datetime (treated as UTC) or datetime(..., tzinfo=timezone.utc)"
+                        ),
+                    )
+                )
 
     return TimestampFilter(
         gt=ops.get("gt"),

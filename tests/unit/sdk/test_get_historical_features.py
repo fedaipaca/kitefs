@@ -438,3 +438,23 @@ class TestWhereValidation:
                 select=["net_area"],
                 where={"sold_at": {"gte": 1}},  # type: ignore[dict-item]
             )
+
+    def test_non_utc_timezone_where_value_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A non-UTC timezone-aware where datetime raises RetrievalParameterError before storage access."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        non_utc = datetime.datetime(
+            2024,
+            1,
+            1,
+            tzinfo=datetime.timezone(datetime.timedelta(hours=3)),
+        )
+        with pytest.raises(RetrievalParameterError):
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select=["net_area"],
+                where={"sold_at": {"gte": non_utc}},
+            )

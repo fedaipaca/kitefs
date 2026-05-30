@@ -8,7 +8,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 
-from kitefs.errors import OfflineStoreWriteError
+from kitefs.errors import OfflineStoreReadError, OfflineStoreWriteError
 from kitefs.providers.base import TimestampFilter
 from kitefs.providers.local.offline_store import LocalOfflineStore
 
@@ -290,3 +290,30 @@ class TestRead:
 
         assert len(result) == 0
         assert result.schema.equals(_READ_SCHEMA)
+
+    def test_unfiltered_read_failure_raises_offline_store_read_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A physical read failure in the unfiltered path is wrapped as OfflineStoreReadError."""
+        import pyarrow.parquet as pq
+
+        store = LocalOfflineStore(tmp_path)
+        table = _small_table([_TS_FEB])
+        store.write(
+            "town_market_features",
+            table,
+            event_timestamp_column="event_timestamp",
+            source_prefix="ing",
+        )
+
+        def _fail(*args: object, **kwargs: object) -> object:
+            raise OSError("disk error")
+
+        monkeypatch.setattr(pq, "read_table", _fail)
+
+        with pytest.raises(OfflineStoreReadError):
+            store.read(
+                "town_market_features",
+                event_timestamp_column="event_timestamp",
+                schema=_READ_SCHEMA,
+            )
