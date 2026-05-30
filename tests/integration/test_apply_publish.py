@@ -129,6 +129,29 @@ class TestApplyPublish:
         assert response.get("KeyCount", 0) == 0
 
 
+class TestApplyPublishWriteFailure:
+    """apply(publish=True) propagates RegistryWriteError after a successful local write."""
+
+    def test_remote_write_failure_after_local_write_raises(
+        self, producer_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """RegistryWriteError is raised; local registry already contains the new groups."""
+        from kitefs.errors import RegistryWriteError
+
+        def _fail_write(self_store: Any, document: dict[str, Any]) -> None:
+            raise RegistryWriteError("simulated S3 put_object failure")
+
+        monkeypatch.setattr("kitefs.providers.aws.registry.AWSRegistryStore.write", _fail_write)
+
+        with pytest.raises(RegistryWriteError):
+            FeatureStore().apply(publish=True)
+
+        local = producer_project / "feature_store" / "registry.json"
+        doc = json.loads(local.read_text(encoding="utf-8"))
+        assert "listing_features" in doc["feature_groups"]
+        assert "town_market_features" in doc["feature_groups"]
+
+
 class TestApplyPublishMisconfig:
     """apply(publish=True) raises ConfigurationError before any work on invalid config."""
 

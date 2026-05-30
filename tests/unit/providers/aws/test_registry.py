@@ -7,7 +7,7 @@ from typing import Any
 import boto3
 import pytest
 
-from kitefs.errors import RegistryReadError
+from kitefs.errors import RegistryReadError, RegistryWriteError
 from kitefs.providers.aws.registry import AWSRegistryStore
 from kitefs.registry.serializer import serialize_registry_document
 from tests.helpers.aws import create_s3_bucket
@@ -76,6 +76,13 @@ class TestAWSRegistryStoreWrite:
         keys = [o["Key"] for o in s3_client.list_objects_v2(Bucket=_BUCKET).get("Contents", [])]
         assert f"{_PREFIX}/registry.json" in keys
 
+    def test_write_failure_raises_registry_write_error(self, s3_client: Any) -> None:
+        """RegistryWriteError when PutObject fails; message identifies the S3 target."""
+        store = AWSRegistryStore(s3_client, bucket="nonexistent-bucket", s3_prefix=_PREFIX)
+        with pytest.raises(RegistryWriteError) as exc_info:
+            store.write(_SAMPLE_DOC)
+        assert "nonexistent-bucket" in str(exc_info.value)
+
 
 class TestAWSRegistryStoreRead:
     """AWSRegistryStore.read fetches and validates the registry document from S3."""
@@ -114,3 +121,12 @@ class TestAWSRegistryStoreRead:
         s3_client.put_object(Bucket=_BUCKET, Key=f"{_PREFIX}/registry.json", Body=body)
         result = store.read()
         assert result == {"feature_groups": {}}
+
+    def test_read_missing_bucket_raises_with_config_guidance(self, s3_client: Any) -> None:
+        """RegistryReadError with bucket config guidance when bucket does not exist."""
+        store = AWSRegistryStore(s3_client, bucket="nonexistent-bucket", s3_prefix=_PREFIX)
+        with pytest.raises(RegistryReadError) as exc_info:
+            store.read()
+        msg = str(exc_info.value)
+        assert "apply --publish" not in msg
+        assert "nonexistent-bucket" in msg

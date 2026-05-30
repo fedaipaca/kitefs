@@ -108,7 +108,9 @@ def describe(name: str, fmt: str, output: str | None) -> None:
 def apply(publish: bool, no_confirm: bool, fmt: str) -> None:
     """Compile feature definitions into the local registry."""
     if publish and not no_confirm:
-        click.echo("Type 'yes' to confirm publish to the remote registry: ", err=True, nl=False)
+        click.echo("You are about to publish the registry to the remote target.", err=True)
+        click.echo("This overwrites the existing remote registry.", err=True)
+        click.echo("Type 'yes' to continue: ", err=True, nl=False)
         response = sys.stdin.readline().rstrip("\n")
         if response != "yes":
             raise click.ClickException("Publish aborted.")

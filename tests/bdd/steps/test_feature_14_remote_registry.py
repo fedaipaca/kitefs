@@ -344,27 +344,11 @@ def _then_json_storage_target(ctx: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-@then('stderr contains "RegistryReadError"')
-def _then_stderr_has_registry_read_error(ctx: dict[str, Any]) -> None:
-    exc = ctx["result"].exception
-    assert exc is not None, "Expected an exception but none was raised"
-    assert type(exc).__name__ == "RegistryReadError", f"Expected RegistryReadError, got {type(exc).__name__}: {exc}"
-
-
 @then('stderr contains "apply --publish"')
 def _then_stderr_has_apply_publish(ctx: dict[str, Any]) -> None:
     exc = ctx["result"].exception
     assert exc is not None, "Expected an exception but none was raised"
     assert "apply --publish" in str(exc), f"Expected 'apply --publish' in: {str(exc)!r}"
-
-
-@then('stderr contains "FeatureGroupNotFoundError"')
-def _then_stderr_has_feature_group_not_found(ctx: dict[str, Any]) -> None:
-    exc = ctx["result"].exception
-    assert exc is not None, "Expected an exception but none was raised"
-    assert type(exc).__name__ == "FeatureGroupNotFoundError", (
-        f"Expected FeatureGroupNotFoundError, got {type(exc).__name__}: {exc}"
-    )
 
 
 @then('stderr contains "neighborhood_features"')

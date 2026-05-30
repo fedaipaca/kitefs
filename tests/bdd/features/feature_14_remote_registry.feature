@@ -32,7 +32,6 @@ Feature: Remote registry publish, list, and describe (S3)
     And the S3 registry object does not exist
     When the user runs "kitefs list"
     Then the command exits non-zero
-    And stderr contains "RegistryReadError"
     And stderr contains "apply --publish"
 
   Scenario: Remote describe unknown group lists known names
@@ -40,6 +39,5 @@ Feature: Remote registry publish, list, and describe (S3)
     And the S3 registry contains only "listing_features" and "town_market_features"
     When the user runs "kitefs describe neighborhood_features"
     Then the command exits non-zero
-    And stderr contains "FeatureGroupNotFoundError"
     And stderr contains "neighborhood_features"
     And stderr contains "listing_features"

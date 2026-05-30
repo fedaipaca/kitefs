@@ -39,17 +39,24 @@ class AWSRegistryStore(RegistryStore):
             document = json.loads(response["Body"].read())
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "")
-            if code in {"NoSuchKey", "NoSuchBucket", "404"}:
+            if code in {"NoSuchKey", "404"}:
                 raise RegistryReadError(
                     f"Remote registry not found at s3://{self._bucket}/{self._key}. "
                     "Run 'kitefs apply --publish' to publish the registry."
                 ) from exc
+            if code == "NoSuchBucket":
+                raise RegistryReadError(
+                    f"Remote registry bucket '{self._bucket}' does not exist or is inaccessible. "
+                    "Check or create the bucket and verify remote.registry.bucket in kitefs.yaml."
+                ) from exc
             raise RegistryReadError(
-                f"Failed to read remote registry at s3://{self._bucket}/{self._key}: {exc}"
+                f"Failed to read remote registry at s3://{self._bucket}/{self._key}: {exc}. "
+                "Check region, bucket/prefix, credentials, and S3 permissions."
             ) from exc
         except BotoCoreError as exc:
             raise RegistryReadError(
-                f"Failed to read remote registry at s3://{self._bucket}/{self._key}: {exc}"
+                f"Failed to read remote registry at s3://{self._bucket}/{self._key}: {exc}. "
+                "Check region, credentials, and S3 connectivity."
             ) from exc
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise RegistryReadError(
@@ -86,7 +93,8 @@ class AWSRegistryStore(RegistryStore):
             )
         except (ClientError, BotoCoreError) as exc:
             raise RegistryWriteError(
-                f"Failed to write remote registry at s3://{self._bucket}/{self._key}: {exc}"
+                f"Failed to write remote registry at s3://{self._bucket}/{self._key}: {exc}. "
+                "Check bucket/prefix, region, credentials, and S3 write permissions."
             ) from exc
 
 
