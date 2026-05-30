@@ -169,3 +169,45 @@ class TestIngestCsvPath:
         assert isinstance(result, IngestResult)
         assert result.accepted_rows == 6
         assert len(result.written_files) == 1
+
+
+class TestIngestParquetPath:
+    """Ingest from a Parquet file path."""
+
+    def test_parquet_ingest_returns_ingest_result(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Ingesting from a .parquet file path returns IngestResult with accepted_rows > 0."""
+        store = _setup_applied_store(tmp_path, monkeypatch)
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "town_market_2024_02.parquet"
+        rows = [
+            {"town_id": i, "avg_price_per_sqm": float(20000 + i * 100), "event_timestamp": _TS_FEB} for i in range(1, 7)
+        ]
+        pd.DataFrame(rows).to_parquet(parquet_path, index=False)
+
+        result = store.ingest("town_market_features", str(parquet_path))
+
+        assert isinstance(result, IngestResult)
+        assert result.accepted_rows == 6
+        assert len(result.written_files) == 1
+
+    def test_parquet_ingest_creates_hive_partition(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Parquet source file ends up in the correct year=2024/month=02 partition."""
+        store = _setup_applied_store(tmp_path, monkeypatch)
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "town_market_2024_02.parquet"
+        pd.DataFrame([{"town_id": 1, "avg_price_per_sqm": 24500.0, "event_timestamp": _TS_FEB}]).to_parquet(
+            parquet_path, index=False
+        )
+
+        result = store.ingest("town_market_features", str(parquet_path))
+
+        expected_dir = (
+            tmp_path / "feature_store" / "data" / "offline_store" / "town_market_features" / "year=2024" / "month=02"
+        )
+        assert expected_dir.is_dir()
+        assert len(result.written_files) == 1
+        assert Path(result.written_files[0]).parent == expected_dir

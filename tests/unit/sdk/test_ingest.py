@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from kitefs.errors import FeatureGroupNotFoundError, IngestionShapeError
+from kitefs.errors import FeatureGroupNotFoundError, IngestionShapeError, ValidationError
 from kitefs.sdk.feature_store import FeatureStore
 from kitefs.sdk.results import IngestResult
 from tests.helpers.dataframes import town_market_frame
@@ -199,3 +199,117 @@ class TestIngestHappyPath:
 
         for path in result.written_files:
             assert Path(path).exists(), f"Written file does not exist: {path}"
+
+
+_NONE_TOWN_MARKET_SRC = _TOWN_MARKET_SRC.replace(
+    "ingestion_validation=ValidationMode.ERROR",
+    "ingestion_validation=ValidationMode.NONE",
+)
+
+
+class TestIngestValidationModes:
+    """FeatureStore.ingest() wires validation modes correctly through orchestration."""
+
+    def test_none_mode_validation_report_is_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ValidationMode.NONE returns IngestResult with validation_report=None."""
+        _setup_project(tmp_path, _NONE_TOWN_MARKET_SRC)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        # Row that would fail the gt(0) expectation — ignored in NONE mode.
+        frame = town_market_frame([{"town_id": 1, "avg_price_per_sqm": -999.0, "event_timestamp": _TS_FEB}])
+
+        result = FeatureStore().ingest("town_market_features", frame)
+
+        assert result.validation_report is None
+        assert result.accepted_rows == 1
+
+    def test_error_mode_feature_failure_raises_before_write(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ValidationMode.ERROR raises ValidationError on feature failure; no file is written."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        frame = town_market_frame([{"town_id": 1, "avg_price_per_sqm": -999.0, "event_timestamp": _TS_FEB}])
+
+        with pytest.raises(ValidationError):
+            FeatureStore().ingest("town_market_features", frame)
+
+        offline_root = tmp_path / "feature_store" / "data" / "offline_store"
+        parquet_files = list(offline_root.rglob("*.parquet")) if offline_root.exists() else []
+        assert parquet_files == []
+
+    def test_filter_mode_mixed_rows_writes_only_accepted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ValidationMode.FILTER writes only passing rows; rejected rows do not appear in output."""
+        _setup_project(tmp_path, _FILTER_TOWN_MARKET_SRC)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        frame = town_market_frame(
+            [
+                {"town_id": 1, "avg_price_per_sqm": 24500.0, "event_timestamp": _TS_FEB},  # passes
+                {"town_id": 2, "avg_price_per_sqm": -10.0, "event_timestamp": _TS_FEB},  # fails gt(0)
+            ]
+        )
+
+        result = FeatureStore().ingest("town_market_features", frame)
+
+        assert result.accepted_rows == 1
+        assert result.rejected_rows == 1
+        assert len(result.written_files) == 1
+
+        import pyarrow.parquet as pq
+
+        table = pq.read_table(result.written_files[0])
+        assert len(table) == 1
+        assert table.column("town_id")[0].as_py() == 1
+
+
+class TestIngestNormalizationErrors:
+    """FeatureStore.ingest() wraps file read failures in IngestionShapeError."""
+
+    def test_missing_csv_raises_ingestion_shape_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A missing .csv path raises IngestionShapeError, not an OS or pandas exception."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        with pytest.raises(IngestionShapeError):
+            FeatureStore().ingest("town_market_features", str(tmp_path / "nonexistent.csv"))
+
+    def test_missing_csv_error_contains_group_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """IngestionShapeError for a missing CSV names the feature group."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        with pytest.raises(IngestionShapeError) as exc_info:
+            FeatureStore().ingest("town_market_features", str(tmp_path / "nonexistent.csv"))
+
+        assert "town_market_features" in str(exc_info.value)
+
+    def test_missing_parquet_raises_ingestion_shape_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A missing .parquet path raises IngestionShapeError."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        with pytest.raises(IngestionShapeError):
+            FeatureStore().ingest("town_market_features", str(tmp_path / "nonexistent.parquet"))
+
+    def test_unsupported_extension_error_contains_group_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """IngestionShapeError for an unsupported extension names the feature group."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+
+        with pytest.raises(IngestionShapeError) as exc_info:
+            FeatureStore().ingest("town_market_features", "data/file.xlsx")
+
+        assert "town_market_features" in str(exc_info.value)

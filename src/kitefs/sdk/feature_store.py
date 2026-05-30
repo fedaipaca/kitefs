@@ -135,7 +135,7 @@ class FeatureStore:
         document = self._provider.registry_store().read()
         description = _describe_feature_group(document, feature_group)
 
-        frame = _normalize_input(data)
+        frame = _normalize_input(data, group=feature_group)
         frame = _coerce_datetime_columns(frame, description)
         total_rows = len(frame)
 
@@ -785,13 +785,16 @@ def _selected_description(
     return replace(description, features=selected_features)
 
 
-def _normalize_input(data: pd.DataFrame | str | os.PathLike[str]) -> pd.DataFrame:
+def _normalize_input(data: pd.DataFrame | str | os.PathLike[str], *, group: str) -> pd.DataFrame:
     """Convert *data* to a pandas DataFrame.
 
     - DataFrame → copy (defensive; validation must not mutate the caller's frame).
-    - Path ending in .csv → pd.read_csv().
-    - Path ending in .parquet → pd.read_parquet().
+    - Path ending in .csv → pd.read_csv(); IOError and parse errors become IngestionShapeError.
+    - Path ending in .parquet → pd.read_parquet(); IOError and ArrowInvalid become IngestionShapeError.
     - Any other path suffix → raises IngestionShapeError with a clear message.
+
+    All failures are wrapped in IngestionShapeError so callers receive a KiteFS-typed
+    error rather than a raw pandas, PyArrow, or OS exception.
     """
     if isinstance(data, pd.DataFrame):
         return data.copy()
@@ -800,13 +803,32 @@ def _normalize_input(data: pd.DataFrame | str | os.PathLike[str]) -> pd.DataFram
     suffix = path.suffix.lower()
 
     if suffix == ".csv":
-        return pd.read_csv(path)
+        try:
+            return pd.read_csv(path)
+        except Exception as exc:
+            raise IngestionShapeError(
+                format_actionable(
+                    group=group,
+                    problem=f"could not read CSV file {path}: {exc}",
+                    next_step="check that the file exists and is a valid CSV",
+                )
+            ) from exc
+
     if suffix == ".parquet":
-        return pd.read_parquet(path)
+        try:
+            return pd.read_parquet(path)
+        except Exception as exc:
+            raise IngestionShapeError(
+                format_actionable(
+                    group=group,
+                    problem=f"could not read Parquet file {path}: {exc}",
+                    next_step="check that the file exists and is a valid Parquet file",
+                )
+            ) from exc
 
     raise IngestionShapeError(
         format_actionable(
-            group="<unknown>",
+            group=group,
             problem=(f"unsupported input file extension {suffix!r}; only .csv and .parquet are accepted"),
             next_step="pass a .csv or .parquet file path, or a pandas DataFrame directly",
         )
@@ -843,8 +865,9 @@ def _coerce_datetime_columns(
         series = frame[col]
         if pd.api.types.is_datetime64_any_dtype(series):
             continue
-        # Parse; infer_datetime_format and utc=True so tz-aware strings get
-        # timezone info preserved as UTC-aware.  Naive strings stay naive.
+        # Parse with format="mixed" to handle both ISO-8601 and locale strings.
+        # utc=False preserves tz-aware strings as UTC-aware and leaves naive strings naive;
+        # the validation engine rejects non-UTC tz-aware datetimes in the next step.
         with contextlib.suppress(ValueError, TypeError):
             frame[col] = pd.to_datetime(series, utc=False, format="mixed")
 
