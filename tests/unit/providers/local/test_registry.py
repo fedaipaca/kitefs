@@ -40,10 +40,26 @@ class TestRead:
             store.read()
         assert "registry.json" in str(exc_info.value).lower() or "registry" in str(exc_info.value).lower()
 
+    def test_missing_file_message_suggests_init_and_apply(self, tmp_path) -> None:
+        """read() error message for a missing file suggests both 'kitefs init' and 'kitefs apply'."""
+        store = _make_store(tmp_path)
+        with pytest.raises(RegistryReadError) as exc_info:
+            store.read()
+        msg = str(exc_info.value)
+        assert "kitefs init" in msg
+        assert "kitefs apply" in msg
+
     def test_corrupt_json_raises_registry_read_error(self, tmp_path) -> None:
         """read() raises RegistryReadError when registry.json is not valid JSON."""
         store = _make_store(tmp_path)
         (tmp_path / "feature_store" / "registry.json").write_text("{broken json", encoding="utf-8")
+        with pytest.raises(RegistryReadError):
+            store.read()
+
+    def test_invalid_utf8_raises_registry_read_error(self, tmp_path) -> None:
+        """read() raises RegistryReadError when registry.json contains invalid UTF-8 bytes."""
+        store = _make_store(tmp_path)
+        (tmp_path / "feature_store" / "registry.json").write_bytes(b"\xff\xfe invalid utf8")
         with pytest.raises(RegistryReadError):
             store.read()
 

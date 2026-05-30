@@ -145,7 +145,8 @@ Core stays storage-agnostic. Backend libraries are allowed **only** under `src/k
 
 ## When to Read Specs
 
-- **Do not** blindly read all specs.
+- **Do not** blindly read all specs in `/docs/specs` directory.
+- **Do** read the relavant sections when you need further information or clarification.
 - **Do** read the relevant sections when the feature definition is pointing for a reason.
 - If the feature definition or contract is unclear, ambiguous, or conflicting with existing behavior, read the relevant spec sections to clarify before implementation. Then ask the user to clarify and verify your approach before implementation.
 

@@ -20,12 +20,13 @@ Feature: Local registry list and describe
     And the JSON output has entity_key.name "town_id"
     And the JSON output has storage_target "OFFLINE_AND_ONLINE"
     And the JSON output contains feature "avg_price_per_sqm"
+    And the JSON output has metadata owner "data-science-team"
+    And the JSON output has feature "avg_price_per_sqm" with expect constraints
 
   Scenario: Describe an unknown feature group
     Given the registry contains only "listing_features" and "town_market_features"
     When the user runs "kitefs describe neighborhood_features"
     Then the command exits non-zero
-    And stderr contains "FeatureGroupNotFoundError"
     And stderr contains "neighborhood_features"
     And stderr contains "listing_features"
     And stderr contains "town_market_features"

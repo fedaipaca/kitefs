@@ -132,6 +132,28 @@ class TestDescribeOutputFile:
         assert data["entity_key"]["name"] == "town_id"
 
 
+class TestOutputWriteFailure:
+    """--output PATH write failures produce a user-facing error, not a traceback."""
+
+    def test_list_output_unwritable_path_exits_nonzero(self, applied_project: Path) -> None:
+        """list --output into a missing parent directory exits non-zero with actionable message."""
+        out_file = applied_project / "no_such_dir" / "out.txt"
+        runner = CliRunner()
+        result = runner.invoke(main, ["list", "--output", str(out_file)])
+
+        assert result.exit_code != 0
+        assert "Could not write output to" in result.output
+
+    def test_describe_output_unwritable_path_exits_nonzero(self, applied_project: Path) -> None:
+        """describe --output into a missing parent directory exits non-zero with actionable message."""
+        out_file = applied_project / "no_such_dir" / "desc.txt"
+        runner = CliRunner()
+        result = runner.invoke(main, ["describe", "town_market_features", "--output", str(out_file)])
+
+        assert result.exit_code != 0
+        assert "Could not write output to" in result.output
+
+
 class TestImportIsolation:
     """kitefs.cli must not eagerly import SDK or registry modules."""
 

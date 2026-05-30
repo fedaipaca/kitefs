@@ -24,9 +24,10 @@ class LocalRegistryStore(RegistryStore):
                 document = json.load(f)
         except FileNotFoundError as exc:
             raise RegistryReadError(
-                f"Registry file not found at {self._path.resolve()}. Run 'kitefs init' to scaffold a registry."
+                f"Registry file not found at {self._path.resolve()}. "
+                "Run 'kitefs init' to scaffold a project, then 'kitefs apply' to generate the registry."
             ) from exc
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise RegistryReadError(f"Registry file at {self._path.resolve()} could not be parsed: {exc}") from exc
         except OSError as exc:
             raise RegistryReadError(f"Failed to read registry at {self._path.resolve()}: {exc}") from exc

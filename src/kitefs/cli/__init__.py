@@ -31,6 +31,19 @@ def init_config() -> None:
     click.echo(scaffold.init_config(Path.cwd()))
 
 
+def _emit_or_write(rendered: str, output: str | None) -> None:
+    """Echo rendered to stdout, or write it to a file; OSError is wrapped as ClickException."""
+    if output is None:
+        click.echo(rendered)
+        return
+    from pathlib import Path
+
+    try:
+        Path(output).write_text(rendered + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise click.ClickException(f"Could not write output to {output}: {exc}") from exc
+
+
 @main.command(name="list")
 @click.option(
     "--format",
@@ -53,12 +66,7 @@ def list_(fmt: str, output: str | None) -> None:
 
     summaries = FeatureStore().list_feature_groups()
     rendered = render.render_list(summaries, as_json=(fmt == "json"))
-    if output is not None:
-        from pathlib import Path
-
-        Path(output).write_text(rendered + "\n", encoding="utf-8")
-    else:
-        click.echo(rendered)
+    _emit_or_write(rendered, output)
 
 
 @main.command()
@@ -84,12 +92,7 @@ def describe(name: str, fmt: str, output: str | None) -> None:
 
     description = FeatureStore().describe_feature_group(name)
     rendered = render.render_describe(description, as_json=(fmt == "json"))
-    if output is not None:
-        from pathlib import Path
-
-        Path(output).write_text(rendered + "\n", encoding="utf-8")
-    else:
-        click.echo(rendered)
+    _emit_or_write(rendered, output)
 
 
 @main.command()

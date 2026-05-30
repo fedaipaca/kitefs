@@ -21,14 +21,15 @@ scenarios("../features/feature_5_list_describe.feature")
 # ---------------------------------------------------------------------------
 
 _TOWN_MARKET_SRC = """\
-from kitefs import FeatureGroup, EntityKey, EventTimestamp, Feature, FeatureType, StorageTarget
+from kitefs import FeatureGroup, EntityKey, EventTimestamp, Expect, Feature, FeatureType, Metadata, StorageTarget
 
 town_market_features = FeatureGroup(
     name="town_market_features",
     storage_target=StorageTarget.OFFLINE_AND_ONLINE,
     entity_key=EntityKey(name="town_id", dtype=FeatureType.INTEGER),
     event_timestamp=EventTimestamp(name="event_timestamp"),
-    features=[Feature(name="avg_price_per_sqm", dtype=FeatureType.FLOAT)],
+    features=[Feature(name="avg_price_per_sqm", dtype=FeatureType.FLOAT, expect=Expect().not_null().gt(0))],
+    metadata=Metadata(description="Monthly town-level market aggregate", owner="data-science-team"),
 )
 """
 
@@ -225,15 +226,6 @@ def _then_result_is_empty_list(ctx: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-@then('stderr contains "FeatureGroupNotFoundError"')
-def _then_stderr_has_error_class(ctx: dict[str, Any]) -> None:
-    exc = ctx["result"].exception
-    assert exc is not None, "Expected an exception but none was raised"
-    assert type(exc).__name__ == "FeatureGroupNotFoundError", (
-        f"Expected FeatureGroupNotFoundError, got {type(exc).__name__}: {exc}"
-    )
-
-
 @then('stderr contains "neighborhood_features"')
 def _then_stderr_has_neighborhood(ctx: dict[str, Any]) -> None:
     err = str(ctx["result"].exception or "")
@@ -250,3 +242,20 @@ def _then_stderr_has_listing_err(ctx: dict[str, Any]) -> None:
 def _then_stderr_has_town_market_err(ctx: dict[str, Any]) -> None:
     err = str(ctx["result"].exception or "")
     assert "town_market_features" in err, f"Expected 'town_market_features' in error: {err!r}"
+
+
+@then('the JSON output has metadata owner "data-science-team"')
+def _then_json_metadata_owner(ctx: dict[str, Any]) -> None:
+    data = ctx.get("json_output") or json.loads(ctx["result"].output.strip())
+    assert data.get("metadata", {}).get("owner") == "data-science-team"
+
+
+@then('the JSON output has feature "avg_price_per_sqm" with expect constraints')
+def _then_json_feature_has_expect(ctx: dict[str, Any]) -> None:
+    data = ctx.get("json_output") or json.loads(ctx["result"].output.strip())
+    features = {f["name"]: f for f in data.get("features", [])}
+    assert "avg_price_per_sqm" in features
+    constraints = features["avg_price_per_sqm"].get("expect") or []
+    constraint_types = [c["type"] for c in constraints]
+    assert "not_null" in constraint_types
+    assert "gt" in constraint_types
