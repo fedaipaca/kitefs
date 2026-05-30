@@ -5,9 +5,8 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
+from kitefs.constants import DATETIME_FMT
 from kitefs.definitions import FeatureGroup
-
-_DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
 def _serialize_expect(expect: Any) -> list[dict[str, Any]] | None:
@@ -19,10 +18,10 @@ def _serialize_expect(expect: Any) -> list[dict[str, Any]] | None:
         if op == "not_null":
             result.append({"type": "not_null"})
         elif op == "is_in":
-            serialized_values = [v.strftime(_DATETIME_FMT) if isinstance(v, datetime.datetime) else v for v in value]
+            serialized_values = [v.strftime(DATETIME_FMT) if isinstance(v, datetime.datetime) else v for v in value]
             result.append({"type": op, "value": serialized_values})
         else:
-            v = value.strftime(_DATETIME_FMT) if isinstance(v := value, datetime.datetime) else value
+            v = value.strftime(DATETIME_FMT) if isinstance(v := value, datetime.datetime) else value
             result.append({"type": op, "value": v})
     return result if result else None
 
@@ -44,7 +43,7 @@ def _serialize_feature_group(
     }
 
     return {
-        "applied_at": applied_at.strftime(_DATETIME_FMT),
+        "applied_at": applied_at.strftime(DATETIME_FMT),
         "entity_key": {
             "description": group.entity_key.description,
             "dtype": group.entity_key.dtype.value,

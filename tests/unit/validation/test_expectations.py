@@ -7,12 +7,12 @@ import pytest
 
 from kitefs.enums import FeatureType, ValidationMode
 from kitefs.errors import ValidationError
-from kitefs.sdk.results import FieldSpec
+from kitefs.sdk.results import FeatureGroupDescription, FieldSpec
 from kitefs.validation import validate_dataframe
 from tests.unit.validation.conftest import make_description
 
 
-def _desc_with_expect(expect: list) -> object:
+def _desc_with_expect(expect: list) -> FeatureGroupDescription:
     """Description with one FLOAT feature carrying the given serialized expectations."""
     return make_description(features=[FieldSpec(name="feat", dtype=FeatureType.FLOAT, description=None, expect=expect)])
 
@@ -249,3 +249,34 @@ class TestChainedExpectations:
         assert failure.entity_key_value == 3
         assert failure.actual_value == -10.0
         assert failure.row_index == 0
+
+
+class TestObjectDatatimeExpectation:
+    """Expectation evaluation on object-dtype DATETIME features must not raise TypeError."""
+
+    def test_gt_on_naive_datetime_object_column_does_not_crash(self) -> None:
+        """A naive Python datetime in an object column survives gt expectation evaluation."""
+        import datetime
+
+        desc = make_description(
+            features=[
+                FieldSpec(
+                    name="event_dt",
+                    dtype=FeatureType.DATETIME,
+                    description=None,
+                    expect=[{"type": "gt", "value": "2020-01-01T00:00:00.000000Z"}],
+                )
+            ]
+        )
+        # Object-dtype column with a naive datetime — passes dtype and UTC checks,
+        # then the gt expectation is evaluated. This must not raise TypeError.
+        frame = pd.DataFrame(
+            {
+                "id": [1],
+                "ts": pd.to_datetime(["2024-01-01"]),
+                "event_dt": pd.Series([datetime.datetime(2024, 6, 1)], dtype=object),
+            }
+        )
+
+        _, report = validate_dataframe(desc, frame, ValidationMode.ERROR, operation="test")
+        assert report is not None and report.fail_count == 0

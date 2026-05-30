@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from kitefs.config import RuntimeConfig, load_runtime_config
+from kitefs.constants import DATETIME_FMT
 from kitefs.errors import IngestionShapeError, JoinError, RegistryReadError, RetrievalParameterError, format_actionable
 from kitefs.join_engine import point_in_time_join
 from kitefs.offline_store import build_offline_schema, prepare_ingestion_table
@@ -198,7 +199,7 @@ class FeatureStore:
         from kitefs.online_store import select_latest_rows
         from kitefs.sdk.results import FailedGroup, MaterializeResult, SkippedGroup
 
-        _DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
+        _DATETIME_FMT = DATETIME_FMT
 
         registry_store = self._provider.registry_store()
         document = registry_store.read()
@@ -850,7 +851,7 @@ def _coerce_datetime_columns(
     return frame
 
 
-_ONLINE_DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
+_ONLINE_DATETIME_FMT = DATETIME_FMT
 
 
 def _build_online_entity_lookup(

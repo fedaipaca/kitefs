@@ -238,3 +238,19 @@ def _then_contains_only_town_id_1(ctx: dict[str, Any]) -> None:
     assert ctx["result"] is not None, "Expected a result tuple but got None (exception was raised)"
     frame, _ = ctx["result"]
     assert list(frame["town_id"]) == [1], f"Expected only town_id=1 in result, got: {list(frame['town_id'])}"
+
+
+# ---------------------------------------------------------------------------
+# Given / steps for dtype-filtering scenario
+# ---------------------------------------------------------------------------
+
+
+@given('"town_market_features" expects "avg_price_per_sqm" to be FLOAT')
+def _given_town_market_float_dtype(ctx: dict[str, Any], town_market_description: FeatureGroupDescription) -> None:
+    ctx["description"] = town_market_description
+
+
+@given("the DataFrame contains town_id 3 with a non-float avg_price_per_sqm value")
+def _given_row_with_non_float_value(ctx: dict[str, Any]) -> None:
+    ctx["frame_rows"].append({"town_id": 3, "avg_price_per_sqm": "bad_value", "event_timestamp": _TS_2024})
+    ctx["frame"] = pd.DataFrame(ctx["frame_rows"])

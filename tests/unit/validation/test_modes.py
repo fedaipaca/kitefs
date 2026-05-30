@@ -7,12 +7,12 @@ import pytest
 
 from kitefs.enums import FeatureType, ValidationMode
 from kitefs.errors import ValidationError
-from kitefs.sdk.results import FieldSpec
+from kitefs.sdk.results import FeatureGroupDescription, FieldSpec
 from kitefs.validation import validate_dataframe
 from tests.unit.validation.conftest import make_description
 
 
-def _desc_with_gt_0() -> object:
+def _desc_with_gt_0() -> FeatureGroupDescription:
     """Description with a single FLOAT feature expecting gt(0)."""
     return make_description(
         features=[
@@ -202,12 +202,12 @@ class TestFilterMode:
         assert report.pass_count == 0
         assert len(report.failures) == 2  # 2 failure records
 
-    def test_column_dtype_fault_raises_in_filter_mode(self) -> None:
-        """A column-level dtype failure in FILTER mode raises (not row-filterable)."""
+    def test_feature_dtype_fault_drops_rows_in_filter_mode(self) -> None:
+        """A dtype mismatch in FILTER mode drops the failing rows instead of raising."""
         desc = make_description(
             features=[FieldSpec(name="value", dtype=FeatureType.INTEGER, description=None, expect=None)]
         )
-        # float64 column for an INTEGER feature → column-level dtype failure
+        # float64 values for an INTEGER feature — per-row dtype failures, all dropped in FILTER
         frame = pd.DataFrame(
             {
                 "id": [1],
@@ -216,8 +216,9 @@ class TestFilterMode:
             }
         )
 
-        with pytest.raises(ValidationError) as exc_info:
-            validate_dataframe(desc, frame, ValidationMode.FILTER, operation="test")
+        result_frame, report = validate_dataframe(desc, frame, ValidationMode.FILTER, operation="test")
 
-        failures = exc_info.value.report.failures
-        assert any("dtype(INTEGER)" in f.constraint for f in failures)
+        assert len(result_frame) == 0
+        assert report is not None
+        assert report.fail_count == 1
+        assert any("dtype(INTEGER)" in f.constraint for f in report.failures)

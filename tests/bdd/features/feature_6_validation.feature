@@ -30,3 +30,11 @@ Feature: Validation engine
     When the DataFrame is validated in NONE mode
     Then ValidationError is raised
     And the error report contains a failure for field "town_id"
+
+  Scenario: Feature dtype failure filters rows in FILTER mode
+    Given "town_market_features" expects "avg_price_per_sqm" to be FLOAT
+    And a DataFrame contains town_id 1 with avg_price_per_sqm 24500.0
+    And the DataFrame contains town_id 3 with a non-float avg_price_per_sqm value
+    When the DataFrame is validated in FILTER mode
+    Then the returned DataFrame contains only town_id 1
+    And the validation report has fail_count 1

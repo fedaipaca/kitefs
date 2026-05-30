@@ -9,7 +9,7 @@ import pytest
 
 from kitefs.enums import FeatureType, ValidationMode
 from kitefs.errors import ValidationError
-from kitefs.sdk.results import FieldSpec
+from kitefs.sdk.results import FeatureGroupDescription, FieldSpec
 from kitefs.validation import validate_dataframe
 from tests.unit.validation.conftest import make_description
 
@@ -17,7 +17,7 @@ _UTC = datetime.UTC
 _ISTANBUL = datetime.timezone(datetime.timedelta(hours=3), "Europe/Istanbul")
 
 
-def _desc_with_datetime_feature() -> object:
+def _desc_with_datetime_feature() -> FeatureGroupDescription:
     """Description with a single DATETIME feature (no expectations)."""
     return make_description(
         features=[FieldSpec(name="feat_dt", dtype=FeatureType.DATETIME, description=None, expect=None)]
@@ -136,10 +136,10 @@ class TestFeatureUtcValidation:
 
         failures = [f for f in exc_info.value.report.failures if f.field == "feat_dt"]
         assert any(f.constraint == "utc" for f in failures)
-        assert failures[0].row_index is None  # column-level
+        assert failures[0].row_index == 0  # row-level
 
-    def test_non_utc_feature_raises_in_filter_mode(self) -> None:
-        """A column-level UTC failure on a feature raises even in FILTER mode."""
+    def test_non_utc_feature_filters_rows_in_filter_mode(self) -> None:
+        """A non-UTC tz-aware datetime64 feature column drops failing rows in FILTER mode."""
         desc = _desc_with_datetime_feature()
         frame = pd.DataFrame(
             {
@@ -149,8 +149,12 @@ class TestFeatureUtcValidation:
             }
         )
 
-        with pytest.raises(ValidationError):
-            validate_dataframe(desc, frame, ValidationMode.FILTER, operation="test")
+        result_frame, report = validate_dataframe(desc, frame, ValidationMode.FILTER, operation="test")
+
+        assert len(result_frame) == 0
+        assert report is not None
+        assert report.fail_count == 1
+        assert any(f.constraint == "utc" for f in report.failures)
 
 
 class TestObjectColumnDatetimeUtc:

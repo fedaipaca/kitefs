@@ -16,9 +16,9 @@ from typing import Any
 
 import pandas as pd
 
+from kitefs.constants import DATETIME_FMT
 from kitefs.enums import FeatureType, ValidationMode
 from kitefs.errors import IngestionShapeError, ValidationError, format_actionable
-from kitefs.registry.serializer import _DATETIME_FMT
 from kitefs.sdk.results import (
     FeatureGroupDescription,
     ValidationFailure,
@@ -45,9 +45,8 @@ def validate_dataframe(
     In NONE mode, feature-level checks are skipped and (frame, None) is returned.
     In ERROR mode, any feature failure raises ValidationError carrying a ValidationReport.
     In FILTER mode, failing rows are dropped and the passing subset plus a
-    ValidationReport are returned. Column-level feature faults (wrong column dtype,
-    non-UTC tz-aware datetime64 column) cannot be fixed by dropping rows and raise
-    ValidationError even in FILTER mode.
+    ValidationReport are returned. Feature dtype and UTC checks are row-level;
+    failing rows are dropped in FILTER mode, not raised.
 
     Args:
         description: The registered feature group description from the registry.
@@ -62,8 +61,8 @@ def validate_dataframe(
 
     Raises:
         IngestionShapeError: A required structural or feature column is missing.
-        ValidationError: Any structural failure (in any mode), any feature failure in
-            ERROR mode, or a non-row-filterable feature failure in FILTER mode.
+        ValidationError: Any structural failure (in any mode) or any feature failure
+            in ERROR mode.
     """
     _check_shape(description, frame)
 
@@ -83,18 +82,7 @@ def validate_dataframe(
     if mode is ValidationMode.NONE:
         return frame, None
 
-    feature, fatal = _feature_failures(description, frame)
-    if fatal:
-        n = len(feature)
-        raise ValidationError(
-            format_actionable(
-                setting=operation,
-                group=description.name,
-                problem=f"feature validation failed with {n} column-level failure(s)",
-                next_step="fix column dtype mismatches or non-UTC tz-aware datetimes in the feature columns",
-            ),
-            report=ValidationReport(pass_count=0, fail_count=len(frame), failures=feature),
-        )
+    feature = _feature_failures(description, frame)
 
     if mode is ValidationMode.ERROR:
         if feature:
@@ -378,7 +366,7 @@ def _evaluate_expectation(
     if op in ("gt", "gte", "lt", "lte"):
         raw_value = constraint["value"]
         if isinstance(raw_value, str):
-            raw_value = datetime.datetime.strptime(raw_value, _DATETIME_FMT).replace(tzinfo=datetime.UTC)
+            raw_value = datetime.datetime.strptime(raw_value, DATETIME_FMT).replace(tzinfo=datetime.UTC)
         threshold = raw_value
         # For naive datetime64 Series, strip tz from a UTC threshold to avoid the
         # tz-naive/tz-aware comparison error — naive is treated as UTC.
@@ -388,6 +376,10 @@ def _evaluate_expectation(
             and isinstance(threshold, datetime.datetime)
             and threshold.tzinfo is not None
         ):
+            threshold = threshold.replace(tzinfo=None)
+        # For object-dtype Series with naive Python datetimes, also strip tz from
+        # a UTC-aware threshold — naive is treated as UTC per project convention.
+        if series.dtype == object and isinstance(threshold, datetime.datetime) and threshold.tzinfo is not None:
             threshold = threshold.replace(tzinfo=None)
         constraint_str = f"{op}({raw_value})"
 
@@ -417,7 +409,7 @@ def _evaluate_expectation(
         raw_list = constraint["value"]
         # Parse datetime strings if the column holds datetime values.
         parsed_list: list[Any] = [
-            datetime.datetime.strptime(v, _DATETIME_FMT).replace(tzinfo=datetime.UTC)
+            datetime.datetime.strptime(v, DATETIME_FMT).replace(tzinfo=datetime.UTC)
             if isinstance(v, str) and pd.api.types.is_datetime64_any_dtype(series)
             else v
             for v in raw_list
@@ -446,60 +438,117 @@ def _evaluate_expectation(
     return []  # unknown operator type — skip silently
 
 
+def _is_scalar_compatible(val: Any, dtype: FeatureType) -> bool:
+    """Return True if a single non-null scalar matches the declared FeatureType.
+
+    Booleans are excluded from INTEGER and FLOAT even though isinstance(True, int)
+    is True in Python. Null values must be screened before calling this function.
+    """
+    if isinstance(val, bool):
+        return False
+    if dtype == FeatureType.INTEGER:
+        return pd.api.types.is_integer_dtype(type(val))
+    if dtype == FeatureType.FLOAT:
+        return pd.api.types.is_float_dtype(type(val))
+    if dtype == FeatureType.STRING:
+        return isinstance(val, str)
+    if dtype == FeatureType.DATETIME:
+        return isinstance(val, datetime.datetime)  # pd.Timestamp is a subclass
+    return False  # unreachable: FeatureType has exactly 4 members
+
+
 def _feature_failures(
     description: FeatureGroupDescription,
     frame: pd.DataFrame,
-) -> tuple[list[ValidationFailure], bool]:
+) -> list[ValidationFailure]:
     """Check feature dtype, UTC, and expectation constraints.
 
-    Returns (failures, fatal) where fatal=True means a column-level failure was
-    encountered that cannot be fixed by dropping rows (wrong column dtype or a
-    non-UTC tz-aware datetime64 column). Callers raise ValidationError on fatal
-    instead of attempting row-level filtering.
-
-    Features are processed in declared order (alphabetical in FeatureGroupDescription,
-    per the serializer). Constraints are evaluated in the order they appear in the
-    serialized expect list. Per-row failures within a constraint are in ascending
-    positional order.
+    All failures are row-level. Features are processed in declared order.
+    Rows that fail dtype or UTC checks for a given feature are skipped during
+    expectation evaluation to avoid comparison errors on incompatible values.
     """
     failures: list[ValidationFailure] = []
-    fatal = False
     ek_series = _col(frame, description.entity_key.name)
 
     for feature in description.features:
         series = _col(frame, feature.name)
 
-        # Column dtype check: column-level failure → fatal (not row-filterable).
-        if not _is_dtype_compatible(series, feature.dtype):
-            failures.append(
-                ValidationFailure(
-                    field=feature.name,
-                    constraint=f"dtype({feature.dtype.value})",
-                    actual_value=str(series.dtype),
-                    entity_key_value=None,
-                    row_index=None,
-                )
-            )
-            fatal = True
-            continue  # skip expectations — values may not be comparable with wrong dtype
+        # Positions that failed dtype or UTC for this feature. Expectation checks
+        # skip these to avoid TypeError when comparing incompatible values.
+        failed_positions: set[int] = set()
 
-        # UTC check for DATETIME features.
+        # Per-row dtype check (skip fully-null columns — not_null owns null rejection).
+        if not series.isna().all():
+            for pos in range(len(series)):
+                if series.isna().iloc[pos]:
+                    continue
+                val = series.iloc[pos]
+                if not _is_scalar_compatible(val, feature.dtype):
+                    failures.append(
+                        ValidationFailure(
+                            field=feature.name,
+                            constraint=f"dtype({feature.dtype.value})",
+                            actual_value=_py_scalar(val),
+                            entity_key_value=_ek_value(ek_series, pos),
+                            row_index=pos,
+                        )
+                    )
+                    failed_positions.add(pos)
+
+        # UTC check for DATETIME features (only on rows that passed dtype).
         if feature.dtype == FeatureType.DATETIME:
-            utc_fails = _utc_failures(series, feature.name, ek_series)
-            if utc_fails:
-                # datetime64 with non-UTC tz is a column-level failure → fatal.
-                if any(f.row_index is None for f in utc_fails):
-                    fatal = True
-                failures.extend(utc_fails)
-                if fatal:
-                    continue  # skip expectations — column timezone is wrong
+            if pd.api.types.is_datetime64_any_dtype(series):
+                tz = getattr(series.dtype, "tz", None)
+                if tz is not None and str(tz) != "UTC":
+                    # Non-UTC tz-aware datetime64: report one failure per non-null row.
+                    for pos in range(len(series)):
+                        if pos in failed_positions or series.isna().iloc[pos]:
+                            continue
+                        failures.append(
+                            ValidationFailure(
+                                field=feature.name,
+                                constraint="utc",
+                                actual_value=str(tz),
+                                entity_key_value=_ek_value(ek_series, pos),
+                                row_index=pos,
+                            )
+                        )
+                        failed_positions.add(pos)
+            elif series.dtype == object:
+                # Object column: use existing per-row UTC helper.
+                for f in _utc_failures(series, feature.name, ek_series):
+                    failures.append(f)
+                    if f.row_index is not None:
+                        failed_positions.add(f.row_index)
 
-        # Expectation constraints (per-row).
+        # Expectation constraints: skip positions that failed dtype or UTC.
         if feature.expect is not None:
-            for c in feature.expect:
-                failures.extend(_evaluate_expectation(series, c, feature.name, ek_series))
+            if not failed_positions:
+                # Fast path: no dtype/UTC failures — evaluate on full series.
+                for c in feature.expect:
+                    failures.extend(_evaluate_expectation(series, c, feature.name, ek_series))
+            elif len(failed_positions) < len(series):
+                # Some rows failed — evaluate expectations only on eligible positions.
+                eligible_idx = [i for i in range(len(series)) if i not in failed_positions]
+                eligible_series = series.iloc[pd.Index(eligible_idx)].reset_index(drop=True)
+                eligible_ek = ek_series.iloc[pd.Index(eligible_idx)].reset_index(drop=True)
+                for c in feature.expect:
+                    for sub_f in _evaluate_expectation(eligible_series, c, feature.name, eligible_ek):
+                        if sub_f.row_index is not None:
+                            failures.append(
+                                ValidationFailure(
+                                    field=sub_f.field,
+                                    constraint=sub_f.constraint,
+                                    actual_value=sub_f.actual_value,
+                                    entity_key_value=sub_f.entity_key_value,
+                                    row_index=eligible_idx[sub_f.row_index],
+                                )
+                            )
+                        else:
+                            failures.append(sub_f)
+            # else: all rows failed dtype/UTC — no eligible rows for expectations.
 
-    return failures, fatal
+    return failures
 
 
 __all__ = ["validate_dataframe"]

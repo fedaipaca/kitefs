@@ -9,9 +9,9 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
+from kitefs.constants import DATETIME_FMT
 from kitefs.enums import FeatureType, StorageTarget, ValidationMode
 from kitefs.errors import FeatureGroupNotFoundError, format_actionable
-from kitefs.registry.serializer import _DATETIME_FMT
 from kitefs.sdk.results import (
     FeatureGroupDescription,
     FeatureGroupSummary,
@@ -25,7 +25,7 @@ def _parse_dt(value: str | None) -> datetime.datetime | None:
     """Parse an ISO registry datetime string to datetime, or return None."""
     if value is None:
         return None
-    return datetime.datetime.strptime(value, _DATETIME_FMT).replace(tzinfo=datetime.UTC)
+    return datetime.datetime.strptime(value, DATETIME_FMT).replace(tzinfo=datetime.UTC)
 
 
 def _parse_field(entry: dict[str, Any], *, include_expect: bool) -> FieldSpec:

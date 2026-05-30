@@ -7,12 +7,12 @@ import pytest
 
 from kitefs.enums import FeatureType, ValidationMode
 from kitefs.errors import ValidationError
-from kitefs.sdk.results import FieldSpec
+from kitefs.sdk.results import FeatureGroupDescription, FieldSpec
 from kitefs.validation import validate_dataframe
 from tests.unit.validation.conftest import make_description
 
 
-def _desc_with_feature(name: str, dtype: FeatureType, *, expect: list | None = None) -> object:
+def _desc_with_feature(name: str, dtype: FeatureType, *, expect: list | None = None) -> FeatureGroupDescription:
     """Return a description with a single feature of the given dtype."""
     return make_description(features=[FieldSpec(name=name, dtype=dtype, description=None, expect=expect)])
 
@@ -169,3 +169,40 @@ class TestFullyNullColumn:
         except ValidationError as exc:
             dtype_failures = [f for f in exc.report.failures if "dtype" in f.constraint]
             assert not dtype_failures, f"Unexpected dtype failure on all-null column: {dtype_failures}"
+
+
+class TestFilterModeDtype:
+    """FILTER mode drops rows with dtype mismatches rather than raising."""
+
+    def test_incompatible_row_dropped_compatible_row_kept(self) -> None:
+        """In FILTER mode, a row whose feature value fails dtype check is dropped."""
+        desc = _desc_with_feature("feat", FeatureType.INTEGER)
+        # Mixed object column: row 0 is an int (passes), row 1 is a float (fails INTEGER)
+        frame = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "ts": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                "feat": pd.Series([1, 1.5], dtype=object),
+            }
+        )
+
+        result_frame, report = validate_dataframe(desc, frame, ValidationMode.FILTER, operation="test")
+
+        assert len(result_frame) == 1
+        assert result_frame.iloc[0]["id"] == 1
+        assert report is not None
+        assert report.fail_count == 1
+        assert report.pass_count == 1
+        assert any(f.constraint == "dtype(INTEGER)" for f in report.failures)
+
+    def test_all_incompatible_rows_produce_empty_frame(self) -> None:
+        """When all rows fail dtype check in FILTER mode, an empty DataFrame is returned."""
+        desc = _desc_with_feature("feat", FeatureType.FLOAT)
+        frame = _frame_with("feat", ["x", "y"])  # object dtype strings for FLOAT
+
+        result_frame, report = validate_dataframe(desc, frame, ValidationMode.FILTER, operation="test")
+
+        assert len(result_frame) == 0
+        assert report is not None
+        assert report.fail_count == 2
+        assert report.pass_count == 0

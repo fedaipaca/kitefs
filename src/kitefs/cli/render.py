@@ -19,9 +19,7 @@ if TYPE_CHECKING:
         ValidationReport,
     )
 
-# Re-use the single datetime format string from the serializer.
-_DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
-
+from kitefs.constants import DATETIME_FMT as _DATETIME_FMT
 
 # ---------------------------------------------------------------------------
 # list
