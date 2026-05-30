@@ -83,6 +83,7 @@ class LocalOnlineStore(OnlineStore):
         latest_rows: pa.Table,
         *,
         entity_key_column: str,
+        event_timestamp_column: str,
     ) -> None:
         """Atomically replace the online table for *feature_group*.
 
@@ -91,8 +92,10 @@ class LocalOnlineStore(OnlineStore):
         On any error the transaction is rolled back and an OnlineStoreWriteError
         is raised, leaving the prior committed contents intact.
 
-        The *entity_key_column* is the PRIMARY KEY of the table. All other
-        columns from *latest_rows* are stored in declaration order.
+        The *entity_key_column* is the PRIMARY KEY of the table.  The
+        *event_timestamp_column* is stored as TEXT NOT NULL.  All other
+        columns (join keys and feature columns) are stored without a NOT NULL
+        constraint so that nullable feature values are accepted.
 
         FeatureType → SQLite affinity mapping:
             STRING  → TEXT
@@ -127,8 +130,10 @@ class LocalOnlineStore(OnlineStore):
 
             if name == entity_key_column:
                 col_defs.append(f'"{name}" {sqlite_type} PRIMARY KEY')
-            else:
+            elif name == event_timestamp_column:
                 col_defs.append(f'"{name}" {sqlite_type} NOT NULL')
+            else:
+                col_defs.append(f'"{name}" {sqlite_type}')
 
         ddl = f'CREATE TABLE IF NOT EXISTS "{feature_group}" ({", ".join(col_defs)})'
 

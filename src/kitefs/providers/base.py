@@ -68,6 +68,7 @@ class OnlineStore(abc.ABC):
         latest_rows: pyarrow.Table,
         *,
         entity_key_column: str,
+        event_timestamp_column: str,
     ) -> None: ...
 
     @abc.abstractmethod

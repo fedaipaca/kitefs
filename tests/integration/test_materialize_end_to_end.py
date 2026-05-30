@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -231,3 +232,196 @@ class TestMaterializeSkipped:
         assert result.skipped[0].name == "town_market_features"
         rows_after = _read_sqlite_rows(tmp_path, "town_market_features")
         assert rows_after == rows_before
+
+
+_NEIGHBORHOOD_SRC = """\
+from kitefs import (
+    EntityKey, EventTimestamp, Feature, FeatureGroup, FeatureType,
+    Metadata, StorageTarget, ValidationMode,
+)
+
+neighborhood_features = FeatureGroup(
+    name="neighborhood_features",
+    storage_target=StorageTarget.OFFLINE_AND_ONLINE,
+    entity_key=EntityKey(name="neighborhood_id", dtype=FeatureType.INTEGER),
+    event_timestamp=EventTimestamp(name="event_timestamp"),
+    features=[
+        Feature(name="avg_score", dtype=FeatureType.FLOAT),
+    ],
+    ingestion_validation=ValidationMode.NONE,
+    metadata=Metadata(description="Neighborhood features", owner="team", tags={}),
+)
+"""
+
+
+def _setup_store_two_groups(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FeatureStore:
+    """Scaffold a project with two OFFLINE_AND_ONLINE groups and return a FeatureStore."""
+    from tests.helpers.tmp_store import make_initialized_project
+
+    make_initialized_project(tmp_path)
+    defs_dir = tmp_path / "feature_store" / "definitions"
+    (defs_dir / "town_market_features.py").write_text(_TOWN_MARKET_SRC, encoding="utf-8")
+    (defs_dir / "neighborhood_features.py").write_text(_NEIGHBORHOOD_SRC, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    FeatureStore().apply()
+    return FeatureStore()
+
+
+def _ingest_neighborhood_rows(store: FeatureStore, n_rows: int = 3) -> None:
+    """Ingest minimal rows into neighborhood_features."""
+    import pandas as pd
+
+    rows = [
+        {
+            "neighborhood_id": i,
+            "avg_score": float(i * 10),
+            "event_timestamp": _ts(f"2024-0{i}-01T00:00:00"),
+        }
+        for i in range(1, n_rows + 1)
+    ]
+    df = pd.DataFrame(rows)
+    store.ingest("neighborhood_features", df)
+
+
+class TestMaterializeFailedGroup:
+    """Per-group online write failures are captured in MaterializeResult.failed."""
+
+    def test_write_failure_reported_in_failed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An online write failure produces a FailedGroup entry in result.failed."""
+        from kitefs.errors import OnlineStoreWriteError
+        from kitefs.providers.local.online_store import LocalOnlineStore
+
+        store = _setup_store(tmp_path, monkeypatch)
+        _ingest_market_rows(store)
+
+        monkeypatch.setattr(
+            LocalOnlineStore,
+            "materialize",
+            lambda *a, **kw: (_ for _ in ()).throw(OnlineStoreWriteError("simulated write failure")),
+        )
+        result = store.materialize("town_market_features")
+
+        assert len(result.failed) == 1
+        assert result.failed[0].name == "town_market_features"
+        assert "simulated write failure" in result.failed[0].error_message
+        assert result.succeeded == []
+
+    def test_write_failure_leaves_last_materialized_at_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A write failure does not update last_materialized_at in the registry."""
+        from kitefs.errors import OnlineStoreWriteError
+        from kitefs.providers.local.online_store import LocalOnlineStore
+
+        store = _setup_store(tmp_path, monkeypatch)
+        _ingest_market_rows(store)
+
+        # First materialize succeeds — record the timestamp.
+        store.materialize("town_market_features")
+        ts_before = store.describe_feature_group("town_market_features").last_materialized_at
+        assert ts_before is not None
+
+        # Force failure on the next call.
+        monkeypatch.setattr(
+            LocalOnlineStore,
+            "materialize",
+            lambda *a, **kw: (_ for _ in ()).throw(OnlineStoreWriteError("simulated write failure")),
+        )
+        store.materialize("town_market_features")
+
+        ts_after = store.describe_feature_group("town_market_features").last_materialized_at
+        assert ts_after == ts_before
+
+    def test_write_failure_preserves_prior_online_state(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A write failure leaves the previously materialized SQLite rows intact."""
+        from kitefs.errors import OnlineStoreWriteError
+        from kitefs.providers.local.online_store import LocalOnlineStore
+
+        store = _setup_store(tmp_path, monkeypatch)
+        _ingest_market_rows(store, n_months=1, n_towns=3)
+        store.materialize("town_market_features")
+        rows_before = _read_sqlite_rows(tmp_path, "town_market_features")
+        assert len(rows_before) == 3
+
+        monkeypatch.setattr(
+            LocalOnlineStore,
+            "materialize",
+            lambda *a, **kw: (_ for _ in ()).throw(OnlineStoreWriteError("simulated write failure")),
+        )
+        store.materialize("town_market_features")
+
+        rows_after = _read_sqlite_rows(tmp_path, "town_market_features")
+        assert rows_after == rows_before
+
+    def test_one_failure_does_not_abort_all_groups(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An online write failure for one group does not abort processing of remaining groups."""
+        from kitefs.errors import OnlineStoreWriteError
+        from kitefs.providers.local.online_store import LocalOnlineStore
+
+        store = _setup_store_two_groups(tmp_path, monkeypatch)
+        _ingest_market_rows(store)
+        _ingest_neighborhood_rows(store)
+
+        # targets are sorted alphabetically: neighborhood_features < town_market_features
+        # Fail only the first call so the second group still succeeds.
+        call_count = {"n": 0}
+        original_materialize = LocalOnlineStore.materialize
+
+        def _fail_first(self_inner: LocalOnlineStore, *args: Any, **kwargs: Any) -> None:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise OnlineStoreWriteError("simulated write failure")
+            original_materialize(self_inner, *args, **kwargs)
+
+        monkeypatch.setattr(LocalOnlineStore, "materialize", _fail_first)
+        result = store.materialize()
+
+        assert len(result.failed) == 1
+        assert result.failed[0].name == "neighborhood_features"
+        assert len(result.succeeded) == 1
+        assert result.succeeded[0] == "town_market_features"
+
+    def test_registry_write_failure_reported_in_failed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A registry write failure is captured as FailedGroup, not raised to the caller."""
+        from kitefs.errors import RegistryWriteError
+        from kitefs.providers.local.registry import LocalRegistryStore
+
+        store = _setup_store(tmp_path, monkeypatch)
+        _ingest_market_rows(store)
+
+        monkeypatch.setattr(
+            LocalRegistryStore,
+            "write",
+            lambda *a, **kw: (_ for _ in ()).throw(RegistryWriteError("simulated registry failure")),
+        )
+        result = store.materialize("town_market_features")
+
+        assert len(result.failed) == 1
+        assert result.failed[0].name == "town_market_features"
+        assert result.succeeded == []
+
+    def test_registry_write_failure_leaves_last_materialized_at_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A registry write failure does not persist a new last_materialized_at."""
+        from kitefs.errors import RegistryWriteError
+        from kitefs.providers.local.registry import LocalRegistryStore
+
+        store = _setup_store(tmp_path, monkeypatch)
+        _ingest_market_rows(store)
+
+        # First materialize succeeds — record the timestamp.
+        store.materialize("town_market_features")
+        ts_before = store.describe_feature_group("town_market_features").last_materialized_at
+        assert ts_before is not None
+
+        # Force registry write failure on the next call.
+        monkeypatch.setattr(
+            LocalRegistryStore,
+            "write",
+            lambda *a, **kw: (_ for _ in ()).throw(RegistryWriteError("simulated registry failure")),
+        )
+        store.materialize("town_market_features")
+
+        ts_after = store.describe_feature_group("town_market_features").last_materialized_at
+        assert ts_after == ts_before

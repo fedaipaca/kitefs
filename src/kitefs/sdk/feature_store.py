@@ -268,14 +268,23 @@ class FeatureStore:
                     name,
                     latest_rows,
                     entity_key_column=description.entity_key.name,
+                    event_timestamp_column=description.event_timestamp.name,
                 )
             except Exception as exc:
                 failed.append(FailedGroup(name=name, error_message=str(exc)))
                 continue
 
-            # Update last_materialized_at in the document and persist.
+            # Update last_materialized_at and persist.  If the registry write
+            # fails, revert the in-memory timestamp and report the group as
+            # failed — the online data is already refreshed so a retry is safe.
+            prior_lm = document["feature_groups"][name].get("last_materialized_at")
             document["feature_groups"][name]["last_materialized_at"] = datetime.now(UTC).strftime(_DATETIME_FMT)
-            registry_store.write(document)
+            try:
+                registry_store.write(document)
+            except Exception as exc:
+                document["feature_groups"][name]["last_materialized_at"] = prior_lm
+                failed.append(FailedGroup(name=name, error_message=str(exc)))
+                continue
             succeeded.append(name)
 
         return MaterializeResult(succeeded=succeeded, skipped=skipped, failed=failed)

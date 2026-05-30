@@ -32,7 +32,7 @@ class TestMaterialize:
         """materialize() creates the SQLite database file if it does not exist."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         expected_db = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
         assert expected_db.exists()
 
@@ -46,7 +46,7 @@ class TestMaterialize:
                 {"town_id": 3, "ts": "2024-01-01T00:00:00", "price": 30.0},
             ]
         )
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
         with sqlite3.connect(str(db_path)) as conn:
             count = conn.execute('SELECT COUNT(*) FROM "tmf"').fetchone()[0]
@@ -56,10 +56,10 @@ class TestMaterialize:
         """The entity key column is the PRIMARY KEY — duplicate keys overwrite."""
         store = LocalOnlineStore(tmp_path)
         t1 = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
-        store.materialize("tmf", t1, entity_key_column="town_id")
+        store.materialize("tmf", t1, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         # Second call replaces the table entirely (DELETE + INSERT).
         t2 = _market_table([{"town_id": 1, "ts": "2024-06-01T00:00:00", "price": 99.0}])
-        store.materialize("tmf", t2, entity_key_column="town_id")
+        store.materialize("tmf", t2, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
         with sqlite3.connect(str(db_path)) as conn:
             rows = conn.execute('SELECT avg_price FROM "tmf"').fetchall()
@@ -75,9 +75,9 @@ class TestMaterialize:
                 {"town_id": 2, "ts": "2024-01-01T00:00:00", "price": 20.0},
             ]
         )
-        store.materialize("tmf", t1, entity_key_column="town_id")
+        store.materialize("tmf", t1, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         t2 = _market_table([{"town_id": 1, "ts": "2024-06-01T00:00:00", "price": 50.0}])
-        store.materialize("tmf", t2, entity_key_column="town_id")
+        store.materialize("tmf", t2, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
         with sqlite3.connect(str(db_path)) as conn:
             count = conn.execute('SELECT COUNT(*) FROM "tmf"').fetchone()[0]
@@ -87,7 +87,7 @@ class TestMaterialize:
         """DATETIME columns are stored as ISO-8601 UTC strings ending in Z."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2025-01-01T00:00:00", "price": 5.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
         with sqlite3.connect(str(db_path)) as conn:
             ts_str = conn.execute('SELECT event_timestamp FROM "tmf"').fetchone()[0]
@@ -104,7 +104,7 @@ class TestMaterialize:
             ]
         )
         empty = schema.empty_table()
-        store.materialize("tmf", empty, entity_key_column="town_id")
+        store.materialize("tmf", empty, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
         with sqlite3.connect(str(db_path)) as conn:
             count = conn.execute('SELECT COUNT(*) FROM "tmf"').fetchone()[0]
@@ -114,8 +114,21 @@ class TestMaterialize:
         """materialize() creates the online_store directory if missing."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 1.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         assert (tmp_path / "feature_store" / "data" / "online_store").is_dir()
+
+    def test_nullable_feature_stored_as_null(self, tmp_path: Path) -> None:
+        """A None feature value is stored as SQL NULL without raising a NOT NULL constraint error."""
+        store = LocalOnlineStore(tmp_path)
+        town_ids = pa.array([1], type=pa.int64())
+        timestamps = pa.array([_ts("2024-01-01T00:00:00")], type=pa.timestamp("us", tz="UTC"))
+        prices = pa.array([None], type=pa.float64())
+        t = pa.table({"town_id": town_ids, "event_timestamp": timestamps, "avg_price": prices})
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
+        db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
+        with sqlite3.connect(str(db_path)) as conn:
+            row = conn.execute('SELECT avg_price FROM "tmf"').fetchone()
+        assert row[0] is None
 
 
 class TestGet:
@@ -125,7 +138,7 @@ class TestGet:
         """get() returns a dict with the matching row values on hit."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 27800.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         result = store.get("tmf", 1, entity_key_column="town_id", select=["town_id", "event_timestamp", "avg_price"])
         assert result["town_id"] == 1
         assert result["avg_price"] == pytest.approx(27800.0)
@@ -134,7 +147,7 @@ class TestGet:
         """get() returns {} when entity key value has no matching row."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         result = store.get("tmf", 999, entity_key_column="town_id", select=["town_id", "event_timestamp", "avg_price"])
         assert result == {}
 
@@ -148,7 +161,7 @@ class TestGet:
         """select=None returns all columns from the table."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         result = store.get("tmf", 1, entity_key_column="town_id", select=None)
         assert set(result.keys()) == {"town_id", "event_timestamp", "avg_price"}
 
@@ -156,7 +169,7 @@ class TestGet:
         """select restricts the returned columns to those specified."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2024-01-01T00:00:00", "price": 10.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         result = store.get("tmf", 1, entity_key_column="town_id", select=["town_id", "avg_price"])
         assert set(result.keys()) == {"town_id", "avg_price"}
         assert "event_timestamp" not in result
@@ -165,7 +178,7 @@ class TestGet:
         """Datetime columns are returned as ISO-8601 strings (SDK coerces to datetime)."""
         store = LocalOnlineStore(tmp_path)
         t = _market_table([{"town_id": 1, "ts": "2025-06-01T00:00:00", "price": 5.0}])
-        store.materialize("tmf", t, entity_key_column="town_id")
+        store.materialize("tmf", t, entity_key_column="town_id", event_timestamp_column="event_timestamp")
         result = store.get("tmf", 1, entity_key_column="town_id", select=["event_timestamp"])
         assert isinstance(result["event_timestamp"], str)
         assert result["event_timestamp"].startswith("2025-06-01")
