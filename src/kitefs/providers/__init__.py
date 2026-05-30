@@ -38,11 +38,24 @@ def build_provider(config: RuntimeConfig, root: Path) -> Provider:
     return _RemoteStubProvider()
 
 
+def build_local_provider(root: Path) -> Provider:
+    """Construct and return a local provider rooted at root.
+
+    Use this when the local working registry must be accessed regardless of the
+    configured runtime target — for example, apply() always writes the local
+    working registry before any optional remote publish.
+    """
+    from kitefs.providers.local import LocalProvider
+
+    return LocalProvider(root)
+
+
 __all__ = [
     "OfflineStore",
     "OnlineStore",
     "Provider",
     "RegistryStore",
     "TimestampFilter",
+    "build_local_provider",
     "build_provider",
 ]

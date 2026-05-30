@@ -170,3 +170,98 @@ class TestAggregatedErrors:
         msg = str(exc_info.value)
         assert "dupe" in msg
         assert "nonexistent" in msg
+
+
+class TestDefensiveStructuralChecks:
+    """validate_cross_definition rejects per-group invariants bypassed after construction."""
+
+    def test_invalid_event_timestamp_dtype_raises(self) -> None:
+        """A group whose EventTimestamp.dtype was mutated to a non-DATETIME value is rejected."""
+        group = _simple_group("my_group")
+        group.event_timestamp.dtype = FeatureType.FLOAT  # mutate past constructor
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        msg = str(exc_info.value)
+        assert "EventTimestamp" in msg or "DATETIME" in msg
+
+    def test_invalid_entity_key_dtype_raises(self) -> None:
+        """A group whose EntityKey.dtype was mutated to FLOAT is rejected."""
+        group = _simple_group("my_group")
+        group.entity_key.dtype = FeatureType.FLOAT  # mutate past constructor
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        msg = str(exc_info.value)
+        assert "EntityKey" in msg or "INTEGER" in msg or "STRING" in msg
+
+    def test_invalid_feature_dtype_raises(self) -> None:
+        """A feature whose dtype was mutated to a non-FeatureType value is rejected."""
+        group = _simple_group("my_group")
+        group.features[0].dtype = "not_a_type"  # type: ignore[assignment]
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        assert "Feature" in str(exc_info.value) or "FeatureType" in str(exc_info.value)
+
+    def test_empty_features_list_raises(self) -> None:
+        """A group whose features list was cleared after construction is rejected."""
+        group = _simple_group("my_group")
+        group.features = []  # mutate past constructor
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        msg = str(exc_info.value)
+        assert "at least one feature" in msg
+
+    def test_too_many_join_keys_raises(self) -> None:
+        """A group with more than one join key is rejected."""
+        group = _simple_group("source")
+        target = _simple_group("target")
+        jk1 = JoinKey(name="ref1", dtype=FeatureType.INTEGER, referenced_group="target")
+        jk2 = JoinKey(name="ref2", dtype=FeatureType.INTEGER, referenced_group="target")
+        group.join_keys = [jk1, jk2]  # mutate past constructor
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group, target])
+
+        msg = str(exc_info.value)
+        assert "join_key" in msg or "join key" in msg
+
+    def test_duplicate_field_names_raises(self) -> None:
+        """A group with a feature sharing the entity key's name is rejected."""
+        group = _simple_group("my_group")
+        group.features.append(Feature(name="id", dtype=FeatureType.FLOAT))  # "id" = entity_key.name
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        msg = str(exc_info.value)
+        assert "duplicate" in msg and "id" in msg
+
+    def test_invalid_group_name_identifier_raises(self) -> None:
+        """A group whose name was mutated to a non-identifier string is rejected."""
+        group = _simple_group("my_group")
+        group.name = "123-invalid"  # mutate past constructor
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        assert "identifier" in str(exc_info.value)
+
+    def test_multiple_structural_violations_all_reported(self) -> None:
+        """Multiple per-group structural violations appear in one DefinitionValidationError."""
+        group = _simple_group("my_group")
+        group.event_timestamp.dtype = FeatureType.FLOAT  # bad dtype
+        group.features = []  # no features
+
+        with pytest.raises(DefinitionValidationError) as exc_info:
+            validate_cross_definition([group])
+
+        msg = str(exc_info.value)
+        assert "EventTimestamp" in msg or "DATETIME" in msg
+        assert "at least one feature" in msg

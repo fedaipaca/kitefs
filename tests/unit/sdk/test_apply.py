@@ -164,3 +164,38 @@ listing_features = FeatureGroup(
             FeatureStore().apply()
 
         assert registry_path.read_text(encoding="utf-8") == original_content
+
+
+class TestApplyWithRemoteRuntimeTarget:
+    """FeatureStore.apply() writes the local registry even when runtime.target is remote."""
+
+    def test_writes_local_registry_when_remote_target(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """apply() writes feature_store/registry.json locally regardless of runtime.target."""
+        root = _setup_project(tmp_path)
+        monkeypatch.chdir(root)
+        monkeypatch.setenv("KITEFS_RUNTIME_TARGET", "remote")
+
+        result = FeatureStore().apply()
+
+        assert isinstance(result, ApplyResult)
+        assert result.published is False
+        doc = json.loads((root / "feature_store" / "registry.json").read_text())
+        assert "town_market_features" in doc["feature_groups"]
+
+
+class TestApplyUsesConstructionRoot:
+    """FeatureStore.apply() uses the root captured at construction, not the current cwd."""
+
+    def test_uses_construction_root_after_cwd_change(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """apply() updates the registry at the construction root even after cwd changes."""
+        root = _setup_project(tmp_path)
+        monkeypatch.chdir(root)
+        fs = FeatureStore()
+
+        # Change cwd to an unrelated directory after construction.
+        monkeypatch.chdir(tmp_path.parent)
+
+        fs.apply()
+
+        doc = json.loads((root / "feature_store" / "registry.json").read_text())
+        assert "town_market_features" in doc["feature_groups"]

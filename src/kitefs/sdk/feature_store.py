@@ -13,7 +13,7 @@ from kitefs.config import RuntimeConfig, load_runtime_config
 from kitefs.errors import IngestionShapeError, JoinError, RegistryReadError, RetrievalParameterError, format_actionable
 from kitefs.join_engine import point_in_time_join
 from kitefs.offline_store import build_offline_schema, prepare_ingestion_table
-from kitefs.providers import Provider, TimestampFilter, build_provider
+from kitefs.providers import Provider, TimestampFilter, build_local_provider, build_provider
 from kitefs.registry import (
     build_registry_document,
     discover_feature_groups,
@@ -41,9 +41,9 @@ class FeatureStore:
     """
 
     def __init__(self) -> None:
-        root = Path.cwd()
-        self._config: RuntimeConfig = load_runtime_config(root)
-        self._provider: Provider = build_provider(self._config, root)
+        self._root: Path = Path.cwd()
+        self._config: RuntimeConfig = load_runtime_config(self._root)
+        self._provider: Provider = build_provider(self._config, self._root)
 
     @property
     def runtime_target(self) -> str:
@@ -57,14 +57,15 @@ class FeatureStore:
         validates them as a set, then atomically writes ./feature_store/registry.json.
         Returns an ApplyResult listing the registered group names sorted alphabetically.
 
-        publish=True is reserved for a future remote-write feature and is accepted
-        but has no effect in this implementation.
+        publish=True is reserved for Feature 14, which will also push to the remote
+        registry after the local write. Plain apply always writes the local working
+        registry regardless of the configured runtime target.
         """
-        definitions_dir = Path.cwd() / "feature_store" / "definitions"
+        definitions_dir = self._root / "feature_store" / "definitions"
         groups = discover_feature_groups(definitions_dir)
         validate_cross_definition(groups)
 
-        store = self._provider.registry_store()
+        store = build_local_provider(self._root).registry_store()
         try:
             prior = store.read()
         except RegistryReadError as exc:
