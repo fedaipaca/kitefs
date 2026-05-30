@@ -133,11 +133,11 @@ def _interpolate_string(s: str) -> str:
         var_name = m.group(1)
         default = m.group(2)  # None when no :- clause
         val = os.environ.get(var_name)
-        if val is not None:
-            return val
         if default is not None:
-            return default
-        return m.group(0)  # leave unexpanded when var unset and no default
+            # ${VAR:-default}: use default when var is unset or empty, per bash semantics.
+            return val or default
+        # ${VAR} without default: resolve to empty string when unset.
+        return val if val is not None else ""
 
     return _INTERP_RE.sub(_replace, s)
 
@@ -200,6 +200,15 @@ def _validate_and_build(resolved: dict[str, Any]) -> RuntimeConfig:
                 setting="runtime.target",
                 problem=f"unsupported value {target!r}; must be one of: local, remote",
                 next_step="set runtime.target to 'local' or 'remote'",
+            )
+        )
+
+    if target == "remote" and not isinstance(resolved.get("remote"), dict):
+        raise ConfigurationError(
+            format_actionable(
+                setting="remote",
+                problem="required section is missing for runtime.target 'remote'",
+                next_step="add a remote section to kitefs.yaml or set runtime.target to 'local'",
             )
         )
 

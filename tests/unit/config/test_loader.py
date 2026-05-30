@@ -134,6 +134,22 @@ class TestInterpolation:
         cfg = load_runtime_config(root)
         assert cfg.project_name == "fromenv"
 
+    def test_unset_var_without_default_resolves_to_empty_string(self, tmp_path, monkeypatch) -> None:
+        """${VAR} resolves to empty string when the env var is not set."""
+        monkeypatch.delenv("MY_BUCKET", raising=False)
+        content = 'version: 1\nproject:\n  name: myproj\nruntime:\n  target: local\nremote:\n  region: "${MY_BUCKET}"\n'
+        root = _write_yaml(tmp_path, content)
+        cfg = load_runtime_config(root)
+        assert cfg.remote == {"region": ""}
+
+    def test_empty_env_var_with_default_uses_default(self, tmp_path, monkeypatch) -> None:
+        """${VAR:-default} uses the default when the env var is set but empty."""
+        monkeypatch.setenv("MY_PROJECT", "")
+        content = 'version: 1\nproject:\n  name: "${MY_PROJECT:-fallback}"\nruntime:\n  target: local\n'
+        root = _write_yaml(tmp_path, content)
+        cfg = load_runtime_config(root)
+        assert cfg.project_name == "fallback"
+
     def test_runtime_target_interpolated(self, tmp_path, monkeypatch) -> None:
         """${KITEFS_RUNTIME_TARGET:-local} resolves from env."""
         monkeypatch.setenv("KITEFS_RUNTIME_TARGET", "remote")
@@ -149,7 +165,7 @@ class TestRuntimeTargetOverride:
     def test_override_beats_hardcoded_local(self, tmp_path, monkeypatch) -> None:
         """Env override changes hardcoded 'local' target to 'remote'."""
         monkeypatch.setenv("KITEFS_RUNTIME_TARGET", "remote")
-        root = _write_yaml(tmp_path, _MINIMAL_YAML)
+        root = _write_yaml(tmp_path, _PRODUCER_YAML)
         cfg = load_runtime_config(root)
         assert cfg.target == "remote"
 
@@ -254,6 +270,37 @@ class TestRequiredFieldValidation:
         with pytest.raises(ConfigurationError) as exc_info:
             load_runtime_config(root)
         assert "runtime.target" in str(exc_info.value)
+
+    def test_remote_target_without_remote_section_raises(self, tmp_path) -> None:
+        """Raises ConfigurationError when target is 'remote' but remote section is absent."""
+        content = "version: 1\nproject:\n  name: test\nruntime:\n  target: remote\n"
+        root = _write_yaml(tmp_path, content)
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_runtime_config(root)
+        assert "remote" in str(exc_info.value)
+
+    def test_init_config_style_without_offline_store_is_valid(self, tmp_path) -> None:
+        """Consumer-only config (registry + online_store, no offline_store) is valid."""
+        content = """\
+version: 1
+project:
+  name: consumer
+runtime:
+  target: remote
+remote:
+  region: us-east-1
+  registry:
+    type: aws_s3
+    bucket: my-bucket
+    s3_prefix: kitefs
+  online_store:
+    type: aws_dynamodb
+    dynamodb_table_prefix: kitefs_
+"""
+        root = _write_yaml(tmp_path, content)
+        cfg = load_runtime_config(root)
+        assert cfg.target == "remote"
+        assert isinstance(cfg.remote, dict)
 
 
 class TestUnsupportedRuntimeTarget:

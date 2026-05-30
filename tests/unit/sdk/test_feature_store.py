@@ -16,6 +16,27 @@ runtime:
   target: local
 """
 
+_YAML_WITH_REMOTE = """\
+version: 1
+project:
+  name: testproject
+runtime:
+  target: local
+remote:
+  region: us-east-1
+  registry:
+    type: aws_s3
+    bucket: my-bucket
+    s3_prefix: kitefs
+  offline_store:
+    type: aws_s3
+    bucket: my-bucket
+    s3_prefix: kitefs
+  online_store:
+    type: aws_dynamodb
+    dynamodb_table_prefix: kitefs_
+"""
+
 
 class TestConstruction:
     """FeatureStore() constructs successfully in an initialized project."""
@@ -52,7 +73,7 @@ class TestRuntimeOverride:
 
     def test_override_to_remote(self, tmp_path, monkeypatch) -> None:
         """KITEFS_RUNTIME_TARGET=remote overrides hardcoded local target."""
-        (tmp_path / "kitefs.yaml").write_text(_MINIMAL_YAML, encoding="utf-8")
+        (tmp_path / "kitefs.yaml").write_text(_YAML_WITH_REMOTE, encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KITEFS_RUNTIME_TARGET", "remote")
         fs = FeatureStore()

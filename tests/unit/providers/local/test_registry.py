@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -44,6 +44,36 @@ class TestRead:
         """read() raises RegistryReadError when registry.json is not valid JSON."""
         store = _make_store(tmp_path)
         (tmp_path / "feature_store" / "registry.json").write_text("{broken json", encoding="utf-8")
+        with pytest.raises(RegistryReadError):
+            store.read()
+
+    def test_non_dict_json_raises_registry_read_error(self, tmp_path) -> None:
+        """read() raises RegistryReadError when JSON root is not an object."""
+        store = _make_store(tmp_path)
+        (tmp_path / "feature_store" / "registry.json").write_text("[1, 2, 3]", encoding="utf-8")
+        with pytest.raises(RegistryReadError):
+            store.read()
+
+    def test_missing_feature_groups_raises_registry_read_error(self, tmp_path) -> None:
+        """read() raises RegistryReadError when feature_groups key is absent."""
+        store = _make_store(tmp_path)
+        (tmp_path / "feature_store" / "registry.json").write_text('{"version": 1}', encoding="utf-8")
+        with pytest.raises(RegistryReadError):
+            store.read()
+
+    def test_non_dict_feature_groups_raises_registry_read_error(self, tmp_path) -> None:
+        """read() raises RegistryReadError when feature_groups is not an object."""
+        store = _make_store(tmp_path)
+        (tmp_path / "feature_store" / "registry.json").write_text('{"feature_groups": []}', encoding="utf-8")
+        with pytest.raises(RegistryReadError):
+            store.read()
+
+    def test_io_error_raises_registry_read_error(self, tmp_path) -> None:
+        """read() raises RegistryReadError on unexpected OSError."""
+        store = _make_store(tmp_path)
+        store._path = MagicMock()
+        store._path.open.side_effect = PermissionError("denied")
+        store._path.resolve.return_value = tmp_path / "feature_store" / "registry.json"
         with pytest.raises(RegistryReadError):
             store.read()
 
@@ -107,3 +137,10 @@ class TestWrite:
 
         tmp_files = list((tmp_path / "feature_store").glob(".tmp_registry_*"))
         assert tmp_files == [], f"Temp files not cleaned up: {tmp_files}"
+
+    def test_mkstemp_failure_raises_registry_write_error(self, tmp_path) -> None:
+        """write() raises RegistryWriteError when tempfile.mkstemp fails."""
+        store = _make_store(tmp_path)
+        _patch = patch("kitefs.providers.local.registry.tempfile.mkstemp", side_effect=OSError("no space left"))
+        with _patch, pytest.raises(RegistryWriteError):
+            store.write({"feature_groups": {}})
