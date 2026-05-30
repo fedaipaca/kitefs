@@ -6,12 +6,13 @@ Top-level imports are exactly: pathlib, os, tempfile, json, kitefs.errors.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
 from pathlib import Path
 
-from kitefs.errors import ConfigurationError
+from kitefs.errors import ConfigurationError, format_actionable
 
 # ---------------------------------------------------------------------------
 # Template constants — copied byte-for-byte from docs/06-api-and-cli-contracts.md
@@ -230,12 +231,11 @@ def _write_gitignore(path: Path, created: list[Path]) -> tuple[str, int]:
     """Manage .gitignore entries. Returns (action, n) where action is one of
     "created", "appended", or "untouched" and n is the number of entries added."""
     if not path.exists():
-        path.write_text(
+        _atomic_write_text(
+            path,
             "".join(e + "\n" for e in _GITIGNORE_ENTRIES),
-            encoding="utf-8",
-            newline="",
+            created,
         )
-        created.append(path)
         return "created", len(_GITIGNORE_ENTRIES)
 
     existing = path.read_text(encoding="utf-8")
@@ -262,6 +262,27 @@ def _gitignore_summary_line(action: str, n: int) -> str | None:
         word = "entry" if n == 1 else "entries"
         return f"  .gitignore (appended {n} {word})"
     return None
+
+
+def _rollback_producer(
+    created: list[Path],
+    created_dirs: list[Path],
+    gitignore_path: Path,
+    gitignore_snapshot: str | None,
+) -> None:
+    """Best-effort rollback after a failed init_producer attempt.
+
+    Unlinks files created by the attempt, restores a pre-existing .gitignore
+    that was modified, and removes any empty scaffold directories.
+    """
+    for p in reversed(created):
+        p.unlink(missing_ok=True)
+    if gitignore_snapshot is not None and gitignore_path.exists():
+        with contextlib.suppress(OSError):
+            gitignore_path.write_text(gitignore_snapshot, encoding="utf-8")
+    for d in reversed(created_dirs):
+        with contextlib.suppress(OSError):
+            d.rmdir()
 
 
 # ---------------------------------------------------------------------------
@@ -292,21 +313,39 @@ def init_producer(root: Path) -> str:
                 f"{conflict.resolve()} already exists; remove it or run `kitefs init` from a different directory."
             )
 
+    # Determine which scaffold directories do not yet exist so rollback can remove them.
+    _scaffold_dirs = [
+        root / "feature_store",
+        root / "feature_store" / "definitions",
+        root / "feature_store" / "data",
+        root / "feature_store" / "data" / "offline_store",
+        root / "feature_store" / "data" / "online_store",
+    ]
+    created_dirs = [d for d in _scaffold_dirs if not d.exists()]
+
+    # Snapshot a pre-existing .gitignore so an appended entry can be rolled back.
+    gitignore_snapshot: str | None = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else None
+
     created: list[Path] = []
     try:
-        (root / "feature_store" / "definitions").mkdir(parents=True, exist_ok=True)
-        (root / "feature_store" / "data" / "offline_store").mkdir(parents=True, exist_ok=True)
-        (root / "feature_store" / "data" / "online_store").mkdir(parents=True, exist_ok=True)
+        for d in _scaffold_dirs:
+            d.mkdir(parents=True, exist_ok=True)
 
-        definition_path.write_text(EXAMPLE_DEFINITION, encoding="utf-8", newline="")
-        created.append(definition_path)
-
+        _atomic_write_text(definition_path, EXAMPLE_DEFINITION, created)
         _atomic_write_text(registry_path, EMPTY_REGISTRY, created)
         gi_action, gi_n = _write_gitignore(gitignore_path, created)
         _atomic_write_text(config_path, PRODUCER_CONFIG_TEMPLATE, created)  # last — commit marker
+    except OSError as exc:
+        _rollback_producer(created, created_dirs, gitignore_path, gitignore_snapshot)
+        raise ConfigurationError(
+            format_actionable(
+                setting=str(root.resolve()),
+                problem=f"could not create KiteFS scaffold: {exc}",
+                next_step="check permissions and disk space, then rerun 'kitefs init'",
+            )
+        ) from exc
     except BaseException:
-        for p in reversed(created):
-            p.unlink(missing_ok=True)
+        _rollback_producer(created, created_dirs, gitignore_path, gitignore_snapshot)
         raise
 
     lines = [
@@ -341,6 +380,16 @@ def init_config(root: Path) -> str:
     created: list[Path] = []
     try:
         _atomic_write_text(config_path, CONSUMER_CONFIG_TEMPLATE, created)
+    except OSError as exc:
+        for p in reversed(created):
+            p.unlink(missing_ok=True)
+        raise ConfigurationError(
+            format_actionable(
+                setting=str(root.resolve()),
+                problem=f"could not create consumer configuration: {exc}",
+                next_step="check permissions and disk space, then rerun 'kitefs init-config'",
+            )
+        ) from exc
     except BaseException:
         for p in reversed(created):
             p.unlink(missing_ok=True)

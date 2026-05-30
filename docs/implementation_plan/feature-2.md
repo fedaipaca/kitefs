@@ -37,7 +37,7 @@ Feature 1 (uses `KiteFSError` for the CLI error boundary).
 8. `kitefs init`: write `./feature_store/registry.json` with `{"feature_groups": {}}` plus trailing newline.
 9. `kitefs init`: append `.gitignore` entries for `feature_store/data/` and `feature_store/registry.json`.
 10. `kitefs init-config`: abort if `./kitefs.yaml` exists; write only `./kitefs.yaml` using the consumer template (no directories, no example).
-11. Print a one-line success summary listing the created files on success.
+11. Print a success summary listing the created files on success.
 
 ## Error Handling
 

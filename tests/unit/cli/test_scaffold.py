@@ -171,10 +171,10 @@ class TestInitProducerGuards:
 
 
 class TestInitProducerRollback:
-    """On failure partway through, init_producer removes only the files it created."""
+    """On failure partway through, init_producer removes created files and empty directories."""
 
     def test_rollback_removes_created_files_on_registry_write_failure(self, tmp_path, monkeypatch) -> None:
-        """When registry.json write fails, the definition file is removed (rollback)."""
+        """When registry.json write fails, created file and empty directories are removed."""
         original_write = scaffold._atomic_write_text
 
         def fail_on_registry(path, content, created):
@@ -184,17 +184,16 @@ class TestInitProducerRollback:
 
         monkeypatch.setattr(scaffold, "_atomic_write_text", fail_on_registry)
 
-        with pytest.raises(OSError):
+        with pytest.raises(ConfigurationError):
             scaffold.init_producer(tmp_path)
 
         assert not (tmp_path / "feature_store" / "definitions" / "town_market_features.py").exists()
         assert not (tmp_path / "feature_store" / "registry.json").exists()
         assert not (tmp_path / "kitefs.yaml").exists()
-        # Directories created before the failure remain (per spec).
-        assert (tmp_path / "feature_store").is_dir()
+        assert not (tmp_path / "feature_store").exists()
 
     def test_rollback_removes_created_files_on_config_write_failure(self, tmp_path, monkeypatch) -> None:
-        """When kitefs.yaml write fails, all previously created files are removed."""
+        """When kitefs.yaml write fails, all created files and empty directories are removed."""
         original_write = scaffold._atomic_write_text
 
         def fail_on_config(path, content, created):
@@ -204,15 +203,48 @@ class TestInitProducerRollback:
 
         monkeypatch.setattr(scaffold, "_atomic_write_text", fail_on_config)
 
-        with pytest.raises(OSError):
+        with pytest.raises(ConfigurationError):
             scaffold.init_producer(tmp_path)
 
         assert not (tmp_path / "kitefs.yaml").exists()
         assert not (tmp_path / "feature_store" / "registry.json").exists()
         assert not (tmp_path / "feature_store" / "definitions" / "town_market_features.py").exists()
         assert not (tmp_path / ".gitignore").exists()
-        # Directories remain (not tracked for rollback).
-        assert (tmp_path / "feature_store").is_dir()
+        assert not (tmp_path / "feature_store").exists()
+
+    def test_rollback_restores_gitignore_on_failure_after_append(self, tmp_path, monkeypatch) -> None:
+        """When failure occurs after .gitignore was appended, the original content is restored."""
+        original_content = "# existing content\n"
+        (tmp_path / ".gitignore").write_text(original_content, encoding="utf-8")
+
+        original_write = scaffold._atomic_write_text
+
+        def fail_on_config(path, content, created):
+            if path.name == "kitefs.yaml":
+                raise OSError("simulated disk full")
+            original_write(path, content, created)
+
+        monkeypatch.setattr(scaffold, "_atomic_write_text", fail_on_config)
+
+        with pytest.raises(ConfigurationError):
+            scaffold.init_producer(tmp_path)
+
+        assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == original_content
+
+    def test_io_failure_raises_configuration_error(self, tmp_path, monkeypatch) -> None:
+        """An OSError during scaffold is wrapped as ConfigurationError with an actionable message."""
+
+        def fail_all(path, content, created):
+            raise OSError("simulated no space left")
+
+        monkeypatch.setattr(scaffold, "_atomic_write_text", fail_all)
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            scaffold.init_producer(tmp_path)
+
+        assert "kitefs init" in str(exc_info.value)
+        assert not (tmp_path / "kitefs.yaml").exists()
+        assert not (tmp_path / "feature_store").exists()
 
 
 class TestInitProducerSummary:
@@ -303,3 +335,17 @@ class TestInitConfig:
         summary = scaffold.init_config(tmp_path)
         assert "kitefs.yaml" in summary
         assert "bucket" in summary or "dynamodb_table_prefix" in summary
+
+    def test_io_failure_raises_configuration_error(self, tmp_path, monkeypatch) -> None:
+        """An OSError during config write is wrapped as ConfigurationError with an actionable message."""
+
+        def fail_write(path, content, created):
+            raise OSError("simulated permission denied")
+
+        monkeypatch.setattr(scaffold, "_atomic_write_text", fail_write)
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            scaffold.init_config(tmp_path)
+
+        assert "kitefs init-config" in str(exc_info.value)
+        assert not (tmp_path / "kitefs.yaml").exists()

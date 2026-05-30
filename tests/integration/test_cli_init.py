@@ -8,7 +8,7 @@ import sys
 import pytest
 from click.testing import CliRunner
 
-from kitefs.cli import main
+from kitefs.cli import cli, main
 from kitefs.errors import ConfigurationError
 
 
@@ -180,3 +180,30 @@ class TestInitImportIsolation:
         ]
         for mod in forbidden:
             assert mod not in result.stdout, f"Forbidden module imported: {mod}"
+
+
+class TestInitIOFailure:
+    """kitefs init classifies filesystem failures as ConfigurationError; cli() exits 1 without traceback."""
+
+    def test_io_failure_exits_one_without_traceback(self, tmp_path, monkeypatch, capsys) -> None:
+        """An OSError during scaffold is classified as ConfigurationError; cli() exits 1 without traceback."""
+        from kitefs.cli import scaffold as scaffold_module
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["kitefs", "init"])
+
+        def fail_all(path, content, created):
+            raise OSError("simulated: no space left on device")
+
+        monkeypatch.setattr(scaffold_module, "_atomic_write_text", fail_all)
+
+        with pytest.raises(SystemExit) as ei:
+            cli()
+
+        assert ei.value.code == 1
+        out, err = capsys.readouterr()
+        assert out == ""
+        assert "Traceback" not in err
+        assert "Error:" in err
+        assert not (tmp_path / "kitefs.yaml").exists()
+        assert not (tmp_path / "feature_store").exists()
