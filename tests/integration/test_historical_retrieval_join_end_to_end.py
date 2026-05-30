@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -241,3 +242,64 @@ class TestHistoricalRetrievalWithJoin:
                     "town_market_features": ["avg_price_per_sqm"],
                 },
             )
+
+    def test_equal_timestamp_tie_broken_by_ingestion_order(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Later-ingested row wins when two joined rows tie on event_timestamp."""
+        store = _setup_applied_store(tmp_path, monkeypatch)
+
+        store.ingest(
+            "town_market_features",
+            town_market_frame(
+                [
+                    {
+                        "town_id": 1,
+                        "event_timestamp": datetime.datetime(2024, 4, 1, tzinfo=_UTC),
+                        "avg_price_per_sqm": 20000.0,
+                    }
+                ]
+            ),
+        )
+        # Ensure distinct file modification time for the second ingest so that
+        # the local store's (st_mtime_ns, path) sort exposes ingestion order.
+        time.sleep(0.01)
+        store.ingest(
+            "town_market_features",
+            town_market_frame(
+                [
+                    {
+                        "town_id": 1,
+                        "event_timestamp": datetime.datetime(2024, 4, 1, tzinfo=_UTC),
+                        "avg_price_per_sqm": 25000.0,
+                    }
+                ]
+            ),
+        )
+
+        store.ingest(
+            "listing_features",
+            listing_features_frame(
+                [
+                    {
+                        "listing_id": 4001,
+                        "sold_at": datetime.datetime(2024, 4, 5, tzinfo=_UTC),
+                        "town_id": 1,
+                        "net_area": 80,
+                        "sold_price": 300000.0,
+                    }
+                ]
+            ),
+        )
+
+        result = FeatureStore().get_historical_features(
+            from_="listing_features",
+            join=["town_market_features"],
+            select={
+                "listing_features": ["net_area"],
+                "town_market_features": ["avg_price_per_sqm"],
+            },
+        )
+
+        assert len(result) == 1
+        assert result.loc[0, "town_market_features_avg_price_per_sqm"] == 25000.0

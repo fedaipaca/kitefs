@@ -375,6 +375,66 @@ class TestSelectValidation:
         with pytest.raises(FeatureGroupNotFoundError):
             FeatureStore().get_historical_features(from_="nonexistent_group", select=["col"])
 
+    def test_join_dict_select_wildcard_returns_all_features(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Dict select with ["*"] expands to all declared features for each group."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_empty_read(monkeypatch)
+
+        result = FeatureStore().get_historical_features(
+            from_="listing_features",
+            select={"listing_features": ["*"], "town_market_features": ["*"]},
+            join=["town_market_features"],
+        )
+
+        assert list(result.columns) == [
+            "listing_id",
+            "sold_at",
+            "town_id",
+            "build_year",
+            "net_area",
+            "number_of_rooms",
+            "sold_price",
+            "town_market_features_town_id",
+            "town_market_features_event_timestamp",
+            "town_market_features_avg_price_per_sqm",
+        ]
+
+    def test_join_select_missing_base_group_key_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Join dict select omitting the base group key raises RetrievalParameterError."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(RetrievalParameterError):
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={"town_market_features": ["avg_price_per_sqm"]},
+                join=["town_market_features"],
+            )
+
+    def test_join_select_extra_unknown_key_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Join dict select with an extra unknown key raises RetrievalParameterError."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        _stub_read_failure(monkeypatch)
+
+        with pytest.raises(RetrievalParameterError):
+            FeatureStore().get_historical_features(
+                from_="listing_features",
+                select={
+                    "listing_features": ["net_area"],
+                    "town_market_features": ["avg_price_per_sqm"],
+                    "unknown_group": ["some_feature"],
+                },
+                join=["town_market_features"],
+            )
+
 
 class TestWhereValidation:
     """get_historical_features() raises RetrievalParameterError for invalid where."""
