@@ -17,8 +17,8 @@ scenarios("../features/feature_13_remote_provider.feature")
 
 
 @pytest.fixture(autouse=True)
-def _use_fake_boto3(fake_boto3: None) -> None:
-    """Use fake boto3 for all Feature 13 scenarios by default."""
+def _use_mocked_aws(mocked_aws: None) -> None:
+    """Use moto-backed AWS clients for all Feature 13 scenarios."""
 
 
 @pytest.fixture

@@ -29,6 +29,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "boto3>=1.43.18",
+    "moto[s3,dynamodb]>=5.0.0",
     "pyright>=1.1.409",
     "pytest>=9.0.3",
     "pytest-bdd>=8.1.0",
