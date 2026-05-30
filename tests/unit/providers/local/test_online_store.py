@@ -9,6 +9,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 
+from kitefs.errors import OnlineStoreReadError
 from kitefs.providers.local.online_store import LocalOnlineStore
 
 
@@ -182,3 +183,12 @@ class TestGet:
         result = store.get("tmf", 1, entity_key_column="town_id", select=["event_timestamp"])
         assert isinstance(result["event_timestamp"], str)
         assert result["event_timestamp"].startswith("2025-06-01")
+
+    def test_corrupt_db_raises_online_store_read_error(self, tmp_path: Path) -> None:
+        """get() raises OnlineStoreReadError when the database file is corrupt."""
+        store = LocalOnlineStore(tmp_path)
+        db_path = tmp_path / "feature_store" / "data" / "online_store" / "online.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.write_bytes(b"not a sqlite database")
+        with pytest.raises(OnlineStoreReadError):
+            store.get("tmf", 1, entity_key_column="town_id", select=None)

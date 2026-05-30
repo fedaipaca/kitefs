@@ -11,7 +11,14 @@ import pandas as pd
 
 from kitefs.config import RuntimeConfig, load_runtime_config
 from kitefs.constants import DATETIME_FMT
-from kitefs.errors import IngestionShapeError, JoinError, RegistryReadError, RetrievalParameterError, format_actionable
+from kitefs.errors import (
+    IngestionShapeError,
+    JoinError,
+    OnlineStoreReadError,
+    RegistryReadError,
+    RetrievalParameterError,
+    format_actionable,
+)
 from kitefs.join_engine import point_in_time_join
 from kitefs.offline_store import build_offline_schema, prepare_ingestion_table
 from kitefs.providers import Provider, TimestampFilter, build_local_provider, build_provider
@@ -1023,7 +1030,17 @@ def _coerce_online_result(
     result: dict[str, Any] = {}
     for key, value in raw.items():
         if value is not None and dtype_map.get(key) == FeatureType.DATETIME and isinstance(value, str):
-            result[key] = datetime.strptime(value, _ONLINE_DATETIME_FMT).replace(tzinfo=UTC)
+            try:
+                result[key] = datetime.strptime(value, _ONLINE_DATETIME_FMT).replace(tzinfo=UTC)
+            except ValueError as exc:
+                raise OnlineStoreReadError(
+                    format_actionable(
+                        group=description.name,
+                        field=key,
+                        problem=f"online store returned a malformed datetime value: {value!r}",
+                        next_step="re-run materialize for the feature group to rebuild the online store",
+                    )
+                ) from exc
         else:
             result[key] = value
     return result

@@ -193,9 +193,10 @@ class LocalOnlineStore(OnlineStore):
         """
         if not self._db_path.exists():
             return {}
-        conn = self._connect()
-        conn.row_factory = sqlite3.Row
+        conn: sqlite3.Connection | None = None
         try:
+            conn = self._connect()
+            conn.row_factory = sqlite3.Row
             projection = "*" if select is None else ", ".join(f'"{col}"' for col in select)
             sql = f'SELECT {projection} FROM "{feature_group}" WHERE "{entity_key_column}" = ? LIMIT 1'
             try:
@@ -224,7 +225,8 @@ class LocalOnlineStore(OnlineStore):
                 )
             ) from exc
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
 
 __all__ = ["LocalOnlineStore"]

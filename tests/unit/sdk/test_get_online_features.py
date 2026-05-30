@@ -7,7 +7,12 @@ from typing import Any
 
 import pytest
 
-from kitefs.errors import FeatureGroupNotFoundError, FeatureGroupNotMaterializableError, RetrievalParameterError
+from kitefs.errors import (
+    FeatureGroupNotFoundError,
+    FeatureGroupNotMaterializableError,
+    OnlineStoreReadError,
+    RetrievalParameterError,
+)
 from kitefs.providers.local.online_store import LocalOnlineStore
 from kitefs.sdk.feature_store import FeatureStore
 from tests.helpers.tmp_store import make_initialized_project
@@ -443,3 +448,22 @@ class TestProviderCall:
         assert captured["select"][0] == "town_id"
         assert captured["select"][1] == "event_timestamp"
         assert "avg_price_per_sqm" in captured["select"]
+
+    def test_malformed_datetime_raises_online_store_read_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_online_features() raises OnlineStoreReadError when the online store has a malformed datetime."""
+        _setup_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        FeatureStore().apply()
+        monkeypatch.setattr(
+            LocalOnlineStore,
+            "get",
+            lambda *a, **kw: {"town_id": 1, "event_timestamp": "not-a-date", "avg_price_per_sqm": 25000.0},
+        )
+        with pytest.raises(OnlineStoreReadError):
+            FeatureStore().get_online_features(
+                from_="town_market_features",
+                select=["avg_price_per_sqm"],
+                where={"town_id": {"eq": 1}},
+            )
