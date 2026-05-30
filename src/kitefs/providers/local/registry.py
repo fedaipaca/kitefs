@@ -10,6 +10,7 @@ from typing import Any
 
 from kitefs.errors import RegistryReadError, RegistryWriteError
 from kitefs.providers.base import RegistryStore
+from kitefs.registry.serializer import serialize_registry_document
 
 
 class LocalRegistryStore(RegistryStore):
@@ -43,7 +44,7 @@ class LocalRegistryStore(RegistryStore):
         return document  # type: ignore[return-value]
 
     def write(self, document: dict[str, Any]) -> None:
-        content = json.dumps(document, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+        content = serialize_registry_document(document)
         tmp: Path | None = None
         try:
             fd, tmp_name = tempfile.mkstemp(dir=self._path.parent, prefix=".tmp_registry_", suffix="")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 from typing import Any
 
 from kitefs.constants import DATETIME_FMT
@@ -102,4 +103,13 @@ def build_registry_document(
     return {"feature_groups": feature_groups}
 
 
-__all__ = ["build_registry_document"]
+def serialize_registry_document(document: dict[str, Any]) -> str:
+    """Canonical registry JSON: deterministic key order, 2-space indent, UTF-8, trailing newline.
+
+    Both the local file and S3 registry stores must emit byte-identical content by
+    calling this function rather than inlining json.dumps.
+    """
+    return json.dumps(document, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+
+
+__all__ = ["build_registry_document", "serialize_registry_document"]

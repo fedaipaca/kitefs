@@ -185,17 +185,7 @@ class TestAWSProviderBoto3Missing:
 
 
 class TestAWSStoreStubs:
-    """AWS store methods raise NotImplementedError until Features 14-16 land."""
-
-    def test_registry_read_raises(self) -> None:
-        """AWSRegistryStore.read raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            AWSProvider(_VALID_REMOTE).registry_store().read()
-
-    def test_registry_write_raises(self) -> None:
-        """AWSRegistryStore.write raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            AWSProvider(_VALID_REMOTE).registry_store().write({})
+    """AWS store methods raise NotImplementedError until Features 15-16 land."""
 
     def test_offline_read_raises(self) -> None:
         """AWSOfflineStore.read raises NotImplementedError."""

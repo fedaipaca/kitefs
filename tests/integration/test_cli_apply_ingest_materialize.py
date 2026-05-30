@@ -151,12 +151,25 @@ class TestCliApply:
         # Error must NOT mention missing config — it aborts before config loading.
         assert "kitefs.yaml" not in result.output.lower()
 
-    def test_apply_publish_no_confirm_skips_prompt(self, applied_project: Path) -> None:
-        """--publish --no-confirm skips the confirmation prompt and succeeds."""
+    def test_apply_publish_no_confirm_skips_prompt(
+        self, applied_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--publish --no-confirm skips the confirmation prompt and calls apply(publish=True)."""
+        from kitefs.sdk.results import ApplyResult
+
+        class _FakeStore:
+            def __init__(self) -> None:
+                pass
+
+            def apply(self, *, publish: bool = False) -> ApplyResult:
+                return ApplyResult(registered_groups=["town_market_features"], published=publish)
+
+        monkeypatch.setattr("kitefs.sdk.feature_store.FeatureStore", _FakeStore)
         runner = CliRunner()
         result = runner.invoke(main, ["apply", "--publish", "--no-confirm"])
         assert result.exit_code == 0, result.output
         assert "Applied" in result.output
+        assert "Published to remote registry." in result.output
 
     def test_apply_publish_yes_calls_sdk_with_publish_true(
         self, applied_project: Path, monkeypatch: pytest.MonkeyPatch

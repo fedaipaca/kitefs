@@ -21,7 +21,7 @@ from kitefs.errors import (
 )
 from kitefs.join_engine import point_in_time_join
 from kitefs.offline_store import build_offline_schema, prepare_ingestion_table
-from kitefs.providers import Provider, TimestampFilter, build_local_provider, build_provider
+from kitefs.providers import Provider, TimestampFilter, build_local_provider, build_provider, build_remote_provider
 from kitefs.registry import (
     build_registry_document,
     discover_feature_groups,
@@ -65,10 +65,16 @@ class FeatureStore:
         validates them as a set, then atomically writes ./feature_store/registry.json.
         Returns an ApplyResult listing the registered group names sorted alphabetically.
 
-        publish=True is reserved for Feature 14, which will also push to the remote
-        registry after the local write. Plain apply always writes the local working
-        registry regardless of the configured runtime target.
+        When publish=True the remote registry configuration is validated first (raising
+        ConfigurationError on misconfiguration), then the full local-apply path runs, and
+        finally the same deterministic JSON document is written to S3 via a single PutObject.
+        A remote write failure after a successful local write raises RegistryWriteError;
+        the local registry may already reflect the new content (acceptable per FR-REG-003).
         """
+        # Validate remote registry config up front so a misconfiguration fails before
+        # any definition discovery or local write work is done.
+        remote_store = build_remote_provider(self._config).registry_store() if publish else None
+
         definitions_dir = self._root / "feature_store" / "definitions"
         groups = discover_feature_groups(definitions_dir)
         validate_cross_definition(groups)
@@ -89,9 +95,12 @@ class FeatureStore:
         )
         store.write(document)
 
+        if remote_store is not None:
+            remote_store.write(document)
+
         return ApplyResult(
             registered_groups=sorted(g.name for g in groups),
-            published=False,
+            published=publish,
         )
 
     def list_feature_groups(self) -> list[FeatureGroupSummary]:

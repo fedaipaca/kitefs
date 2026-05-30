@@ -41,6 +41,21 @@ def build_local_provider(root: Path) -> Provider:
     return LocalProvider(root)
 
 
+def build_remote_provider(config: RuntimeConfig) -> Provider:
+    """Construct and return an AWS provider from the remote config section.
+
+    Unlike build_provider, this always returns an AWSProvider regardless of
+    config.target.  apply(publish=True) uses this so a producer whose target is
+    'local' can still push to the remote registry.
+
+    Raises ConfigurationError if the remote configuration is absent or invalid.
+    """
+    # Lazy import keeps boto3 off the base kitefs import path.
+    from kitefs.providers.aws import AWSProvider
+
+    return AWSProvider(config.remote or {})
+
+
 __all__ = [
     "OfflineStore",
     "OnlineStore",
@@ -49,4 +64,5 @@ __all__ = [
     "TimestampFilter",
     "build_local_provider",
     "build_provider",
+    "build_remote_provider",
 ]

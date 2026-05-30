@@ -1,20 +1,24 @@
-"""AWS S3-backed registry store.
-
-Constructors and ABC compliance only; read/write methods land in Feature 14.
-"""
+"""AWS S3-backed registry store."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
+
+from kitefs.errors import RegistryReadError, RegistryWriteError
 from kitefs.providers.base import RegistryStore
+from kitefs.registry.serializer import serialize_registry_document
 
 
 class AWSRegistryStore(RegistryStore):
     """S3-backed registry store.
 
-    Holds the resolved S3 client and coordinates (bucket, key).
-    Read and write operations land in Feature 14.
+    Reads and writes the registry JSON document at ``s3://{bucket}/{s3_prefix}/registry.json``
+    using a pre-constructed boto3 S3 client.  The serialized bytes are byte-identical to the
+    local registry store so a consumer's remote read produces the same document a producer's
+    local write produced.
     """
 
     def __init__(self, client: Any, *, bucket: str, s3_prefix: str) -> None:
@@ -25,10 +29,65 @@ class AWSRegistryStore(RegistryStore):
         self._key = f"{s3_prefix}/registry.json"
 
     def read(self) -> dict[str, Any]:
-        raise NotImplementedError("AWS registry read lands in Feature 14")
+        """Fetch and parse the registry document from S3.
+
+        Raises:
+            RegistryReadError: Object absent, network failure, or malformed/invalid document.
+        """
+        try:
+            response = self._client.get_object(Bucket=self._bucket, Key=self._key)
+            document = json.loads(response["Body"].read())
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in {"NoSuchKey", "NoSuchBucket", "404"}:
+                raise RegistryReadError(
+                    f"Remote registry not found at s3://{self._bucket}/{self._key}. "
+                    "Run 'kitefs apply --publish' to publish the registry."
+                ) from exc
+            raise RegistryReadError(
+                f"Failed to read remote registry at s3://{self._bucket}/{self._key}: {exc}"
+            ) from exc
+        except BotoCoreError as exc:
+            raise RegistryReadError(
+                f"Failed to read remote registry at s3://{self._bucket}/{self._key}: {exc}"
+            ) from exc
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise RegistryReadError(
+                f"Remote registry at s3://{self._bucket}/{self._key} could not be parsed: {exc}"
+            ) from exc
+
+        if not isinstance(document, dict):
+            raise RegistryReadError(
+                f"Remote registry at s3://{self._bucket}/{self._key} has an unexpected format: expected a JSON object"
+            )
+        if not isinstance(document.get("feature_groups"), dict):
+            raise RegistryReadError(
+                f"Remote registry at s3://{self._bucket}/{self._key} is corrupt:"
+                " missing or invalid 'feature_groups' field"
+            )
+        return document  # type: ignore[return-value]
 
     def write(self, document: dict[str, Any]) -> None:
-        raise NotImplementedError("AWS registry write lands in Feature 14")
+        """Serialize and upload the registry document to S3 via a single PutObject call.
+
+        The serialized bytes are byte-identical to those written by LocalRegistryStore
+        (sort_keys=True, indent=2, ensure_ascii=False, trailing newline).
+
+        Raises:
+            RegistryWriteError: PutObject failed.
+        """
+        body = serialize_registry_document(document).encode("utf-8")
+        try:
+            self._client.put_object(
+                Bucket=self._bucket,
+                Key=self._key,
+                Body=body,
+                ContentType="application/json",
+            )
+        except (ClientError, BotoCoreError) as exc:
+            raise RegistryWriteError(
+                f"Failed to write remote registry at s3://{self._bucket}/{self._key}: {exc}"
+            ) from exc
 
 
 __all__ = ["AWSRegistryStore"]
