@@ -20,6 +20,11 @@ _VALID_REMOTE: dict[str, Any] = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _use_fake_boto3(fake_boto3: None) -> None:
+    """Use fake boto3 for all tests in this module by default."""
+
+
 class TestAWSProviderConstruction:
     """AWSProvider constructs and exposes the correct store instances."""
 
@@ -81,6 +86,22 @@ class TestAWSProviderRegistryValidation:
             AWSProvider(remote).registry_store()
         assert "remote.registry.s3_prefix" in str(exc_info.value)
 
+    @pytest.mark.parametrize(
+        "registry_section",
+        [
+            pytest.param({"bucket": "b", "s3_prefix": "p"}, id="missing_type"),
+            pytest.param({"type": "gcs_bucket", "bucket": "b", "s3_prefix": "p"}, id="wrong_type"),
+        ],
+    )
+    def test_invalid_registry_type_raises(self, registry_section: dict[str, Any]) -> None:
+        """ConfigurationError naming remote.registry.type when type is missing or wrong."""
+        remote = {**_VALID_REMOTE, "registry": registry_section}
+        with pytest.raises(ConfigurationError) as exc_info:
+            AWSProvider(remote).registry_store()
+        msg = str(exc_info.value)
+        assert "remote.registry.type" in msg
+        assert "aws_s3" in msg
+
 
 class TestAWSProviderOfflineValidation:
     """offline_store() raises ConfigurationError for invalid offline config."""
@@ -99,6 +120,22 @@ class TestAWSProviderOfflineValidation:
             AWSProvider(remote).offline_store()
         assert "remote.offline_store.bucket" in str(exc_info.value)
 
+    @pytest.mark.parametrize(
+        "offline_section",
+        [
+            pytest.param({"bucket": "b", "s3_prefix": "p"}, id="missing_type"),
+            pytest.param({"type": "gcs_bucket", "bucket": "b", "s3_prefix": "p"}, id="wrong_type"),
+        ],
+    )
+    def test_invalid_offline_type_raises(self, offline_section: dict[str, Any]) -> None:
+        """ConfigurationError naming remote.offline_store.type when type is missing or wrong."""
+        remote = {**_VALID_REMOTE, "offline_store": offline_section}
+        with pytest.raises(ConfigurationError) as exc_info:
+            AWSProvider(remote).offline_store()
+        msg = str(exc_info.value)
+        assert "remote.offline_store.type" in msg
+        assert "aws_s3" in msg
+
 
 class TestAWSProviderOnlineValidation:
     """online_store() raises ConfigurationError for invalid online config."""
@@ -116,6 +153,22 @@ class TestAWSProviderOnlineValidation:
         with pytest.raises(ConfigurationError) as exc_info:
             AWSProvider(remote).online_store()
         assert "remote.online_store.dynamodb_table_prefix" in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "online_section",
+        [
+            pytest.param({"dynamodb_table_prefix": "p_"}, id="missing_type"),
+            pytest.param({"type": "redis", "dynamodb_table_prefix": "p_"}, id="wrong_type"),
+        ],
+    )
+    def test_invalid_online_type_raises(self, online_section: dict[str, Any]) -> None:
+        """ConfigurationError naming remote.online_store.type when type is missing or wrong."""
+        remote = {**_VALID_REMOTE, "online_store": online_section}
+        with pytest.raises(ConfigurationError) as exc_info:
+            AWSProvider(remote).online_store()
+        msg = str(exc_info.value)
+        assert "remote.online_store.type" in msg
+        assert "aws_dynamodb" in msg
 
 
 class TestAWSProviderBoto3Missing:

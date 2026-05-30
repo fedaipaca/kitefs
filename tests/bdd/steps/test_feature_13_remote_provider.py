@@ -16,6 +16,11 @@ from kitefs.errors import ConfigurationError, ProviderError
 scenarios("../features/feature_13_remote_provider.feature")
 
 
+@pytest.fixture(autouse=True)
+def _use_fake_boto3(fake_boto3: None) -> None:
+    """Use fake boto3 for all Feature 13 scenarios by default."""
+
+
 @pytest.fixture
 def ctx() -> dict[str, Any]:
     """Shared mutable context threaded through steps within a scenario."""

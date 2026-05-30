@@ -53,6 +53,19 @@ def _resolve_region(remote: dict[str, Any]) -> str:
     return str(region)
 
 
+def _require_type(section: dict[str, Any], setting: str, expected: str) -> None:
+    """Raise ConfigurationError when section['type'] is absent or not the expected literal."""
+    value = section.get("type")
+    if value != expected:
+        raise ConfigurationError(
+            format_actionable(
+                setting=setting,
+                problem=f"must be the literal value {expected!r}; got {value!r}",
+                next_step=f"set {setting} to {expected!r}",
+            )
+        )
+
+
 def _resolve_s3_section(
     remote: dict[str, Any],
     key: str,
@@ -70,7 +83,7 @@ def _resolve_s3_section(
         prefix_env: Env-var name that sets the s3_prefix (cited in next_step).
 
     Raises:
-        ConfigurationError: Sub-section absent, bucket empty, or s3_prefix empty.
+        ConfigurationError: Sub-section absent, bucket empty, s3_prefix empty, or type wrong.
     """
     section = remote.get(key)
     if not isinstance(section, dict):
@@ -81,6 +94,8 @@ def _resolve_s3_section(
                 next_step=f"add a remote.{key} section to kitefs.yaml",
             )
         )
+
+    _require_type(section, f"remote.{key}.type", "aws_s3")
 
     bucket = section.get("bucket")
     if not bucket:
@@ -109,7 +124,7 @@ def _resolve_online_section(remote: dict[str, Any]) -> str:
     """Validate remote.online_store and return the DynamoDB table prefix.
 
     Raises:
-        ConfigurationError: Sub-section absent or dynamodb_table_prefix empty.
+        ConfigurationError: Sub-section absent, type wrong, or dynamodb_table_prefix empty.
     """
     section = remote.get("online_store")
     if not isinstance(section, dict):
@@ -120,6 +135,8 @@ def _resolve_online_section(remote: dict[str, Any]) -> str:
                 next_step="add a remote.online_store section to kitefs.yaml",
             )
         )
+
+    _require_type(section, "remote.online_store.type", "aws_dynamodb")
 
     table_prefix = section.get("dynamodb_table_prefix")
     if not table_prefix:
