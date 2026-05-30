@@ -185,19 +185,7 @@ class TestAWSProviderBoto3Missing:
 
 
 class TestAWSStoreStubs:
-    """AWS store methods raise NotImplementedError until Features 15-16 land."""
-
-    def test_offline_read_raises(self) -> None:
-        """AWSOfflineStore.read raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            AWSProvider(_VALID_REMOTE).offline_store().read("group", event_timestamp_column="ts", schema=pa.schema([]))
-
-    def test_offline_write_raises(self) -> None:
-        """AWSOfflineStore.write raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            AWSProvider(_VALID_REMOTE).offline_store().write(
-                "group", pa.table({}), event_timestamp_column="ts", source_prefix="ing"
-            )
+    """AWS store methods that are not yet implemented raise NotImplementedError."""
 
     def test_online_materialize_raises(self) -> None:
         """AWSOnlineStore.materialize raises NotImplementedError."""
