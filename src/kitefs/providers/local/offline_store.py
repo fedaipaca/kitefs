@@ -139,9 +139,6 @@ class LocalOfflineStore(OfflineStore):
         ts_col: pa.ChunkedArray = data.column(event_timestamp_column)
         ts_array = ts_col.combine_chunks() if isinstance(ts_col, pa.ChunkedArray) else ts_col
 
-        # Derive (year, month) for every row from the event timestamp column.
-        # The column is stored as timestamp('us') without timezone (UTC semantics).
-        years = ts_array.cast(pa.timestamp("us")).cast(pa.int64())
         # Convert to Python datetime to extract year/month — safe at MVP scale.
         timestamps = ts_array.to_pylist()
         partition_indices: dict[tuple[int, int], list[int]] = {}
@@ -151,15 +148,13 @@ class LocalOfflineStore(OfflineStore):
             if isinstance(val, datetime):
                 y, m = int(val.year), int(val.month)
             else:
-                # pyarrow may return a Timestamp wrapper; convert via isoformat
+                # pyarrow may return a Timestamp wrapper.
                 import pandas as pd
 
                 dt = pd.Timestamp(val).to_pydatetime()
                 y, m = int(dt.year), int(dt.month)
             key = (y, m)
             partition_indices.setdefault(key, []).append(i)
-
-        del years  # not used further
 
         write_ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         written: list[str] = []

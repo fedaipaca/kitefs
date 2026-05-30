@@ -527,12 +527,6 @@ class FeatureStore:
         return accepted_frame
 
 
-# ---------------------------------------------------------------------------
-# Module-level helpers
-# ---------------------------------------------------------------------------
-
-_SUPPORTED_EXTENSIONS = {".csv", ".parquet"}
-
 _ALLOWED_WHERE_OPS: frozenset[str] = frozenset({"gt", "gte", "lt", "lte"})
 
 

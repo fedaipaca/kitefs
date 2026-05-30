@@ -21,10 +21,6 @@ if TYPE_CHECKING:
 
 from kitefs.constants import DATETIME_FMT as _DATETIME_FMT
 
-# ---------------------------------------------------------------------------
-# list
-# ---------------------------------------------------------------------------
-
 
 def render_list(summaries: list[FeatureGroupSummary], *, as_json: bool) -> str:
     """Render a list of FeatureGroupSummary values as a human table or JSON array."""
@@ -64,11 +60,6 @@ def _render_list_json(summaries: list[FeatureGroupSummary]) -> str:
         for s in summaries
     ]
     return json.dumps(items, indent=2)
-
-
-# ---------------------------------------------------------------------------
-# describe
-# ---------------------------------------------------------------------------
 
 
 def render_describe(description: FeatureGroupDescription, *, as_json: bool) -> str:
@@ -202,11 +193,6 @@ def _description_to_entry(desc: FeatureGroupDescription) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# apply
-# ---------------------------------------------------------------------------
-
-
 def render_apply(result: ApplyResult, *, as_json: bool) -> str:
     """Render an ApplyResult as human-readable text or a JSON object."""
     if as_json:
@@ -216,11 +202,6 @@ def render_apply(result: ApplyResult, *, as_json: bool) -> str:
     if result.published:
         text += "\nPublished to remote registry."
     return text
-
-
-# ---------------------------------------------------------------------------
-# ingest
-# ---------------------------------------------------------------------------
 
 
 def render_ingest(result: IngestResult, *, as_json: bool) -> str:
@@ -276,11 +257,6 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
-
-
-# ---------------------------------------------------------------------------
-# materialize
-# ---------------------------------------------------------------------------
 
 
 def render_materialize(result: MaterializeResult, *, as_json: bool) -> str:
