@@ -17,16 +17,16 @@ from kitefs.providers.base import (
 
 
 class _RemoteStubProvider(Provider):
-    """Placeholder that satisfies the remote runtime target until Feature 12."""
+    """Placeholder that satisfies the remote runtime target until Feature 13."""
 
     def registry_store(self) -> RegistryStore:
-        raise NotImplementedError("AWS provider lands in Feature 12")
+        raise NotImplementedError("AWS provider lands in Feature 13")
 
     def offline_store(self) -> OfflineStore:
-        raise NotImplementedError("AWS provider lands in Feature 12")
+        raise NotImplementedError("AWS provider lands in Feature 13")
 
     def online_store(self) -> OnlineStore:
-        raise NotImplementedError("AWS provider lands in Feature 12")
+        raise NotImplementedError("AWS provider lands in Feature 13")
 
 
 def build_provider(config: RuntimeConfig, root: Path) -> Provider:
