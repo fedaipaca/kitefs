@@ -101,7 +101,7 @@ The platform has a PostgreSQL application database with the following tables:
 **`listings`** (10 rows shown, 3M total)
 
 | id   | town_id | net_area | number_of_rooms | build_year | asking_price | sold_at             |
-|------|---------|----------|-----------------|------------|--------------|---------------------|
+| ---- | ------- | -------- | --------------- | ---------- | ------------ | ------------------- |
 | 1001 | 2       | 75       | 2               | 2020       | 2250000.00   | 2024-03-15 11:00:00 |
 | 1002 | 1       | 130      | 3               | 2015       | 3400000.00   | 2024-04-05 14:00:00 |
 | 1003 | 6       | 85       | 2               | 2002       | 1050000.00   | 2024-03-18 14:30:00 |
@@ -115,13 +115,13 @@ The platform has a PostgreSQL application database with the following tables:
 
 **`towns`**: ids 1–6 mapping to Kadıköy, Beşiktaş, Tuzla (İstanbul) and Çankaya, Keçiören, Mamak (Ankara).
 
-**Business rule**: Only *sold* listings (`sold_at IS NOT NULL`) are ingested. Active listing 1009 is excluded. All timestamps are UTC.
+**Business rule**: Only _sold_ listings (`sold_at IS NOT NULL`) are ingested. Active listing 1009 is excluded. All timestamps are UTC.
 
 KiteFS stores **curated, precomputed features** prepared by your pipeline — not the raw PostgreSQL tables, not trained model artifacts. Two feature groups are used:
 
-| Feature Group          | Storage            | Entity Key   | Event Timestamp                     |
-|------------------------|--------------------|--------------|-------------------------------------|
-| `listing_features`     | Offline only       | `listing_id` | `sold_at` — when the listing sold   |
+| Feature Group          | Storage            | Entity Key   | Event Timestamp                      |
+| ---------------------- | ------------------ | ------------ | ------------------------------------ |
+| `listing_features`     | Offline only       | `listing_id` | `sold_at` — when the listing sold    |
 | `town_market_features` | Offline and online | `town_id`    | First moment of the next month (UTC) |
 
 The model uses `net_area`, `number_of_rooms`, `build_year`, and `town_market_features_avg_price_per_sqm` as inputs, and `sold_price` as the training label.
@@ -171,12 +171,12 @@ The default `kitefs.yaml` uses `runtime.target: "${KITEFS_RUNTIME_TARGET:-local}
 version: 1
 
 project:
-  name: "kitefs_featurestore_project"   # rename as needed
+  name: "kitefs_featurestore_project" # rename as needed
 
 runtime:
   target: "${KITEFS_RUNTIME_TARGET:-local}"
 
-remote:                                   # only used when target=remote
+remote: # only used when target=remote
   region: "${KITEFS_AWS_REGION:-eu-central-1}"
   registry:
     type: aws_s3
@@ -292,6 +292,7 @@ town_market_features = FeatureGroup(
 ```
 
 **Key rules when defining groups:**
+
 - `EntityKey.dtype` must be `INTEGER` or `STRING`.
 - `JoinKey.referenced_group` must be the exact `name` of another `FeatureGroup` in the same definitions directory.
 - Any invalid definition raises `DefinitionError` immediately at construction — before `apply()`.
@@ -324,6 +325,7 @@ kitefs apply
 ### List and describe registered groups
 
 **SDK:**
+
 ```python
 summaries = store.list_feature_groups()
 for s in summaries:
@@ -339,6 +341,7 @@ print(desc.last_materialized_at)     # None (not yet materialized)
 ```
 
 **CLI:**
+
 ```bash
 kitefs list                                        # human-readable table
 kitefs list --format json                          # JSON array
@@ -364,7 +367,7 @@ result = store.apply(publish=True)
 print(result.published)   # True
 ```
 
-**Edge case**: Publish validates the remote config (S3 bucket, prefix, region) *before* any local write. If the remote write fails after the local registry is already updated, a `RegistryWriteError` is raised but the local registry reflects the new state. Re-running `apply --publish` is safe.
+**Edge case**: Publish validates the remote config (S3 bucket, prefix, region) _before_ any local write. If the remote write fails after the local registry is already updated, a `RegistryWriteError` is raised but the local registry reflects the new state. Re-running `apply --publish` is safe.
 
 **After `kitefs apply`:** the registry is compiled from source. Re-run `apply` every time you modify definitions. The `applied_at` timestamp is updated on each apply. `last_materialized_at` is preserved from the prior registry.
 
@@ -411,7 +414,7 @@ This convention is critical: the January aggregate becomes available on `2024-02
 Sample market rows for 6 towns (first three months):
 
 | town_id | avg_price_per_sqm | event_timestamp     |
-|---------|-------------------|---------------------|
+| ------- | ----------------- | ------------------- |
 | 1       | 24500.00          | 2024-02-01 00:00:00 |
 | 2       | 28200.00          | 2024-02-01 00:00:00 |
 | 3       | 14100.00          | 2024-02-01 00:00:00 |
@@ -472,6 +475,7 @@ Both groups use `ingestion_validation=ValidationMode.ERROR`. KiteFS runs two tie
 Any structural failure raises immediately, regardless of mode.
 
 **Missing column example:**
+
 ```python
 # listing_features requires: listing_id, sold_at, town_id, net_area, number_of_rooms, build_year, sold_price
 bad_df = pd.DataFrame({"listing_id": [1], "sold_at": [datetime.now()], "net_area": [100]})
@@ -553,6 +557,7 @@ df = store.get_historical_features(
 ```
 
 **`where` constraints:**
+
 - The filter key must be the group's declared event timestamp column name (`"sold_at"` for `listing_features`, `"event_timestamp"` for `town_market_features`).
 - Supported operators: `gt`, `gte`, `lt`, `lte`. Only datetime values are accepted.
 - Filtering on any other column (`town_id`, `net_area`, etc.) raises `RetrievalParameterError` before any read.
@@ -584,28 +589,29 @@ training_df = store.get_historical_features(
 **How the join works (point-in-time correctness):**
 
 For each base listing row, KiteFS finds the latest market row where:
+
 1. `town_market_features.town_id == listing_features.town_id`
 2. `town_market_features.event_timestamp <= listing_features.sold_at`
 
 Worked example for listing 1002 (sold `2024-04-05`, town 1):
 
-| Candidate market row         | event_timestamp     | Outcome               |
-|------------------------------|---------------------|-----------------------|
-| town 1, Feb snapshot         | 2024-02-01 00:00:00 | Match — selected?     |
-| town 1, Mar snapshot         | 2024-03-01 00:00:00 | Match — selected?     |
-| town 1, Apr snapshot         | **2024-04-01 00:00:00** | **Latest ≤ sold_at — selected** |
-| town 1, May snapshot         | 2024-05-01 00:00:00 | Excluded — future     |
+| Candidate market row | event_timestamp         | Outcome                         |
+| -------------------- | ----------------------- | ------------------------------- |
+| town 1, Feb snapshot | 2024-02-01 00:00:00     | Match — selected?               |
+| town 1, Mar snapshot | 2024-03-01 00:00:00     | Match — selected?               |
+| town 1, Apr snapshot | **2024-04-01 00:00:00** | **Latest ≤ sold_at — selected** |
+| town 1, May snapshot | 2024-05-01 00:00:00     | Excluded — future               |
 
 Result: listing 1002 gets `town_market_features_avg_price_per_sqm = 25400.00`.
 
 **The returned DataFrame** includes base structural columns, selected base features, and all joined group columns prefixed with `town_market_features_`:
 
 | listing_id | sold_at             | town_id | net_area | number_of_rooms | build_year | sold_price | town_market_features_town_id | town_market_features_event_timestamp | town_market_features_avg_price_per_sqm |
-|-----------|---------------------|---------|----------|-----------------|------------|------------|------------------------------|--------------------------------------|----------------------------------------|
-| 1001      | 2024-03-15 11:00:00 | 2       | 75       | 2               | 2020       | 2250000.00 | 2                            | 2024-03-01 00:00:00                  | 28800.00                               |
-| 1002      | 2024-04-05 14:00:00 | 1       | 130      | 3               | 2015       | 3400000.00 | 1                            | 2024-04-01 00:00:00                  | 25400.00                               |
-| 1004      | 2024-05-22 16:00:00 | 4       | 110      | 3               | 2010       | 2100000.00 | 4                            | 2024-05-01 00:00:00                  | 19000.00                               |
-| ...       | ...                 | ...     | ...      | ...             | ...        | ...        | ...                          | ...                                  | ...                                    |
+| ---------- | ------------------- | ------- | -------- | --------------- | ---------- | ---------- | ---------------------------- | ------------------------------------ | -------------------------------------- |
+| 1001       | 2024-03-15 11:00:00 | 2       | 75       | 2               | 2020       | 2250000.00 | 2                            | 2024-03-01 00:00:00                  | 28800.00                               |
+| 1002       | 2024-04-05 14:00:00 | 1       | 130      | 3               | 2015       | 3400000.00 | 1                            | 2024-04-01 00:00:00                  | 25400.00                               |
+| 1004       | 2024-05-22 16:00:00 | 4       | 110      | 3               | 2010       | 2100000.00 | 4                            | 2024-05-01 00:00:00                  | 19000.00                               |
+| ...        | ...                 | ...     | ...      | ...             | ...        | ...        | ...                          | ...                                  | ...                                    |
 
 **Boundary case — listing 1010 (sold Jan 20, 2024):**
 The earliest market snapshot is `2024-02-01T00:00:00Z` (January sales, published Feb 1). Because `2024-02-01 > 2024-01-20`, listing 1010 has no matching market row. KiteFS keeps the row but fills joined columns with `NULL` (pandas `NA`). This is why the example `where` filter starts at `2024-02-01` — January listings can be excluded from the first training run or handled with a fallback outside KiteFS.
@@ -684,6 +690,7 @@ result = store.materialize()   # no argument
 ```
 
 **CLI:**
+
 ```bash
 kitefs materialize town_market_features    # specific group
 kitefs materialize                         # all eligible groups
@@ -697,7 +704,7 @@ The CLI exits with code 1 if any group fails.
 For `town_market_features`, the offline store has 12 rows per town (one per month). `select_latest_rows()` picks the row with the maximum `event_timestamp` per `town_id`. After materializing with December 2024 data:
 
 | town_id | avg_price_per_sqm | event_timestamp     |
-|---------|-------------------|---------------------|
+| ------- | ----------------- | ------------------- |
 | 1       | 27200.00          | 2025-01-01 00:00:00 |
 | 2       | 31500.00          | 2025-01-01 00:00:00 |
 | 3       | 15800.00          | 2025-01-01 00:00:00 |
@@ -787,6 +794,7 @@ result = store.get_online_features(
 ```
 
 **`where` constraints for online retrieval:**
+
 - Must be `{entity_key_name: {"eq": value}}`. Only the declared entity key is accepted.
 - Only the `eq` operator is supported; `gt`, `gte`, etc. are not.
 - The value must be type-compatible with the entity key dtype (`int` for INTEGER, `str` for STRING).
@@ -865,14 +873,17 @@ Table names follow `{dynamodb_table_prefix}{group_name}`. The table is created a
 KiteFS uses the standard boto3 credential chain (environment variables, `~/.aws/credentials`, instance roles, container roles, etc.). It never reads, stores, or prompts for credentials.
 
 Required IAM actions for the producer:
+
 - `s3:PutObject`, `s3:GetObject` on the registry and offline store buckets
 - `dynamodb:DescribeTable`, `dynamodb:CreateTable`, `dynamodb:BatchWriteItem` on `{table_prefix}*` tables
 
 Required for the consumer (read-only):
+
 - `s3:GetObject` on the registry bucket
 - `dynamodb:GetItem` on `{table_prefix}*` tables
 
 Install the AWS extra to enable boto3:
+
 ```bash
 pip install kitefs[aws]
 ```
@@ -901,46 +912,46 @@ result = store.get_online_features(
 
 ## 10. MVP Edge Cases and Limits
 
-| Situation | Behavior |
-|-----------|----------|
-| `FeatureStore()` must run from the project root | It reads `./kitefs.yaml` from the current working directory. All local paths are relative to that directory. |
-| Local paths are fixed | `feature_store/`, `feature_store/data/offline_store/`, `feature_store/data/online_store/online.db` are not configurable. |
-| `kitefs init` aborts if `kitefs.yaml` exists | Run from an empty directory or remove the existing file first. |
-| `kitefs init-config` creates only `kitefs.yaml` | No definitions directory, no registry, no data directories. It is a lightweight consumer-only config. |
-| Active listings must be excluded before ingest | KiteFS stores what you give it. Filter `WHERE sold_at IS NOT NULL` in your preparation SQL. |
-| Naive datetimes are treated as UTC | `datetime(2024, 2, 1)` and `datetime(2024, 2, 1, tzinfo=timezone.utc)` are equivalent. |
-| Non-UTC tz-aware datetimes are rejected | `datetime(2024, 2, 1, tzinfo=timezone(timedelta(hours=3)))` raises `ValidationError` on any structural datetime column. No timezone conversion is performed. |
-| `select` is required for both retrieval methods | Omitting `select` raises `RetrievalParameterError` before any storage read. |
-| Wildcard must be `["*"]` (a list) | `select="*"` and `select=["*", "net_area"]` both raise `RetrievalParameterError`. |
-| `where` filters only the base event timestamp | You cannot filter on `town_id`, `net_area`, or other non-timestamp columns. Attempting to do so raises `RetrievalParameterError`. |
-| Online `where` only accepts `eq` on the entity key | `where={"avg_price_per_sqm": {"gt": 0}}` raises `RetrievalParameterError`. Only `{entity_key_name: {"eq": value}}` is accepted. |
-| At most one joined group per historical retrieval | `join=["group_a", "group_b"]` raises `JoinError`. Run separate retrievals and merge in pandas if needed. |
-| Unmatched join rows get `NULL` joined columns | Listing 1010 (sold Jan 2024) has no market snapshot available at that time. Its joined columns are `pandas.NA`. |
-| `get_online_features` returns `{}` on miss | Returns an empty dict — never `None` and never raises — when the item is absent or the group was never materialized. |
-| No row-level validation on the serving path | `get_online_features` does not run feature expectations. Only ingest and retrieval are validated. |
-| Offline store is append-only | There is no built-in deduplication, TTL, or cleanup. Re-ingesting the same period creates additional Parquet files; `select_latest_rows` will still pick the correct row at materialization time. |
-| Empty offline data skips materialization | `result.skipped` contains the group name if no Parquet files exist for it yet. |
-| S3 same-second tie-break limitation | S3 `LastModified` has second precision. Two ingest files for the same entity and event timestamp written within the same second may not preserve strict later-write-wins ordering. This edge case does not affect typical monthly batch ingestion. |
-| DynamoDB unprocessed items retry once | If `BatchWriteItem` returns unprocessed items, KiteFS retries once after a 200ms delay. Any items still unprocessed become an `OnlineStoreWriteError` and the group appears in `result.failed`. |
-| Remote publish fails after local registry write | `RegistryWriteError` is raised, but the local `registry.json` already reflects the new definitions. Re-running `apply --publish` is safe. |
+| Situation                                          | Behavior                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FeatureStore()` must run from the project root    | It reads `./kitefs.yaml` from the current working directory. All local paths are relative to that directory.                                                                                                                                       |
+| Local paths are fixed                              | `feature_store/`, `feature_store/data/offline_store/`, `feature_store/data/online_store/online.db` are not configurable.                                                                                                                           |
+| `kitefs init` aborts if `kitefs.yaml` exists       | Run from an empty directory or remove the existing file first.                                                                                                                                                                                     |
+| `kitefs init-config` creates only `kitefs.yaml`    | No definitions directory, no registry, no data directories. It is a lightweight consumer-only config.                                                                                                                                              |
+| Active listings must be excluded before ingest     | KiteFS stores what you give it. Filter `WHERE sold_at IS NOT NULL` in your preparation SQL.                                                                                                                                                        |
+| Naive datetimes are treated as UTC                 | `datetime(2024, 2, 1)` and `datetime(2024, 2, 1, tzinfo=timezone.utc)` are equivalent.                                                                                                                                                             |
+| Non-UTC tz-aware datetimes are rejected            | `datetime(2024, 2, 1, tzinfo=timezone(timedelta(hours=3)))` raises `ValidationError` on any structural datetime column. No timezone conversion is performed.                                                                                       |
+| `select` is required for both retrieval methods    | Omitting `select` raises `RetrievalParameterError` before any storage read.                                                                                                                                                                        |
+| Wildcard must be `["*"]` (a list)                  | `select="*"` and `select=["*", "net_area"]` both raise `RetrievalParameterError`.                                                                                                                                                                  |
+| `where` filters only the base event timestamp      | You cannot filter on `town_id`, `net_area`, or other non-timestamp columns. Attempting to do so raises `RetrievalParameterError`.                                                                                                                  |
+| Online `where` only accepts `eq` on the entity key | `where={"avg_price_per_sqm": {"gt": 0}}` raises `RetrievalParameterError`. Only `{entity_key_name: {"eq": value}}` is accepted.                                                                                                                    |
+| At most one joined group per historical retrieval  | `join=["group_a", "group_b"]` raises `JoinError`. Run separate retrievals and merge in pandas if needed.                                                                                                                                           |
+| Unmatched join rows get `NULL` joined columns      | Listing 1010 (sold Jan 2024) has no market snapshot available at that time. Its joined columns are `pandas.NA`.                                                                                                                                    |
+| `get_online_features` returns `{}` on miss         | Returns an empty dict — never `None` and never raises — when the item is absent or the group was never materialized.                                                                                                                               |
+| No row-level validation on the serving path        | `get_online_features` does not run feature expectations. Only ingest and retrieval are validated.                                                                                                                                                  |
+| Offline store is append-only                       | There is no built-in deduplication, TTL, or cleanup. Re-ingesting the same period creates additional Parquet files; `select_latest_rows` will still pick the correct row at materialization time.                                                  |
+| Empty offline data skips materialization           | `result.skipped` contains the group name if no Parquet files exist for it yet.                                                                                                                                                                     |
+| S3 same-second tie-break limitation                | S3 `LastModified` has second precision. Two ingest files for the same entity and event timestamp written within the same second may not preserve strict later-write-wins ordering. This edge case does not affect typical monthly batch ingestion. |
+| DynamoDB unprocessed items retry once              | If `BatchWriteItem` returns unprocessed items, KiteFS retries once after a 200ms delay. Any items still unprocessed become an `OnlineStoreWriteError` and the group appears in `result.failed`.                                                    |
+| Remote publish fails after local registry write    | `RegistryWriteError` is raised, but the local `registry.json` already reflects the new definitions. Re-running `apply --publish` is safe.                                                                                                          |
 
 ---
 
 ## 11. Troubleshooting
 
-| Error / Symptom | Cause | Fix |
-|-----------------|-------|-----|
-| `ConfigurationError: kitefs.yaml not found` | `FeatureStore()` was constructed from the wrong directory | `cd` to the project root before running the SDK or CLI |
-| `RegistryReadError: registry file missing` | `apply()` was never run after `init` | Run `kitefs apply` or `store.apply()` |
-| `FeatureGroupNotFoundError: listing_features` | Group not in registry | Run `apply()` after defining the group; check the spelling of the group name |
-| `IngestionShapeError: unsupported file extension` | CLI `ingest` called with `.xlsx`, `.json`, etc. | Convert to `.csv` or `.parquet` first |
-| `IngestionShapeError: missing columns` | Required structural or feature column absent from the DataFrame | Add the missing column(s); check the `describe_feature_group` output for the expected schema |
-| `ValidationError` with `ValidationReport` | A row failed an `Expect` constraint during `ERROR`-mode ingestion | Fix the data, or switch to `ValidationMode.FILTER` in the definition if dropping bad rows is acceptable |
-| `FeatureGroupNotMaterializableError` | `materialize("listing_features")` — group is `OFFLINE` only | Materialize only groups with `StorageTarget.OFFLINE_AND_ONLINE` |
-| `get_online_features` returns `{}` | Group was never materialized, or the entity key value has no stored row | Run `store.materialize("town_market_features")` first; check the entity key value |
-| `ProviderError: boto3 not installed` | `runtime.target=remote` but `kitefs[aws]` not installed | `pip install kitefs[aws]` |
-| `ProviderError: AWS credentials missing` | boto3 credential chain found no credentials | Set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or configure an instance role |
-| `ConfigurationError: remote.registry.bucket ... not configured` | Bucket env var is unset or empty | Set `KITEFS_REMOTE_REGISTRY_S3_BUCKET` (and similarly for other stores) |
-| `OnlineStoreWriteError: existing DynamoDB table partition key does not match` | The DynamoDB table exists from a prior definition with a different entity key | Drop or rename the table, then re-run `materialize` |
-| `RetrievalParameterError: join must be a list` | `join="town_market_features"` passed as a bare string | Use `join=["town_market_features"]` |
-| `JoinError: supports at most one joined feature group` | `join=["group_a", "group_b"]` passed | Split into two retrieval calls |
+| Error / Symptom                                                               | Cause                                                                         | Fix                                                                                                     |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `ConfigurationError: kitefs.yaml not found`                                   | `FeatureStore()` was constructed from the wrong directory                     | `cd` to the project root before running the SDK or CLI                                                  |
+| `RegistryReadError: registry file missing`                                    | `apply()` was never run after `init`                                          | Run `kitefs apply` or `store.apply()`                                                                   |
+| `FeatureGroupNotFoundError: listing_features`                                 | Group not in registry                                                         | Run `apply()` after defining the group; check the spelling of the group name                            |
+| `IngestionShapeError: unsupported file extension`                             | CLI `ingest` called with `.xlsx`, `.json`, etc.                               | Convert to `.csv` or `.parquet` first                                                                   |
+| `IngestionShapeError: missing columns`                                        | Required structural or feature column absent from the DataFrame               | Add the missing column(s); check the `describe_feature_group` output for the expected schema            |
+| `ValidationError` with `ValidationReport`                                     | A row failed an `Expect` constraint during `ERROR`-mode ingestion             | Fix the data, or switch to `ValidationMode.FILTER` in the definition if dropping bad rows is acceptable |
+| `FeatureGroupNotMaterializableError`                                          | `materialize("listing_features")` — group is `OFFLINE` only                   | Materialize only groups with `StorageTarget.OFFLINE_AND_ONLINE`                                         |
+| `get_online_features` returns `{}`                                            | Group was never materialized, or the entity key value has no stored row       | Run `store.materialize("town_market_features")` first; check the entity key value                       |
+| `ProviderError: boto3 not installed`                                          | `runtime.target=remote` but `kitefs[aws]` not installed                       | `pip install kitefs[aws]`                                                                               |
+| `ProviderError: AWS credentials missing`                                      | boto3 credential chain found no credentials                                   | Set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or configure an instance role                         |
+| `ConfigurationError: remote.registry.bucket ... not configured`               | Bucket env var is unset or empty                                              | Set `KITEFS_REMOTE_REGISTRY_S3_BUCKET` (and similarly for other stores)                                 |
+| `OnlineStoreWriteError: existing DynamoDB table partition key does not match` | The DynamoDB table exists from a prior definition with a different entity key | Drop or rename the table, then re-run `materialize`                                                     |
+| `RetrievalParameterError: join must be a list`                                | `join="town_market_features"` passed as a bare string                         | Use `join=["town_market_features"]`                                                                     |
+| `JoinError: supports at most one joined feature group`                        | `join=["group_a", "group_b"]` passed                                          | Split into two retrieval calls                                                                          |
