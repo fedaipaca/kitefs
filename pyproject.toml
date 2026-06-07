@@ -1,6 +1,6 @@
 [project]
 name = "kitefs"
-version = "0.1.0"
+version = "0.3.0a0"
 description = "A Python feature store library for offline/online feature storage, registry, validation, and serving"
 readme = "README.md"
 license = "Apache-2.0"
@@ -8,12 +8,27 @@ authors = [
     { name = "Fedai Paca", email = "fedaipaca@gmail.com" }
 ]
 requires-python = ">=3.12"
+keywords = ["feature-store", "machine-learning", "mlops", "ml", "features", "pandas"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "click>=8.4.0",
     "pandas>=3.0.3",
     "pyarrow>=24.0.0",
     "pyyaml>=6.0.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/fedaipaca/kitefs"
+Repository = "https://github.com/fedaipaca/kitefs"
+Documentation = "https://github.com/fedaipaca/kitefs"
+Issues = "https://github.com/fedaipaca/kitefs/issues"
 
 [project.scripts]
 kitefs = "kitefs.cli:cli"
